@@ -39,7 +39,7 @@ The `demo/` folder contains a made-up flat with simulated devices, and nothing i
 
 ```bash
 python3 -m http.server 8765 --bind 127.0.0.1
-# open http://127.0.0.1:8765/demo/        (?lang=de, ?scene=day|cleaning|playing|cold, ?blank=1)
+# open http://127.0.0.1:8765/demo/        (?lang=de, ?scene=day|cleaning|playing|cold, ?tab=climate, ?open=living, ?blank=1)
 #      http://127.0.0.1:8765/demo/phone.html
 ```
 
@@ -92,7 +92,7 @@ rooms:
       - [70, 580, 290, 652, sofa]      # x1, y1, x2, y2, kind
       - [100, 430, 180, 520, round_table]
   - id: hallway
-    name: Hallway
+    name: Hall
     area: hallway
     rect: [580, 420, 1180, 560]
     helpers: [input_number.hallway_night_brightness]   # sliders in the pop-up

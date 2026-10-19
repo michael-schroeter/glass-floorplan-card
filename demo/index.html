@@ -79,12 +79,15 @@ const sim = GFC_HASS(SCENE, LANG, () => { if (card) card.hass = sim.hass(); });
 window.__sim = sim;
 
 function mount() {
+  // ?tab=climate opens a layer, ?open=living a room (room id) or the weather (links to a view of the demo)
+  if (P.get('tab')) try { localStorage.setItem('glass-floorplan-card:default', JSON.stringify({ tab: P.get('tab') })); } catch (e) { /* ignore */ }
   card = document.createElement('glass-floorplan-card');
   card.id = 'card';
   document.getElementById('main').replaceChildren(card);
   card.setConfig(config);
   card.hass = sim.hass();
   window.__card = card;
+  if (P.get('open')) setTimeout(() => (P.get('open') === 'weather' ? card._openWeather() : card._openRoom(P.get('open'))), 700);
 }
 function start() {
   config = P.get('blank') === '1' ? { type: 'custom:glass-floorplan-card', language: LANG } : GFC_EXAMPLE(LANG);

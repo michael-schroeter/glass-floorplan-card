@@ -15,7 +15,7 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
   const cold = SCENE === 'cold';
 
   for (const [id, en, d] of [['kitchen', 'Kitchen', 'Küche'], ['bathroom', 'Bath', 'Bad'], ['bedroom', 'Bedroom', 'Schlafzimmer'], ['living_room', 'Living room', 'Wohnzimmer'],
-    ['hallway', 'Hallway', 'Flur'], ['office', 'Office', 'Büro'], ['guest_room', 'Guest room', 'Gästezimmer']]) AREAS[id] = { area_id: id, name: N(en, d) };
+    ['hallway', 'Hall', 'Flur'], ['office', 'Office', 'Büro'], ['guest_room', 'Guest room', 'Gästezimmer']]) AREAS[id] = { area_id: id, name: N(en, d) };
 
   // lights
   const light = (id, name, modes, on, extra = {}, area) => {
@@ -104,7 +104,7 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
   set(`vacuum.${V}`, cleaning ? 'cleaning' : 'docked', { friendly_name: 'Roborock S8', fan_speed: 'balanced', fan_speed_list: ['off', 'quiet', 'balanced', 'turbo', 'max', 'custom', 'max_plus'], supported_features: 13180 });
   const vsens = {
     status: [cleaning ? 'segment_cleaning' : 'charging'], battery: [cleaning ? 84 : 100, { unit_of_measurement: '%', device_class: 'battery' }],
-    cleaning_progress: [cleaning ? 42 : 0, { unit_of_measurement: '%' }], current_room: [cleaning ? N('Living room', 'Wohnzimmer') : N('Hallway', 'Flur'), { device_class: 'enum', options: Object.values(AREAS).map((a) => a.name) }],
+    cleaning_progress: [cleaning ? 42 : 0, { unit_of_measurement: '%' }], current_room: [cleaning ? N('Living room', 'Wohnzimmer') : N('Hall', 'Flur'), { device_class: 'enum', options: Object.values(AREAS).map((a) => a.name) }],
     vacuum_error: ['none'], cleaning_area: [cleaning ? 11.5 : 9.0, { unit_of_measurement: 'm²' }], cleaning_time: [cleaning ? 9 : 13, { unit_of_measurement: 'min' }],
   };
   for (const [k, [v, a]] of Object.entries(vsens)) { set(`sensor.${V}_${k}`, v, a || {}); reg(`sensor.${V}_${k}`, { device_id: 'dev_robot', platform: 'roborock', translation_key: k }); }
@@ -161,7 +161,7 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
     upd(`vacuum.${V}`, { state: 'docked' });
     upd(`sensor.${V}_status`, { state: 'charging' });
     upd(`binary_sensor.${V}_charging`, { state: 'on' });
-    upd(`sensor.${V}_current_room`, { state: N('Hallway', 'Flur') });
+    upd(`sensor.${V}_current_room`, { state: N('Hall', 'Flur') });
     upd(`sensor.${V}_cleaning_progress`, { state: '0' });
   }
 

@@ -15,7 +15,7 @@ function exampleConfig(lang = 'en') {
       { id: 'living', name: N('Living room', 'Wohnzimmer'), area: 'living_room', rect: [0, 320, 580, 660],
         furniture: [[56, 400, 236, 560, 'rug'], [120, 328, 300, 368, 'sideboard'], [140, 336, 280, 350, 'tv'], [70, 580, 290, 652, 'sofa'], [100, 430, 180, 520, 'round_table'],
           [380, 400, 540, 490, 'table'], [350, 427, 386, 463, 'chair'], [534, 427, 570, 463, 'chair'], [400, 556, 485, 641, 'armchair']] },
-      { id: 'hallway', name: N('Hallway', 'Flur'), area: 'hallway', rect: [580, 420, 1180, 560],
+      { id: 'hallway', name: N('Hall', 'Flur'), area: 'hallway', rect: [580, 420, 1180, 560],
         helpers: ['input_number.hallway_night_brightness'], furniture: [[1000, 522, 1150, 554, 'sideboard']] },
       { id: 'office', name: N('Office', 'Büro'), area: 'office', rect: [580, 560, 860, 900],
         furniture: [[600, 580, 760, 650, 'desk'], [657, 660, 703, 706, 'chair'], [820, 600, 856, 820, 'shelf'], [600, 806, 685, 891, 'armchair']] },
