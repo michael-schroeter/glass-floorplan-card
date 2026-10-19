@@ -202,6 +202,14 @@ dialog.ed[open] { display: block; }
   background: rgba(255, 255, 255, .9); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
 .edrag-ghost .ic { --ip: #0c0c0e; }
 .edrag-ghost.sq { border-radius: 12px; }
+.edrag-ghost.pill { width: auto; height: 36px; margin: -18px 0 0 -18px; padding: 0 14px 0 10px; gap: 7px; display: flex; border-radius: 99px; font-size: 13.5px; font-weight: 650; color: #0c0c0e; }
+.edrag-ghost.pill .ic { font-size: 17px; }
+.echip.area { cursor: grab; touch-action: none; }
+.echip.area small { margin-left: 2px; padding: 1px 6px; border-radius: 99px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, .12); color: var(--t1); }
+.echip.area.done { color: rgb(var(--green)); background: rgba(var(--green), .1); box-shadow: inset 0 0 0 1px rgba(var(--green), .3); }
+.echip.area.done .ic { --ip: currentColor; }
+.echip.area.empty { opacity: .55; }
+.eroom .en em { display: block; margin-top: 2px; font-style: normal; font-size: 10.5px; font-weight: 600; color: rgb(var(--orange)); }
 
 /* preview */
 .eprev { position: absolute; inset: 60px 0 0 0; z-index: 30; display: none; background: #08090c; }

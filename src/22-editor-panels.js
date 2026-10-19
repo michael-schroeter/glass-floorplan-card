@@ -167,7 +167,10 @@ Object.assign(GfcEditor.prototype, {
   _p_rooms(I) {
     const c = this._c;
     I.append(this._el(`<h2>${esc(t('ed_tool_rooms'))}</h2><p class="lead">${esc(t('ed_rooms_lead'))}</p>`));
+    const missing = c.rooms.some((r) => !r.area);
+    if (c.rooms.length && this._areas().length && missing) this._areaChips(I);
     if (c.rooms.length) {
+      I.append(this._el(`<h3>${esc(t('ed_roomList'))}</h3>`));
       const list = mk('div', 'elist');
       c.rooms.forEach((r, i) => {
         const row = this._el(`<span class="ei">${icon('plan')}</span><div><b>${esc(r.name)}</b><small>${fmt((r.rect[2] - r.rect[0]) / 100, 1)} × ${fmt((r.rect[3] - r.rect[1]) / 100, 1)} m${r.area ? ` · ${esc(this._hs()?.areas?.[r.area]?.name || r.area)}` : ''}</small></div>`, 'erow');
@@ -177,9 +180,42 @@ Object.assign(GfcEditor.prototype, {
       });
       I.append(list);
     } else I.append(this._el(esc(t('ed_rooms_empty')), 'eempty'));
+    if (c.rooms.length && this._areas().length && !missing) this._areaChips(I);
     if (this._areas().length) {
       const b = this._btn(`${icon('wand')}<span>${esc(t('ed_fromAreas'))}</span>`, 'wide', () => this._fromAreas());
       b.style.marginTop = '14px';
+      I.append(b);
+    }
+  },
+
+  /* Home Assistant areas as chips: drag one onto its room (or tap a room, then the chip) */
+  _areaChips(I) {
+    const c = this._c, h = this._hs() || {};
+    const count = (a) => Object.keys(h.states || {}).filter((id) => this._areaOf(id) === a && this._isPlaceable(id)).length;
+    I.append(this._el(`<h3>${esc(t('ed_areasHead'))}</h3><p class="small" style="margin:-2px 0 10px">${esc(t('ed_areasHelp'))}</p>`));
+    const chips = mk('div', 'echips');
+    const areas = this._areas().map((a) => ({ ...a, rooms: c.rooms.filter((r) => r.area === a.area_id).map((r) => r.name), n: count(a.area_id) }))
+      .sort((x, y) => (x.rooms.length ? 1 : 0) - (y.rooms.length ? 1 : 0));
+    for (const a of areas) {
+      const done = a.rooms.length > 0;
+      const b = mk('button', `echip area${done ? ' done' : ''}${!a.n && !done ? ' empty' : ''}`, `${icon(done ? 'check' : 'grip')}<span>${esc(a.name)}</span>${a.n ? `<small>${a.n}</small>` : ''}`);
+      b.title = done ? t('ed_areaIn', a.rooms.join(', ')) : t('ed_areaDrag');
+      this._dragFrom(b, (at) => {
+        const i = this._c.rooms.findIndex((r) => inRect(r.rect, at));
+        if (i >= 0) this._assignArea(i, a.area_id); else this._toast(t('ed_areaDropRoom'));
+      }, 'plan', false, {
+        label: a.name,
+        hover: (pt) => { const i = pt ? this._c.rooms.findIndex((r) => inRect(r.rect, pt)) : -1; const v = i >= 0 ? i : null; if (v !== this._dropRoom) { this._dropRoom = v; this._draw(); } },
+      });
+      b.addEventListener('click', () => { if (this._s?.t === 'room') this._assignArea(this._s.i, a.area_id); else this._toast(t('ed_areaDrag')); });
+      chips.append(b);
+    }
+    I.append(chips);
+    I.append(this._fieldEl(t('ed_withDevices'), this._tglEl(this._withDevices !== false, (v) => { this._withDevices = v; this._panel(); }), true));
+    const m = this._nameMatches();
+    if (m.length) {
+      const b = this._btn(`${icon('wand')}<span>${esc(t('ed_matchByName', m.length))}</span>`, 'wide blue', () => this._matchAreasByName());
+      b.style.marginTop = '12px';
       I.append(b);
     }
   },
@@ -190,10 +226,25 @@ Object.assign(GfcEditor.prototype, {
     I.append(this._fieldEl(t('ed_name'), this._inp(r.name, (v) => { r.name = v; I.querySelector('h2').textContent = v || t('ed_room'); })));
     const areas = this._areas();
     if (areas.length) {
-      I.append(this._fieldEl(t('ed_area'), this._drop([['', t('ed_noArea')], ...areas.map((a) => [a.area_id, a.name])], r.area, (v) => {
-        if (v) r.area = v; else delete r.area;
-        if (v && (!r.name || /^\S+ \d+$/.test(r.name))) r.name = h.areas?.[v]?.name || r.name;
-      })));
+      const sel = mk('select', 'esel2');
+      sel.innerHTML = [['', t('ed_noArea')], ...areas.map((a) => [a.area_id, a.name])].map(([v, l]) => `<option value="${esc(v)}"${v === (r.area || '') ? ' selected' : ''}>${esc(l)}</option>`).join('');
+      sel.addEventListener('change', () => { if (sel.value) this._assignArea(this._s.i, sel.value); else this._change(() => { delete r.area; }, { keepSel: true }); });
+      I.append(this._fieldEl(t('ed_area'), sel));
+      // one tap on a free area links it (name + devices come along)
+      if (!r.area) {
+        const used = new Set(this._c.rooms.map((x) => x.area).filter(Boolean));
+        const free = areas.filter((a) => !used.has(a.area_id));
+        if (free.length) {
+          const chips = mk('div', 'echips');
+          chips.style.marginTop = '8px';
+          for (const a of free) {
+            const b = mk('button', 'echip area', `<span>${esc(a.name)}</span>`);
+            b.addEventListener('click', () => this._assignArea(this._s.i, a.area_id));
+            chips.append(b);
+          }
+          I.append(chips);
+        }
+      }
       I.append(this._el(`<p class="small">${esc(t('ed_area_help'))}</p>`));
     }
     I.append(this._fieldEl(t('ed_label'), this._segEl([['top', t('ed_top')], ['bottom', t('ed_bottom')]], r.label === 'bottom' ? 'bottom' : 'top', (v) => this._change(() => { if (v === 'bottom') r.label = 'bottom'; else delete r.label; }, { keepSel: true }))));

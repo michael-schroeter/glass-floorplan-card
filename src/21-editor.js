@@ -240,11 +240,14 @@ class GfcEditor extends HTMLElement {
     const hs = this._hs() || {};
     let html = '';
     // rooms
+    const hasAreas = Object.keys(hs.areas || {}).length > 0;
     c.rooms.forEach((r, i) => {
       const [a, b, cc, d] = r.rect, w = (cc - a) / 100, h = (d - b) / 100;
-      const on = sel?.t === 'room' && sel.i === i;
-      html += `<div class="eroom${r.label === 'bottom' ? ' lb' : ''}${on ? ' hot' : ''}${tool === 'devices' || tool === 'furniture' ? '' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([a + 1.5 / z, b + 1.5 / z, cc - 1.5 / z, d - 1.5 / z])}">
-        <div class="en">${esc(r.name || t('ed_room'))}<small>${fmt(w, 1)} × ${fmt(h, 1)} m</small></div></div>`;
+      const on = (sel?.t === 'room' && sel.i === i) || this._dropRoom === i;
+      const an = r.area ? hs.areas?.[r.area]?.name || r.area : null;
+      const area = an && an !== r.name ? ` · ${esc(an)}` : '';
+      html += `<div class="eroom${r.label === 'bottom' ? ' lb' : ''}${on ? ' hot' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([a + 1.5 / z, b + 1.5 / z, cc - 1.5 / z, d - 1.5 / z])}">
+        <div class="en">${esc(r.name || t('ed_room'))}<small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
     });
     // furniture
     c.rooms.forEach((r, ri) => (r.furniture || []).forEach((f, fi) => {
@@ -750,6 +753,50 @@ class GfcEditor extends HTMLElement {
     });
   }
 
+  /* Home Assistant area → room: the room gets the area's name (if it still has a default name) and,
+   * if wanted, the area's lights, thermostats, covers, media players are placed in it */
+  _assignArea(i, areaId) {
+    const c = this._c, room = c.rooms[i], h = this._hs() || {};
+    if (!room || !areaId) return;
+    let placed = 0;
+    this._change(() => {
+      room.area = areaId;
+      const an = h.areas?.[areaId]?.name;
+      if (an && (!room.name || new RegExp(`^(${t('ed_room')}|Room|Raum)( \\d+)?$`).test(room.name))) room.name = an;
+      if (this._withDevices === false) return;
+      let ids = Object.keys(h.states || {}).filter((id) => this._areaOf(id) === areaId && this._isPlaceable(id) && !c.entities.some((e) => e.entity === id && e.at));
+      if (ids.some((id) => domainOf(id) === 'climate')) ids = ids.filter((id) => domainOf(id) !== 'sensor');
+      const taken = c.entities.filter((e) => e.at).map((e) => e.at);
+      for (const id of ids.sort()) {
+        const at = freeSpot(room.rect, taken);
+        taken.push(at);
+        if (domainOf(id) === 'vacuum') { if (!c.vacuum?.entity) c.vacuum = { entity: id, dock: at }; continue; }
+        const j = c.entities.findIndex((x) => x.entity === id);
+        if (j >= 0) c.entities[j].at = at;
+        else c.entities.push({ entity: id, at, ...(domainOf(id) === 'light' ? { icon: guessLampIcon(id, h.states[id]) } : {}) });
+        placed++;
+      }
+    });
+    this._toast(placed ? t('ed_assignedPlaced', room.name, placed) : t('ed_assigned', room.name));
+  }
+  /* rooms whose name matches an area's name get that area */
+  _matchAreasByName() {
+    const pairs = this._nameMatches();
+    if (!pairs.length) return;
+    const keep = this._withDevices;
+    pairs.forEach(([i, a]) => this._assignArea(i, a));
+    this._withDevices = keep;
+    this._toast(t('ed_matched', pairs.length));
+  }
+  _nameMatches() {
+    const used = new Set(this._c.rooms.map((r) => r.area).filter(Boolean));
+    return this._c.rooms.map((r, i) => {
+      if (r.area) return null;
+      const a = this._areas().find((x) => !used.has(x.area_id) && normName(x.name) === normName(r.name));
+      return a ? [i, a.area_id] : null;
+    }).filter(Boolean);
+  }
+
   /* ---------------------------------------------------------------- devices */
   _layerDefs() {
     const list = this._c.layers?.length ? this._c.layers : (this._model()?.layers || []).map((L) => L.id);
@@ -831,7 +878,7 @@ class GfcEditor extends HTMLElement {
   }
 
   /* drag from a list (devices, furniture palette) onto the plan */
-  _dragFrom(el, onDrop, ghostIcon, square) {
+  _dragFrom(el, onDrop, ghostIcon, square, extra = {}) {
     let st = null;
     el.addEventListener('pointerdown', (e) => {
       if (e.button > 0 || e.target.closest('.eadd')) return;
@@ -841,10 +888,13 @@ class GfcEditor extends HTMLElement {
     el.addEventListener('pointermove', (e) => {
       if (!st || e.pointerId !== st.id) return;
       if (!st.ghost && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 6) {
-        st.ghost = mk('div', `edrag-ghost${square ? ' sq' : ''}`, icon(ghostIcon));
+        st.ghost = mk('div', `edrag-ghost${square ? ' sq' : ''}${extra.label ? ' pill' : ''}`, `${icon(ghostIcon)}${extra.label ? `<span>${esc(extra.label)}</span>` : ''}`);
         this.$('.ew').append(st.ghost);
       }
-      if (st.ghost) { st.ghost.style.left = `${e.clientX}px`; st.ghost.style.top = `${e.clientY}px`; }
+      if (st.ghost) {
+        st.ghost.style.left = `${e.clientX}px`; st.ghost.style.top = `${e.clientY}px`;
+        if (extra.hover) { const r = this._cv.getBoundingClientRect(), inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; extra.hover(inside ? this._pt(e) : null); }
+      }
     });
     const end = (e, cancel) => {
       if (!st || e.pointerId !== st.id) return;
@@ -852,6 +902,7 @@ class GfcEditor extends HTMLElement {
       st = null;
       if (!g) return;
       g.remove();
+      extra.hover?.(null);
       const r = this._cv.getBoundingClientRect();
       if (!cancel && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) onDrop(this._pt(e).map(r0));
     };

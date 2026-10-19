@@ -173,7 +173,7 @@ Object.assign(GfcEditor.prototype, {
         this._tool = 'rooms';
         this._s = null;
       });
-      this._toast(t('ed_detected', fresh.length, res.doors.length));
+      this._toast(t(Object.keys(this._hs()?.areas || {}).length ? 'ed_detectedAreas' : 'ed_detected', fresh.length, res.doors.length));
     };
     img.src = this._ulSrc;
   },
