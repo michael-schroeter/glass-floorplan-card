@@ -304,9 +304,9 @@ function placeWidgets(M, mobile) {
   // sizes in design units (+ the wall gap of 13), converted to plan units
   const du = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, (v + 13) * D]));
   // phones draw the tiles with fixed pixel fonts: they need more room in design units
-  const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 196, maxW: 380, maxH: 280 }
+  const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 186, maxW: 380, maxH: 280 }
     : { w: 209, h: 118, minW: 158, minH: 92, maxW: 300, maxH: 150 });
-  const CARD = du({ w: 446, h: 212, minW: 318, minH: 180, maxW: 560, maxH: 250 });
+  const CARD = du({ w: 446, h: 190, minW: 318, minH: 176, maxW: 560 });
   const BAR = du({ w: 76, h: Math.max(1, M.layers.length) * 64 + 12 });
 
   for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
@@ -314,40 +314,47 @@ function placeWidgets(M, mobile) {
   // layer card (desktop): prefers the bottom right
   if (!mobile && !out.card) {
     const c = find(CARD.minW, CARD.minH, (i, j, w, h) => (j + h / 2) / ny * 2 + (i + w / 2) / nx + (j + h === ny ? 2 : 0) + (i + w === nx ? 1 : 0));
-    if (c) { grow(c, CARD.maxW, CARD.maxH); out.card = snap(toRect(c)); mark(c); }
+    // wider fills the corner, taller would only add empty space inside the card
+    if (c) { grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c); }
   }
-  // info tiles: as one column, else as one row, else one by one
-  const todo = tiles.filter((k) => !out[k]);
-  if (todo.length) {
-    const n = todo.length;
-    const colScore = mobile ? (i, j, w, h) => -(i + w / 2) / nx + (j + h / 2) / ny : (i, j, w, h) => (i + w / 2) / nx * 2 - (j / ny) * 0.5 + (i + w === nx ? 2 : 0) + (j === 0 ? 1 : 0);
-    let c = find(TILE.minW, n * TILE.minH, colScore), dir = 'col';
-    if (!c && n > 1) { c = find(n * TILE.minW, TILE.minH, colScore); dir = 'row'; }
-    if (c) {
-      grow(c, dir === 'col' ? TILE.maxW : n * TILE.maxW, dir === 'col' ? n * TILE.maxH : TILE.maxH);
-      const R = snap(toRect(c));
-      mark(c);
-      const weights = todo.map((k) => (k === 'door' ? 1.18 : 1)), sum = weights.reduce((a, b) => a + b, 0);
-      let pos = dir === 'col' ? R[1] : R[0];
-      todo.forEach((k, idx) => {
-        const len = ((dir === 'col' ? R[3] - R[1] : R[2] - R[0]) * weights[idx]) / sum;
-        out[k] = dir === 'col' ? [R[0], pos, R[2], pos + len] : [pos, R[1], pos + len, R[3]];
-        pos += len;
-      });
-    } else {
-      for (const k of todo) {
-        const t = find(TILE.minW, TILE.minH, colScore);
-        if (!t) continue;
-        grow(t, TILE.maxW, TILE.maxH * (k === 'door' ? 1.18 : 1));
-        out[k] = snap(toRect(t));
-        mark(t);
-      }
-    }
+  // info tiles: all together as a column (or a row); what does not fit together goes in smaller groups, then alone
+  const colScore = mobile ? (i, j, w, h) => -(i + w / 2) / nx + (j + h / 2) / ny : (i, j, w, h) => (i + w / 2) / nx * 2 - (j / ny) * 0.5 + (i + w === nx ? 2 : 0) + (j === 0 ? 1 : 0);
+  const weight = (k) => (k === 'door' && !mobile ? 1.18 : 1);
+  const placeGroup = (group) => {
+    const n = group.length, ws = group.map(weight), sum = ws.reduce((a, b) => a + b, 0);
+    let c = find(TILE.minW, sum * TILE.minH, colScore), dir = 'col';
+    if (!c && n > 1) { c = find(n * TILE.minW, Math.max(...ws) * TILE.minH, colScore); dir = 'row'; }
+    if (!c) return false;
+    grow(c, dir === 'col' ? TILE.maxW : n * TILE.maxW, dir === 'col' ? sum * TILE.maxH : Math.max(...ws) * TILE.maxH);
+    const R = snap(toRect(c));
+    mark(c);
+    let pos = dir === 'col' ? R[1] : R[0];
+    group.forEach((k, idx) => {
+      const len = ((dir === 'col' ? R[3] - R[1] : R[2] - R[0]) * (dir === 'col' ? ws[idx] : 1)) / (dir === 'col' ? sum : n);
+      out[k] = dir === 'col' ? [R[0], pos, R[2], pos + len] : [pos, R[1], pos + len, R[3]];
+      pos += len;
+    });
+    return true;
+  };
+  let rest = tiles.filter((k) => !out[k]);
+  while (rest.length) {
+    let done = 0;
+    for (let n = rest.length; n >= 1 && !done; n--) if (placeGroup(rest.slice(0, n))) done = n;
+    if (!done) break;
+    rest = rest.slice(done);
   }
   // layer bar (desktop): a free strip on the left
   if (needBar && !out.bar) {
     const c = find(BAR.w, BAR.h, (i, j, w, h) => -(i + w / 2) / nx * 3 + (i === 0 ? 2 : 0) - Math.abs((j + h / 2) / ny - 0.36));
-    if (c) out.bar = toRect(c);
+    if (c) {
+      // centred in its free strip, a little above the middle
+      let j1 = c.j, j2 = c.j + c.h;
+      while (j1 > 0 && free(c.i, j1 - 1, c.w, 1)) j1--;
+      while (j2 < ny && free(c.i, j2, c.w, 1)) j2++;
+      const R = toRect({ i: c.i, j: j1, w: c.w, h: j2 - j1 }), cy = R[1] + (R[3] - R[1]) * 0.45;
+      const y1 = clamp(cy - BAR.h / 2, R[1], R[3] - BAR.h), x1 = (R[0] + R[2] - BAR.w) / 2;
+      out.bar = [x1, y1, x1 + BAR.w, y1 + BAR.h];
+    }
   }
 
   // what did not fit goes into a column next to the plan (desktop) or a row under it (phone), drawn at a readable size

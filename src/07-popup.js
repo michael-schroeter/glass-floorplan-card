@@ -302,9 +302,10 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (clim.length) S.climate = () => this._climateSection(clim, upd);
     if (covers.length) S.covers = () => this._coverSection(covers, upd);
     if (media.length) S.media = () => {
-      const w = mk('div', 'psec'), tv = media.every((e) => this._hass.states[e.entity]?.attributes?.device_class === 'tv');
-      w.append(this._secHead(t(tv ? 'mediaTv' : 'mediaGeneric'), true));
-      media.forEach((e) => w.append(this._mediaSection(e, upd)));
+      const w = mk('div', 'psec'), kinds = new Set(media.map((e) => this._mediaKind(e.entity)));
+      const kind = kinds.size === 1 ? [...kinds][0] : null;
+      w.append(this._secHead(t(kind === 'tv' ? 'mediaTv' : kind === 'speaker' ? 'mediaSpeaker' : 'mediaGeneric'), true));
+      media.forEach((e) => w.append(this._mediaSection(e, upd, media.length > 1)));
       return w;
     };
     if (others.length) S.devices = () => this._devicesSection(others, upd);
@@ -508,18 +509,21 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
 
   /* ---------------------------------------------------------------- Media player */
-  _mediaSection(e, upd) {
+  /* one player; with several in a room, the ones that are off shrink to a single row (like the original's second TV) */
+  _mediaSection(e, upd, multi = false) {
     const F = { PAUSE: 1, VOLUME_SET: 4, PREV: 16, NEXT: 32, ON: 128, OFF: 256, PLAY: 16384 };
-    const E = e.entity, nm = this._name(e);
+    const E = e.entity, nm = this._name(e), ic = this._mediaKind(E) === 'speaker' ? 'speaker' : 'tv';
     const w = mk('div', 'media');
     w.dataset.focus = E;
-    w.innerHTML = `<div class="np"><div class="art">${icon('tv')}</div><div><div class="t1"></div><div class="t2"></div></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>
+    w.innerHTML = `<div class="np"><div class="art">${icon(ic)}</div><div><div class="t1"></div><div class="t2"></div></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>
       <div class="ctrls"><button class="cbtn pv" aria-label="${esc(t('previous'))}">${icon('prev')}</button><button class="cbtn lg pp" aria-label="${esc(t('playPause'))}">${icon('play')}</button><button class="cbtn nx" aria-label="${esc(t('next'))}">${icon('next')}</button></div>
-      <div class="hs vol" role="slider" aria-label="${esc(t('volume'))}" tabindex="0"><i class="fl"></i>${icon('speaker')}</div>`;
+      <div class="hs vol" role="slider" aria-label="${esc(t('volume'))}" tabindex="0"><i class="fl"></i>${icon('speaker')}</div>
+      <div class="lgrow">${icon(ic)}<div><b>${esc(nm)}</b><span></span></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>`;
     const call = (svc, data = {}) => this._call('media_player', svc, { entity_id: E, ...data }).catch(() => {});
     const offState = (s) => unavailable(s) || ['off', 'standby'].includes(s?.state);
     this._hold(w.querySelector('.np'), E);
-    w.querySelector('.pw').addEventListener('click', () => call(offState(this._hass.states[E]) ? 'turn_on' : 'turn_off'));
+    this._hold(w.querySelector('.lgrow'), E);
+    w.querySelectorAll('.pw').forEach((b) => b.addEventListener('click', () => call(offState(this._hass.states[E]) ? 'turn_on' : 'turn_off')));
     w.querySelector('.pv').addEventListener('click', () => call('media_previous_track'));
     w.querySelector('.pp').addEventListener('click', () => call('media_play_pause'));
     w.querySelector('.nx').addEventListener('click', () => call('media_next_track'));
@@ -541,14 +545,15 @@ Object.assign(GlassFloorplanCard.prototype, {
       const s = this._hass.states[E], a = s?.attributes || {}, f = a.supported_features || 0;
       const off = offState(s);
       const playing = ['playing', 'paused'].includes(s?.state);
-      w.querySelector('.t1').textContent = unavailable(s) ? t('notReachableShort') : playing ? (a.media_title || a.app_name || t('playing')) : nm;
-      w.querySelector('.t2').textContent = unavailable(s) ? '' : playing ? ([a.media_artist || a.media_series_title, a.app_name].filter(Boolean).join(' · ') || this._mediaLabel(s))
+      w.classList.toggle('compact', multi && off);
+      w.querySelector('.lgrow span').textContent = unavailable(s) ? t('offOrUnreachable') : this._mediaLabel(s);
+      w.querySelector('.t1').textContent = playing ? (a.media_title || a.app_name || t('playing')) : nm;
+      w.querySelector('.t2').textContent = unavailable(s) ? t('notReachableShort') : playing ? ([a.media_artist || a.media_series_title, a.app_name].filter(Boolean).join(' · ') || this._mediaLabel(s))
         : [this._mediaLabel(s), a.source].filter(Boolean).join(' · ');
       const art = w.querySelector('.art');
       if (playing && a.entity_picture) { art.style.backgroundImage = `url("${this._hass.hassUrl ? this._hass.hassUrl(a.entity_picture) : a.entity_picture}")`; art.innerHTML = ''; }
-      else { art.style.backgroundImage = ''; if (!art.firstChild) art.innerHTML = icon('tv'); }
-      w.querySelector('.pw').classList.toggle('on', !off);
-      w.querySelector('.pw').hidden = !(f & (F.ON | F.OFF));
+      else { art.style.backgroundImage = ''; if (!art.firstChild) art.innerHTML = icon(ic); }
+      w.querySelectorAll('.pw').forEach((b) => { b.classList.toggle('on', !off); b.hidden = !(f & (F.ON | F.OFF)); });
       w.querySelector('.pp').innerHTML = icon(s?.state === 'playing' ? 'pause' : 'play');
       w.querySelector('.pv').disabled = off || !(f & F.PREV);
       w.querySelector('.nx').disabled = off || !(f & F.NEXT);

@@ -108,7 +108,7 @@ const STR = {
     layer: 'Layer', layer_light: 'Light', layer_climate: 'Climate', layer_cover: 'Covers', layer_vacuum: 'Vacuum',
     on: 'On', off: 'Off', open: 'Open', close: 'Close', offline: 'Offline', running: 'Running', ready: 'Ready', standby: 'Standby',
     playing: 'Playing', paused: 'Paused', approx: 'approx.', min: 'min', all: 'All', none: 'None', now: 'Now', today: 'Today', never: 'Never', last: 'Last',
-    error: (m) => `Error: ${m}`, notReachable: (n) => `${n} is not reachable`, notReachableShort: 'Not reachable',
+    error: (m) => `Error: ${m}`, notReachable: (n) => `${n} is not reachable`, notReachableShort: 'Not reachable', offOrUnreachable: 'Off or not reachable',
     activated: (n) => `“${n}” activated`, started: (n) => `“${n}” started`,
     emptyTitle: 'No floor plan yet', emptyText: 'Open the card editor and draw your home: rooms, furniture, lamps and devices – or let a photo of your floor plan guide you.',
     nOn: (n) => `${n} on`, nActive: (n) => `${n} active`, lightsOn: (n) => `${n} ${pl(n, 'light', 'lights')} on`, allOffState: 'All off',
@@ -169,7 +169,7 @@ const STR = {
     layer: 'Ebene', layer_light: 'Licht', layer_climate: 'Klima', layer_cover: 'Rollläden', layer_vacuum: 'Roboter',
     on: 'An', off: 'Aus', open: 'Öffnen', close: 'Schließen', offline: 'Offline', running: 'Läuft', ready: 'Bereit', standby: 'Standby',
     playing: 'Spielt', paused: 'Pausiert', approx: 'ca.', min: 'Min.', all: 'Alle', none: 'Keine', now: 'Jetzt', today: 'Heute', never: 'Noch nie', last: 'Zuletzt',
-    error: (m) => `Fehler: ${m}`, notReachable: (n) => `${n} ist nicht erreichbar`, notReachableShort: 'Nicht erreichbar',
+    error: (m) => `Fehler: ${m}`, notReachable: (n) => `${n} ist nicht erreichbar`, notReachableShort: 'Nicht erreichbar', offOrUnreachable: 'Aus oder nicht erreichbar',
     activated: (n) => `„${n}“ aktiviert`, started: (n) => `„${n}“ gestartet`,
     emptyTitle: 'Noch kein Grundriss', emptyText: 'Öffne den Karten-Editor und zeichne deine Wohnung: Räume, Möbel, Lampen und Geräte – gern mit einem Foto deines Grundrisses als Vorlage.',
     nOn: (n) => `${n} an`, nActive: (n) => `${n} aktiv`, lightsOn: (n) => `${n} ${pl(n, 'Licht', 'Lichter')} an`, allOffState: 'Alles aus',
@@ -709,9 +709,9 @@ function placeWidgets(M, mobile) {
   // sizes in design units (+ the wall gap of 13), converted to plan units
   const du = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, (v + 13) * D]));
   // phones draw the tiles with fixed pixel fonts: they need more room in design units
-  const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 196, maxW: 380, maxH: 280 }
+  const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 186, maxW: 380, maxH: 280 }
     : { w: 209, h: 118, minW: 158, minH: 92, maxW: 300, maxH: 150 });
-  const CARD = du({ w: 446, h: 212, minW: 318, minH: 180, maxW: 560, maxH: 250 });
+  const CARD = du({ w: 446, h: 190, minW: 318, minH: 176, maxW: 560 });
   const BAR = du({ w: 76, h: Math.max(1, M.layers.length) * 64 + 12 });
 
   for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
@@ -719,40 +719,47 @@ function placeWidgets(M, mobile) {
   // layer card (desktop): prefers the bottom right
   if (!mobile && !out.card) {
     const c = find(CARD.minW, CARD.minH, (i, j, w, h) => (j + h / 2) / ny * 2 + (i + w / 2) / nx + (j + h === ny ? 2 : 0) + (i + w === nx ? 1 : 0));
-    if (c) { grow(c, CARD.maxW, CARD.maxH); out.card = snap(toRect(c)); mark(c); }
+    // wider fills the corner, taller would only add empty space inside the card
+    if (c) { grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c); }
   }
-  // info tiles: as one column, else as one row, else one by one
-  const todo = tiles.filter((k) => !out[k]);
-  if (todo.length) {
-    const n = todo.length;
-    const colScore = mobile ? (i, j, w, h) => -(i + w / 2) / nx + (j + h / 2) / ny : (i, j, w, h) => (i + w / 2) / nx * 2 - (j / ny) * 0.5 + (i + w === nx ? 2 : 0) + (j === 0 ? 1 : 0);
-    let c = find(TILE.minW, n * TILE.minH, colScore), dir = 'col';
-    if (!c && n > 1) { c = find(n * TILE.minW, TILE.minH, colScore); dir = 'row'; }
-    if (c) {
-      grow(c, dir === 'col' ? TILE.maxW : n * TILE.maxW, dir === 'col' ? n * TILE.maxH : TILE.maxH);
-      const R = snap(toRect(c));
-      mark(c);
-      const weights = todo.map((k) => (k === 'door' ? 1.18 : 1)), sum = weights.reduce((a, b) => a + b, 0);
-      let pos = dir === 'col' ? R[1] : R[0];
-      todo.forEach((k, idx) => {
-        const len = ((dir === 'col' ? R[3] - R[1] : R[2] - R[0]) * weights[idx]) / sum;
-        out[k] = dir === 'col' ? [R[0], pos, R[2], pos + len] : [pos, R[1], pos + len, R[3]];
-        pos += len;
-      });
-    } else {
-      for (const k of todo) {
-        const t = find(TILE.minW, TILE.minH, colScore);
-        if (!t) continue;
-        grow(t, TILE.maxW, TILE.maxH * (k === 'door' ? 1.18 : 1));
-        out[k] = snap(toRect(t));
-        mark(t);
-      }
-    }
+  // info tiles: all together as a column (or a row); what does not fit together goes in smaller groups, then alone
+  const colScore = mobile ? (i, j, w, h) => -(i + w / 2) / nx + (j + h / 2) / ny : (i, j, w, h) => (i + w / 2) / nx * 2 - (j / ny) * 0.5 + (i + w === nx ? 2 : 0) + (j === 0 ? 1 : 0);
+  const weight = (k) => (k === 'door' && !mobile ? 1.18 : 1);
+  const placeGroup = (group) => {
+    const n = group.length, ws = group.map(weight), sum = ws.reduce((a, b) => a + b, 0);
+    let c = find(TILE.minW, sum * TILE.minH, colScore), dir = 'col';
+    if (!c && n > 1) { c = find(n * TILE.minW, Math.max(...ws) * TILE.minH, colScore); dir = 'row'; }
+    if (!c) return false;
+    grow(c, dir === 'col' ? TILE.maxW : n * TILE.maxW, dir === 'col' ? sum * TILE.maxH : Math.max(...ws) * TILE.maxH);
+    const R = snap(toRect(c));
+    mark(c);
+    let pos = dir === 'col' ? R[1] : R[0];
+    group.forEach((k, idx) => {
+      const len = ((dir === 'col' ? R[3] - R[1] : R[2] - R[0]) * (dir === 'col' ? ws[idx] : 1)) / (dir === 'col' ? sum : n);
+      out[k] = dir === 'col' ? [R[0], pos, R[2], pos + len] : [pos, R[1], pos + len, R[3]];
+      pos += len;
+    });
+    return true;
+  };
+  let rest = tiles.filter((k) => !out[k]);
+  while (rest.length) {
+    let done = 0;
+    for (let n = rest.length; n >= 1 && !done; n--) if (placeGroup(rest.slice(0, n))) done = n;
+    if (!done) break;
+    rest = rest.slice(done);
   }
   // layer bar (desktop): a free strip on the left
   if (needBar && !out.bar) {
     const c = find(BAR.w, BAR.h, (i, j, w, h) => -(i + w / 2) / nx * 3 + (i === 0 ? 2 : 0) - Math.abs((j + h / 2) / ny - 0.36));
-    if (c) out.bar = toRect(c);
+    if (c) {
+      // centred in its free strip, a little above the middle
+      let j1 = c.j, j2 = c.j + c.h;
+      while (j1 > 0 && free(c.i, j1 - 1, c.w, 1)) j1--;
+      while (j2 < ny && free(c.i, j2, c.w, 1)) j2++;
+      const R = toRect({ i: c.i, j: j1, w: c.w, h: j2 - j1 }), cy = R[1] + (R[3] - R[1]) * 0.45;
+      const y1 = clamp(cy - BAR.h / 2, R[1], R[3] - BAR.h), x1 = (R[0] + R[2] - BAR.w) / 2;
+      out.bar = [x1, y1, x1 + BAR.w, y1 + BAR.h];
+    }
   }
 
   // what did not fit goes into a column next to the plan (desktop) or a row under it (phone), drawn at a readable size
@@ -1235,8 +1242,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .pcol { min-width: 0; }
 .pfull { margin-top: 22px; }
 .sec { margin: 24px 0 12px; font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--t3); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.pcol > .psec:first-child > .sec:first-child, .pfull > .psec:first-child > .sec:first-child, .sec.first { margin-top: 0; }
-.psec + .psec { margin-top: 4px; }
+.pv > .sec.first { margin-top: 0; }
 
 .tiles { display: flex; flex-wrap: wrap; gap: 14px; }
 .tile { flex: 1 1 0; min-width: 78px; max-width: 116px; display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -1302,6 +1308,9 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .lgrow b { display: block; font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lgrow span { display: block; font-size: 13px; color: var(--t2); margin-top: 1px; }
 .media + .media { margin-top: 22px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, .07); }
+.media > .lgrow { margin-top: 0; }
+.media:not(.compact) > .lgrow, .media.compact > :not(.lgrow) { display: none; }
+.media.compact + .media, .media + .media.compact { margin-top: 12px; padding-top: 0; border-top: 0; }
 
 .dwrap { display: flex; flex-direction: column; gap: 12px; }
 .slide { --sh: 56px; --p: 0; position: relative; height: var(--sh); border-radius: 999px; overflow: hidden; touch-action: none;
@@ -1840,7 +1849,21 @@ class GlassFloorplanCard extends HTMLElement {
     this._u = u;
     this._pu = pu;
     this._placeKnob(true);
+    this._fitLabels();
     this._declutter();
+  }
+
+  /* a room name that is a little too long for its room gets slightly smaller before it is cut off */
+  _fitLabels() {
+    const range = document.createRange();
+    for (const b of this.shadowRoot.querySelectorAll('.rl b')) {
+      b.style.fontSize = '';
+      range.selectNodeContents(b);
+      const w = b.getBoundingClientRect().width, need = range.getBoundingClientRect().width;
+      if (!w || need <= w) continue;
+      const k = Math.max(0.8, w / need);
+      b.style.fontSize = `${(parseFloat(getComputedStyle(b).fontSize) * k * 0.99).toFixed(2)}px`;
+    }
   }
 
   /* Markers of one layer must not cover each other or a room name: overlapping ones are pushed apart
@@ -2251,6 +2274,17 @@ class GlassFloorplanCard extends HTMLElement {
     }
   }
 
+  /* 'tv' | 'speaker' | null – from the device class, else from the name (an Apple TV has no device class) */
+  _mediaKind(id) {
+    const st = this._hass.states[id], dc = st?.attributes?.device_class;
+    if (dc === 'tv') return 'tv';
+    if (dc === 'speaker' || dc === 'receiver') return 'speaker';
+    const dev = this._hass.devices?.[this._hass.entities?.[id]?.device_id];
+    const txt = `${id} ${st?.attributes?.friendly_name || ''} ${dev?.model || ''}`.toLowerCase();
+    if (/(^|[^a-z])tv([^a-z]|$)|television|fernseh|oled|bravia|webos|chromecast|fire ?tv|roku|shield/.test(txt)) return 'tv';
+    if (/speaker|lautsprecher|sonos|homepod|echo|nest (audio|mini)|receiver|soundbar|avr/.test(txt)) return 'speaker';
+    return null;
+  }
   _mediaOn(st) { return !!st && ['playing', 'paused', 'on', 'idle', 'buffering'].includes(st.state); }
   _mediaLabel(st) {
     if (unavailable(st)) return t('offline');
@@ -2799,9 +2833,10 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (clim.length) S.climate = () => this._climateSection(clim, upd);
     if (covers.length) S.covers = () => this._coverSection(covers, upd);
     if (media.length) S.media = () => {
-      const w = mk('div', 'psec'), tv = media.every((e) => this._hass.states[e.entity]?.attributes?.device_class === 'tv');
-      w.append(this._secHead(t(tv ? 'mediaTv' : 'mediaGeneric'), true));
-      media.forEach((e) => w.append(this._mediaSection(e, upd)));
+      const w = mk('div', 'psec'), kinds = new Set(media.map((e) => this._mediaKind(e.entity)));
+      const kind = kinds.size === 1 ? [...kinds][0] : null;
+      w.append(this._secHead(t(kind === 'tv' ? 'mediaTv' : kind === 'speaker' ? 'mediaSpeaker' : 'mediaGeneric'), true));
+      media.forEach((e) => w.append(this._mediaSection(e, upd, media.length > 1)));
       return w;
     };
     if (others.length) S.devices = () => this._devicesSection(others, upd);
@@ -3005,18 +3040,21 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
 
   /* ---------------------------------------------------------------- Media player */
-  _mediaSection(e, upd) {
+  /* one player; with several in a room, the ones that are off shrink to a single row (like the original's second TV) */
+  _mediaSection(e, upd, multi = false) {
     const F = { PAUSE: 1, VOLUME_SET: 4, PREV: 16, NEXT: 32, ON: 128, OFF: 256, PLAY: 16384 };
-    const E = e.entity, nm = this._name(e);
+    const E = e.entity, nm = this._name(e), ic = this._mediaKind(E) === 'speaker' ? 'speaker' : 'tv';
     const w = mk('div', 'media');
     w.dataset.focus = E;
-    w.innerHTML = `<div class="np"><div class="art">${icon('tv')}</div><div><div class="t1"></div><div class="t2"></div></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>
+    w.innerHTML = `<div class="np"><div class="art">${icon(ic)}</div><div><div class="t1"></div><div class="t2"></div></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>
       <div class="ctrls"><button class="cbtn pv" aria-label="${esc(t('previous'))}">${icon('prev')}</button><button class="cbtn lg pp" aria-label="${esc(t('playPause'))}">${icon('play')}</button><button class="cbtn nx" aria-label="${esc(t('next'))}">${icon('next')}</button></div>
-      <div class="hs vol" role="slider" aria-label="${esc(t('volume'))}" tabindex="0"><i class="fl"></i>${icon('speaker')}</div>`;
+      <div class="hs vol" role="slider" aria-label="${esc(t('volume'))}" tabindex="0"><i class="fl"></i>${icon('speaker')}</div>
+      <div class="lgrow">${icon(ic)}<div><b>${esc(nm)}</b><span></span></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>`;
     const call = (svc, data = {}) => this._call('media_player', svc, { entity_id: E, ...data }).catch(() => {});
     const offState = (s) => unavailable(s) || ['off', 'standby'].includes(s?.state);
     this._hold(w.querySelector('.np'), E);
-    w.querySelector('.pw').addEventListener('click', () => call(offState(this._hass.states[E]) ? 'turn_on' : 'turn_off'));
+    this._hold(w.querySelector('.lgrow'), E);
+    w.querySelectorAll('.pw').forEach((b) => b.addEventListener('click', () => call(offState(this._hass.states[E]) ? 'turn_on' : 'turn_off')));
     w.querySelector('.pv').addEventListener('click', () => call('media_previous_track'));
     w.querySelector('.pp').addEventListener('click', () => call('media_play_pause'));
     w.querySelector('.nx').addEventListener('click', () => call('media_next_track'));
@@ -3038,14 +3076,15 @@ Object.assign(GlassFloorplanCard.prototype, {
       const s = this._hass.states[E], a = s?.attributes || {}, f = a.supported_features || 0;
       const off = offState(s);
       const playing = ['playing', 'paused'].includes(s?.state);
-      w.querySelector('.t1').textContent = unavailable(s) ? t('notReachableShort') : playing ? (a.media_title || a.app_name || t('playing')) : nm;
-      w.querySelector('.t2').textContent = unavailable(s) ? '' : playing ? ([a.media_artist || a.media_series_title, a.app_name].filter(Boolean).join(' · ') || this._mediaLabel(s))
+      w.classList.toggle('compact', multi && off);
+      w.querySelector('.lgrow span').textContent = unavailable(s) ? t('offOrUnreachable') : this._mediaLabel(s);
+      w.querySelector('.t1').textContent = playing ? (a.media_title || a.app_name || t('playing')) : nm;
+      w.querySelector('.t2').textContent = unavailable(s) ? t('notReachableShort') : playing ? ([a.media_artist || a.media_series_title, a.app_name].filter(Boolean).join(' · ') || this._mediaLabel(s))
         : [this._mediaLabel(s), a.source].filter(Boolean).join(' · ');
       const art = w.querySelector('.art');
       if (playing && a.entity_picture) { art.style.backgroundImage = `url("${this._hass.hassUrl ? this._hass.hassUrl(a.entity_picture) : a.entity_picture}")`; art.innerHTML = ''; }
-      else { art.style.backgroundImage = ''; if (!art.firstChild) art.innerHTML = icon('tv'); }
-      w.querySelector('.pw').classList.toggle('on', !off);
-      w.querySelector('.pw').hidden = !(f & (F.ON | F.OFF));
+      else { art.style.backgroundImage = ''; if (!art.firstChild) art.innerHTML = icon(ic); }
+      w.querySelectorAll('.pw').forEach((b) => { b.classList.toggle('on', !off); b.hidden = !(f & (F.ON | F.OFF)); });
       w.querySelector('.pp').innerHTML = icon(s?.state === 'playing' ? 'pause' : 'play');
       w.querySelector('.pv').disabled = off || !(f & F.PREV);
       w.querySelector('.nx').disabled = off || !(f & F.NEXT);
@@ -4467,7 +4506,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const top = this.getBoundingClientRect().top + (window.scrollY || 0);
     const preview = this._inPreview();
     const avail = preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
-    const gH = this._M.layers.length ? 166 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
+    const gH = this._M.layers.length ? 156 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
     let pu = (W - 2 * pad) / S.w;
     if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (this._sideEl ? 106 : 0)) / S.h));
     const u = Math.min(pu * D, 0.62);
@@ -4491,6 +4530,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     this._u = u;
     this._pu = pu;
     this._placeKnob(true);
+    this._fitLabels();
     this._declutter();
   },
 

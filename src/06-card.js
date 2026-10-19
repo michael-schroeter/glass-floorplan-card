@@ -401,7 +401,21 @@ class GlassFloorplanCard extends HTMLElement {
     this._u = u;
     this._pu = pu;
     this._placeKnob(true);
+    this._fitLabels();
     this._declutter();
+  }
+
+  /* a room name that is a little too long for its room gets slightly smaller before it is cut off */
+  _fitLabels() {
+    const range = document.createRange();
+    for (const b of this.shadowRoot.querySelectorAll('.rl b')) {
+      b.style.fontSize = '';
+      range.selectNodeContents(b);
+      const w = b.getBoundingClientRect().width, need = range.getBoundingClientRect().width;
+      if (!w || need <= w) continue;
+      const k = Math.max(0.8, w / need);
+      b.style.fontSize = `${(parseFloat(getComputedStyle(b).fontSize) * k * 0.99).toFixed(2)}px`;
+    }
   }
 
   /* Markers of one layer must not cover each other or a room name: overlapping ones are pushed apart
@@ -812,6 +826,17 @@ class GlassFloorplanCard extends HTMLElement {
     }
   }
 
+  /* 'tv' | 'speaker' | null – from the device class, else from the name (an Apple TV has no device class) */
+  _mediaKind(id) {
+    const st = this._hass.states[id], dc = st?.attributes?.device_class;
+    if (dc === 'tv') return 'tv';
+    if (dc === 'speaker' || dc === 'receiver') return 'speaker';
+    const dev = this._hass.devices?.[this._hass.entities?.[id]?.device_id];
+    const txt = `${id} ${st?.attributes?.friendly_name || ''} ${dev?.model || ''}`.toLowerCase();
+    if (/(^|[^a-z])tv([^a-z]|$)|television|fernseh|oled|bravia|webos|chromecast|fire ?tv|roku|shield/.test(txt)) return 'tv';
+    if (/speaker|lautsprecher|sonos|homepod|echo|nest (audio|mini)|receiver|soundbar|avr/.test(txt)) return 'speaker';
+    return null;
+  }
   _mediaOn(st) { return !!st && ['playing', 'paused', 'on', 'idle', 'buffering'].includes(st.state); }
   _mediaLabel(st) {
     if (unavailable(st)) return t('offline');

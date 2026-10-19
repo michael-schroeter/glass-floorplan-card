@@ -414,8 +414,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .pcol { min-width: 0; }
 .pfull { margin-top: 22px; }
 .sec { margin: 24px 0 12px; font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--t3); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.pcol > .psec:first-child > .sec:first-child, .pfull > .psec:first-child > .sec:first-child, .sec.first { margin-top: 0; }
-.psec + .psec { margin-top: 4px; }
+.pv > .sec.first { margin-top: 0; }
 
 .tiles { display: flex; flex-wrap: wrap; gap: 14px; }
 .tile { flex: 1 1 0; min-width: 78px; max-width: 116px; display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -481,6 +480,9 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .lgrow b { display: block; font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lgrow span { display: block; font-size: 13px; color: var(--t2); margin-top: 1px; }
 .media + .media { margin-top: 22px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, .07); }
+.media > .lgrow { margin-top: 0; }
+.media:not(.compact) > .lgrow, .media.compact > :not(.lgrow) { display: none; }
+.media.compact + .media, .media + .media.compact { margin-top: 12px; padding-top: 0; border-top: 0; }
 
 .dwrap { display: flex; flex-direction: column; gap: 12px; }
 .slide { --sh: 56px; --p: 0; position: relative; height: var(--sh); border-radius: 999px; overflow: hidden; touch-action: none;
