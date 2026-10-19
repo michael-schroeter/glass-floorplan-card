@@ -247,10 +247,10 @@ class GfcEditor extends HTMLElement {
       const an = r.area ? hs.areas?.[r.area]?.name || r.area : null;
       const area = an && an !== r.name ? ` · ${esc(an)}` : '';
       html += `<div class="eroom${r.label === 'bottom' ? ' lb' : ''}${on ? ' hot' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([a + 1.5 / z, b + 1.5 / z, cc - 1.5 / z, d - 1.5 / z])}">
-        <div class="en">${esc(r.name || t('ed_room'))}<small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
+        <div class="en"><b>${esc(r.name || t('ed_room'))}</b><small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
     });
     // a floor plan waiting to be imported: dashed outlines
-    for (const r of this._pending?.rooms || []) html += `<div class="eroom ghost" style="${this._boxPx(r.rect)}"><div class="en">${esc(r.name)}</div></div>`;
+    for (const r of this._pending?.rooms || []) html += `<div class="eroom ghost" style="${this._boxPx(r.rect)}"><div class="en"><b>${esc(r.name)}</b></div></div>`;
     // furniture
     c.rooms.forEach((r, ri) => (r.furniture || []).forEach((f, fi) => {
       const F = normFurn(f);
@@ -334,6 +334,7 @@ class GfcEditor extends HTMLElement {
       html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${this.X(a[0])}" y1="${this.Y(a[1])}" x2="${this.X(b[0])}" y2="${this.Y(b[1])}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${this.X(a[0])}px;top:${this.Y(a[1])}px"></i>${this._measure.b ? `<i style="left:${this.X(this._measure.b[0])}px;top:${this.Y(this._measure.b[1])}px"></i>` : ''}</div>`;
     }
     this._world.innerHTML = html;
+    fitText(this._world.querySelectorAll('.eroom .en b'));
     this._world.querySelectorAll('.efloat button').forEach((b) => b.addEventListener('click', () => {
       if (b.dataset.act === 'rot') this._rotateFurn(); else if (b.dataset.act === 'dup') this._duplicateSel(); else this._deleteSel();
     }));

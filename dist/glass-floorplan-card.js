@@ -98,6 +98,18 @@ function fire(node, type, detail) {
   node.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true, detail }));
 }
 
+/* text that is a little too wide for its box gets slightly smaller (down to `min`) before it is cut off with "…" */
+function fitText(els, min = 0.8) {
+  const range = document.createRange();
+  for (const el of els) {
+    el.style.fontSize = '';
+    range.selectNodeContents(el);
+    const w = el.getBoundingClientRect().width, need = range.getBoundingClientRect().width;
+    if (!w || need <= w) continue;
+    el.style.fontSize = `${(parseFloat(getComputedStyle(el).fontSize) * Math.max(min, w / need) * 0.99).toFixed(2)}px`;
+  }
+}
+
 /* ================================================================== Texts (English, German) + number / time formats from hass.locale */
 let LANG = 'en';
 let LOCALE = 'en';
@@ -1854,17 +1866,7 @@ class GlassFloorplanCard extends HTMLElement {
   }
 
   /* a room name that is a little too long for its room gets slightly smaller before it is cut off */
-  _fitLabels() {
-    const range = document.createRange();
-    for (const b of this.shadowRoot.querySelectorAll('.rl b')) {
-      b.style.fontSize = '';
-      range.selectNodeContents(b);
-      const w = b.getBoundingClientRect().width, need = range.getBoundingClientRect().width;
-      if (!w || need <= w) continue;
-      const k = Math.max(0.8, w / need);
-      b.style.fontSize = `${(parseFloat(getComputedStyle(b).fontSize) * k * 0.99).toFixed(2)}px`;
-    }
-  }
+  _fitLabels() { fitText(this.shadowRoot.querySelectorAll('.rl b')); }
 
   /* Markers of one layer must not cover each other or a room name: overlapping ones are pushed apart
    * (a few relaxation steps, each marker stays in its room and close to its spot). Positions in the config stay. */
@@ -4656,7 +4658,8 @@ dialog.ed[open] { display: block; }
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), 0 6px 18px rgba(0, 0, 0, .2); }
 .ul-on .eroom { background: rgba(30, 32, 40, .38); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .55); }
 .eroom .en { position: absolute; left: 9px; top: 7px; right: 6px; font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; text-shadow: 0 1px 6px rgba(0, 0, 0, .5); }
-.eroom .en small { display: block; margin-top: 1px; font-size: 11px; font-weight: 500; color: var(--t2); }
+.eroom .en b { display: block; font-weight: inherit; overflow: hidden; text-overflow: ellipsis; }
+.eroom .en small { display: block; margin-top: 1px; font-size: 11px; font-weight: 500; color: var(--t2); overflow: hidden; text-overflow: ellipsis; }
 .eroom.lb .en { top: auto; bottom: 7px; }
 .eroom.hot { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .9), 0 0 0 4px rgba(var(--blue), .18); }
 .eroom.dim { opacity: .55; }
@@ -5097,10 +5100,10 @@ class GfcEditor extends HTMLElement {
       const an = r.area ? hs.areas?.[r.area]?.name || r.area : null;
       const area = an && an !== r.name ? ` · ${esc(an)}` : '';
       html += `<div class="eroom${r.label === 'bottom' ? ' lb' : ''}${on ? ' hot' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([a + 1.5 / z, b + 1.5 / z, cc - 1.5 / z, d - 1.5 / z])}">
-        <div class="en">${esc(r.name || t('ed_room'))}<small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
+        <div class="en"><b>${esc(r.name || t('ed_room'))}</b><small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
     });
     // a floor plan waiting to be imported: dashed outlines
-    for (const r of this._pending?.rooms || []) html += `<div class="eroom ghost" style="${this._boxPx(r.rect)}"><div class="en">${esc(r.name)}</div></div>`;
+    for (const r of this._pending?.rooms || []) html += `<div class="eroom ghost" style="${this._boxPx(r.rect)}"><div class="en"><b>${esc(r.name)}</b></div></div>`;
     // furniture
     c.rooms.forEach((r, ri) => (r.furniture || []).forEach((f, fi) => {
       const F = normFurn(f);
@@ -5184,6 +5187,7 @@ class GfcEditor extends HTMLElement {
       html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${this.X(a[0])}" y1="${this.Y(a[1])}" x2="${this.X(b[0])}" y2="${this.Y(b[1])}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${this.X(a[0])}px;top:${this.Y(a[1])}px"></i>${this._measure.b ? `<i style="left:${this.X(this._measure.b[0])}px;top:${this.Y(this._measure.b[1])}px"></i>` : ''}</div>`;
     }
     this._world.innerHTML = html;
+    fitText(this._world.querySelectorAll('.eroom .en b'));
     this._world.querySelectorAll('.efloat button').forEach((b) => b.addEventListener('click', () => {
       if (b.dataset.act === 'rot') this._rotateFurn(); else if (b.dataset.act === 'dup') this._duplicateSel(); else this._deleteSel();
     }));

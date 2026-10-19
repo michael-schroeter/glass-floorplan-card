@@ -406,17 +406,7 @@ class GlassFloorplanCard extends HTMLElement {
   }
 
   /* a room name that is a little too long for its room gets slightly smaller before it is cut off */
-  _fitLabels() {
-    const range = document.createRange();
-    for (const b of this.shadowRoot.querySelectorAll('.rl b')) {
-      b.style.fontSize = '';
-      range.selectNodeContents(b);
-      const w = b.getBoundingClientRect().width, need = range.getBoundingClientRect().width;
-      if (!w || need <= w) continue;
-      const k = Math.max(0.8, w / need);
-      b.style.fontSize = `${(parseFloat(getComputedStyle(b).fontSize) * k * 0.99).toFixed(2)}px`;
-    }
-  }
+  _fitLabels() { fitText(this.shadowRoot.querySelectorAll('.rl b')); }
 
   /* Markers of one layer must not cover each other or a room name: overlapping ones are pushed apart
    * (a few relaxation steps, each marker stays in its room and close to its spot). Positions in the config stay. */

@@ -54,7 +54,8 @@ dialog.ed[open] { display: block; }
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), 0 6px 18px rgba(0, 0, 0, .2); }
 .ul-on .eroom { background: rgba(30, 32, 40, .38); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .55); }
 .eroom .en { position: absolute; left: 9px; top: 7px; right: 6px; font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; text-shadow: 0 1px 6px rgba(0, 0, 0, .5); }
-.eroom .en small { display: block; margin-top: 1px; font-size: 11px; font-weight: 500; color: var(--t2); }
+.eroom .en b { display: block; font-weight: inherit; overflow: hidden; text-overflow: ellipsis; }
+.eroom .en small { display: block; margin-top: 1px; font-size: 11px; font-weight: 500; color: var(--t2); overflow: hidden; text-overflow: ellipsis; }
 .eroom.lb .en { top: auto; bottom: 7px; }
 .eroom.hot { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .9), 0 0 0 4px rgba(var(--blue), .18); }
 .eroom.dim { opacity: .55; }

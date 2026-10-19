@@ -96,3 +96,15 @@ function springVars() {
 function fire(node, type, detail) {
   node.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true, detail }));
 }
+
+/* text that is a little too wide for its box gets slightly smaller (down to `min`) before it is cut off with "…" */
+function fitText(els, min = 0.8) {
+  const range = document.createRange();
+  for (const el of els) {
+    el.style.fontSize = '';
+    range.selectNodeContents(el);
+    const w = el.getBoundingClientRect().width, need = range.getBoundingClientRect().width;
+    if (!w || need <= w) continue;
+    el.style.fontSize = `${(parseFloat(getComputedStyle(el).fontSize) * Math.max(min, w / need) * 0.99).toFixed(2)}px`;
+  }
+}
