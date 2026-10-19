@@ -72,6 +72,8 @@ Object.assign(GfcEditor.prototype, {
   _p_sketch(I) {
     const c = this._c, u = c.underlay;
     I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2><p class="lead">${esc(t('ed_sketch_lead'))}</p>`));
+    // an import waiting for confirmation, the size check after an import or the paste field come first
+    if (this._pending || this._scaleCheck || this._pasting) { this._importSection(I); if (this._pending || this._pasting) return; }
     const file = mk('input');
     file.type = 'file'; file.accept = 'image/*'; file.hidden = true;
     file.addEventListener('change', () => this._readImage(file.files[0]));
@@ -81,8 +83,9 @@ Object.assign(GfcEditor.prototype, {
     drop.addEventListener('click', () => file.click());
     drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drop'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('drop'));
-    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('drop'); this._readImage(e.dataTransfer.files[0]); });
+    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('drop'); this._readDropped(e.dataTransfer.files[0]); });
     I.append(file, drop);
+    if (!this._scaleCheck) this._importSection(I);
     if (this._ulSrc && u?.rect) {
       const op = mk('input', 'erange');
       op.type = 'range'; op.min = '0.1'; op.max = '1'; op.step = '0.05'; op.value = String(u.opacity ?? 0.6);
@@ -134,6 +137,7 @@ Object.assign(GfcEditor.prototype, {
       });
       this._fit(); this._draw(); this._toast(t('ed_exampleLoaded'));
     }));
+    if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide', () => this._exportPlan()));
     if (c.rooms.length) q.append(this._btn(`${icon('trash')}<span>${esc(t('ed_clear'))}</span>`, 'wide red', () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; })));
     I.append(q);
     I.append(this._el(`<p class="small">${esc(t('ed_claudeTip'))}</p>`));

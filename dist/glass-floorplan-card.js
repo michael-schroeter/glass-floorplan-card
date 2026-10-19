@@ -4603,6 +4603,7 @@ dialog.ed[open] { display: block; }
 .eroom.lb .en { top: auto; bottom: 7px; }
 .eroom.hot { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .9), 0 0 0 4px rgba(var(--blue), .18); }
 .eroom.dim { opacity: .55; }
+.eroom.ghost { pointer-events: none; background: rgba(var(--blue), .08); box-shadow: none; outline: 1.5px dashed rgba(100, 170, 255, .9); outline-offset: -2px; }
 .efu { position: absolute; border-radius: calc(var(--fr, 8) * 1px); background: linear-gradient(165deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .04)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .17); }
 .efu.c { border-radius: 50%; }
 .efu.rug { background: rgba(255, 255, 255, .03); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
@@ -4976,7 +4977,7 @@ class GfcEditor extends HTMLElement {
 
   /* ---------------------------------------------------------------- view */
   _bounds() {
-    const rects = this._c.rooms.map((r) => r.rect);
+    const rects = [...this._c.rooms.map((r) => r.rect), ...(this._pending?.rooms || []).map((r) => r.rect)];
     if (this._c.underlay?.rect && this._ulSrc) rects.push(this._c.underlay.rect);
     return bboxOf(rects) || [0, 0, 1200, 800];
   }
@@ -5041,6 +5042,8 @@ class GfcEditor extends HTMLElement {
       html += `<div class="eroom${r.label === 'bottom' ? ' lb' : ''}${on ? ' hot' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([a + 1.5 / z, b + 1.5 / z, cc - 1.5 / z, d - 1.5 / z])}">
         <div class="en">${esc(r.name || t('ed_room'))}<small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
     });
+    // a floor plan waiting to be imported: dashed outlines
+    for (const r of this._pending?.rooms || []) html += `<div class="eroom ghost" style="${this._boxPx(r.rect)}"><div class="en">${esc(r.name)}</div></div>`;
     // furniture
     c.rooms.forEach((r, ri) => (r.furniture || []).forEach((f, fi) => {
       const F = normFurn(f);
@@ -5195,6 +5198,8 @@ class GfcEditor extends HTMLElement {
       if (e.ctrlKey || e.metaKey) this._zoomBy(Math.exp(-e.deltaY * 0.0045), e.clientX - r.left, e.clientY - r.top);
       else { this._viewTouched = true; this._v.x += e.deltaX / this._v.z; this._v.y += e.deltaY / this._v.z; this._draw(); }
     }, { passive: false });
+    cv.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
+    cv.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (!f) return; e.preventDefault(); this._readDropped(f); });
     cv.addEventListener('pointerdown', (e) => this._down(e));
     cv.addEventListener('pointermove', (e) => this._move(e));
     cv.addEventListener('pointerup', (e) => this._up(e));
@@ -5580,13 +5585,27 @@ class GfcEditor extends HTMLElement {
     this._withDevices = keep;
     this._toast(t('ed_matched', pairs.length));
   }
+  /* exact names first, then the same word stem without "room / zimmer / raum" ("Wohnen" ↔ "Wohnzimmer", "Bath" ↔ "Bathroom",
+   * "Bad" ↔ "Badezimmer") – only when exactly one area fits */
   _nameMatches() {
     const used = new Set(this._c.rooms.map((r) => r.area).filter(Boolean));
-    return this._c.rooms.map((r, i) => {
-      if (r.area) return null;
-      const a = this._areas().find((x) => !used.has(x.area_id) && normName(x.name) === normName(r.name));
-      return a ? [i, a.area_id] : null;
-    }).filter(Boolean);
+    const free = () => this._areas().filter((x) => !used.has(x.area_id));
+    const stem = (s) => {
+      let x = normName(s).replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u');
+      for (let k = 0; k < 2; k++) x = x.replace(/(zimmer|raum|room|bereich|area)$/, '');
+      return x.replace(/(en|e|s)$/, '');
+    };
+    const out = [];
+    const open = this._c.rooms.map((r, i) => (r.area ? null : i)).filter((i) => i != null);
+    for (const pass of [0, 1]) for (const i of open) {
+      if (out.some(([j]) => j === i)) continue;
+      const n = normName(this._c.rooms[i].name);
+      if (!n) continue;
+      const st = stem(this._c.rooms[i].name);
+      const hits = free().filter((x) => (pass === 0 ? normName(x.name) === n : st.length >= 3 && stem(x.name) === st));
+      if (hits.length === 1) { out.push([i, hits[0].area_id]); used.add(hits[0].area_id); }
+    }
+    return out;
   }
 
   /* ---------------------------------------------------------------- devices */
@@ -5705,6 +5724,7 @@ class GfcEditor extends HTMLElement {
   /* ---------------------------------------------------------------- underlay (photo / sketch of the floor plan) */
   _ulKey() { return `${CARD_TAG}:underlay:${this._c.id || 'default'}`; }
   _loadUnderlay() {
+    if (!this._c.underlay?.rect) { this._ulSrc = null; return; }
     let src = this._c.underlay?.image || null;
     if (!src) try { src = localStorage.getItem(this._ulKey()); } catch (e) { /* private mode */ }
     this._ulSrc = src || null;
@@ -5920,6 +5940,8 @@ Object.assign(GfcEditor.prototype, {
   _p_sketch(I) {
     const c = this._c, u = c.underlay;
     I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2><p class="lead">${esc(t('ed_sketch_lead'))}</p>`));
+    // an import waiting for confirmation, the size check after an import or the paste field come first
+    if (this._pending || this._scaleCheck || this._pasting) { this._importSection(I); if (this._pending || this._pasting) return; }
     const file = mk('input');
     file.type = 'file'; file.accept = 'image/*'; file.hidden = true;
     file.addEventListener('change', () => this._readImage(file.files[0]));
@@ -5929,8 +5951,9 @@ Object.assign(GfcEditor.prototype, {
     drop.addEventListener('click', () => file.click());
     drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drop'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('drop'));
-    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('drop'); this._readImage(e.dataTransfer.files[0]); });
+    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('drop'); this._readDropped(e.dataTransfer.files[0]); });
     I.append(file, drop);
+    if (!this._scaleCheck) this._importSection(I);
     if (this._ulSrc && u?.rect) {
       const op = mk('input', 'erange');
       op.type = 'range'; op.min = '0.1'; op.max = '1'; op.step = '0.05'; op.value = String(u.opacity ?? 0.6);
@@ -5982,6 +6005,7 @@ Object.assign(GfcEditor.prototype, {
       });
       this._fit(); this._draw(); this._toast(t('ed_exampleLoaded'));
     }));
+    if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide', () => this._exportPlan()));
     if (c.rooms.length) q.append(this._btn(`${icon('trash')}<span>${esc(t('ed_clear'))}</span>`, 'wide red', () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; })));
     I.append(q);
     I.append(this._el(`<p class="small">${esc(t('ed_claudeTip'))}</p>`));
@@ -6742,7 +6766,7 @@ class GfcCardEditor extends HTMLElement {
 
 /* ---------------------------------------------------------------- editor texts */
 Object.assign(STR.en, {
-  ed_selected: 'Selected', ed_roomList: 'Rooms', ed_areasHead: 'Home Assistant areas', ed_areasHelp: 'Drag an area onto its room – the name and the devices come along.', ed_withDevices: 'Place the area’s devices too', ed_assigned: (r) => `“${r}” linked`, ed_assignedPlaced: (r, n) => `“${r}” linked · ${n} ${pl(n, 'device', 'devices')} placed`, ed_areaDrag: 'Drag the area onto a room on the plan', ed_areaDropRoom: 'Drop the area onto a room', ed_areaIn: (r) => `Linked with ${r}`, ed_noAreaYet: 'no area yet', ed_matchByName: (n) => `Link ${n} ${pl(n, 'room', 'rooms')} by name`, ed_matched: (n) => `${n} ${pl(n, 'room', 'rooms')} linked by name`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now drag your areas onto them`, ed_invert: 'Invert colours', ed_detect: 'Find rooms automatically', ed_detectHelp: 'Set the scale first (Measure). Works best with clean plans – check the result and adjust the rooms.', ed_detectFail: 'The picture could not be analysed', ed_detectNone: 'No rooms found – draw them by hand', ed_detectNothingNew: 'No new rooms found', ed_detected: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now name them`, ed_title: 'Floor plan', ed_undo: 'Undo', ed_redo: 'Redo', ed_preview: 'Preview', ed_cancel: 'Cancel', ed_done: 'Done', ed_fit: 'Fit to screen',
+  ed_selected: 'Selected', ed_importBad: 'No floor plan found in this file / text', ed_imported: (n) => `${n} ${pl(n, 'room', 'rooms')} imported`, ed_importReady: 'Floor plan ready to import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'room', 'rooms')} · ${d} ${pl(d, 'passage', 'passages')} · ${w} ${pl(w, 'window', 'windows')} · ${f} pieces of furniture`, ed_importReplaces: 'Replaces the rooms drawn so far – placed devices stay.', ed_importApply: 'Import', ed_scaleTitle: 'Check the size', ed_scaleText: 'The size was estimated from the picture. Enter one real length and everything is adjusted.', ed_scaleOk: 'Size is right', ed_pastePlaceholder: 'Paste the answer or the file content from Claude here …', ed_importRead: 'Read', ed_importTitle: 'Import a floor plan file', ed_importSub: 'e.g. from the Claude skill – file or pasted text', ed_importFile: 'Choose file', ed_importPaste: 'Paste text', ed_export: 'Save floor plan as file', ed_roomList: 'Rooms', ed_areasHead: 'Home Assistant areas', ed_areasHelp: 'Drag an area onto its room – the name and the devices come along.', ed_withDevices: 'Place the area’s devices too', ed_assigned: (r) => `“${r}” linked`, ed_assignedPlaced: (r, n) => `“${r}” linked · ${n} ${pl(n, 'device', 'devices')} placed`, ed_areaDrag: 'Drag the area onto a room on the plan', ed_areaDropRoom: 'Drop the area onto a room', ed_areaIn: (r) => `Linked with ${r}`, ed_noAreaYet: 'no area yet', ed_matchByName: (n) => `Link ${n} ${pl(n, 'room', 'rooms')} by name`, ed_matched: (n) => `${n} ${pl(n, 'room', 'rooms')} linked by name`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now drag your areas onto them`, ed_invert: 'Invert colours', ed_detect: 'Find rooms automatically', ed_detectHelp: 'Set the scale first (Measure). Works best with clean plans – check the result and adjust the rooms.', ed_detectFail: 'The picture could not be analysed', ed_detectNone: 'No rooms found – draw them by hand', ed_detectNothingNew: 'No new rooms found', ed_detected: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now name them`, ed_title: 'Floor plan', ed_undo: 'Undo', ed_redo: 'Redo', ed_preview: 'Preview', ed_cancel: 'Cancel', ed_done: 'Done', ed_fit: 'Fit to screen',
   ed_unsaved: 'Unsaved changes – press Cancel again to discard them', ed_summary: (r, d) => `${r} ${pl(r, 'room', 'rooms')} · ${d} ${pl(d, 'device', 'devices')}`,
   ed_tool_sketch: 'Template', ed_tool_rooms: 'Rooms', ed_tool_furniture: 'Furniture', ed_tool_openings: 'Windows & doors', ed_tool_devices: 'Devices', ed_tool_layers: 'Layers', ed_tool_tiles: 'Tiles', ed_tool_settings: 'Settings',
   ed_room: 'Room', ed_open_window: 'Window', ed_open_door: 'Passage', ed_open_entrance: 'Front door',
@@ -6798,7 +6822,7 @@ Object.assign(STR.en, {
   furn_toilet: 'Toilet', furn_sink: 'Sink', furn_washer: 'Washer', furn_plant: 'Plant', furn_rug: 'Rug', furn_stairs: 'Stairs', furn_block: 'Block',
 });
 Object.assign(STR.de, {
-  ed_selected: 'Ausgewählt', ed_roomList: 'Räume', ed_areasHead: 'Home-Assistant-Bereiche', ed_areasHelp: 'Ziehe einen Bereich auf seinen Raum – Name und Geräte kommen mit.', ed_withDevices: 'Geräte des Bereichs gleich platzieren', ed_assigned: (r) => `„${r}“ verknüpft`, ed_assignedPlaced: (r, n) => `„${r}“ verknüpft · ${n} ${pl(n, 'Gerät', 'Geräte')} platziert`, ed_areaDrag: 'Ziehe den Bereich auf einen Raum im Plan', ed_areaDropRoom: 'Den Bereich auf einen Raum ziehen', ed_areaIn: (r) => `Verknüpft mit ${r}`, ed_noAreaYet: 'noch kein Bereich', ed_matchByName: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpfen`, ed_matched: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpft`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt deine Bereiche auf die Räume ziehen`, ed_invert: 'Farben umkehren', ed_detect: 'Räume automatisch erkennen', ed_detectHelp: 'Vorher den Maßstab setzen (Ausmessen). Klappt am besten mit sauberen Plänen – Ergebnis prüfen und Räume anpassen.', ed_detectFail: 'Das Bild konnte nicht ausgewertet werden', ed_detectNone: 'Keine Räume gefunden – bitte von Hand zeichnen', ed_detectNothingNew: 'Keine neuen Räume gefunden', ed_detected: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt benennen`, ed_title: 'Grundriss', ed_undo: 'Rückgängig', ed_redo: 'Wiederholen', ed_preview: 'Vorschau', ed_cancel: 'Abbrechen', ed_done: 'Fertig', ed_fit: 'Einpassen',
+  ed_selected: 'Ausgewählt', ed_importBad: 'In dieser Datei / diesem Text wurde kein Grundriss gefunden', ed_imported: (n) => `${n} ${pl(n, 'Raum', 'Räume')} importiert`, ed_importReady: 'Grundriss bereit zum Import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${w} Fenster · ${f} Möbel`, ed_importReplaces: 'Ersetzt die bisher gezeichneten Räume – platzierte Geräte bleiben.', ed_importApply: 'Importieren', ed_scaleTitle: 'Größe prüfen', ed_scaleText: 'Die Größe wurde aus dem Bild geschätzt. Gib eine echte Länge ein, dann wird alles angepasst.', ed_scaleOk: 'Größe stimmt', ed_pastePlaceholder: 'Antwort oder Dateiinhalt von Claude hier einfügen …', ed_importRead: 'Einlesen', ed_importTitle: 'Grundriss-Datei importieren', ed_importSub: 'z. B. vom Claude-Skill – Datei oder eingefügter Text', ed_importFile: 'Datei wählen', ed_importPaste: 'Text einfügen', ed_export: 'Grundriss als Datei sichern', ed_roomList: 'Räume', ed_areasHead: 'Home-Assistant-Bereiche', ed_areasHelp: 'Ziehe einen Bereich auf seinen Raum – Name und Geräte kommen mit.', ed_withDevices: 'Geräte des Bereichs gleich platzieren', ed_assigned: (r) => `„${r}“ verknüpft`, ed_assignedPlaced: (r, n) => `„${r}“ verknüpft · ${n} ${pl(n, 'Gerät', 'Geräte')} platziert`, ed_areaDrag: 'Ziehe den Bereich auf einen Raum im Plan', ed_areaDropRoom: 'Den Bereich auf einen Raum ziehen', ed_areaIn: (r) => `Verknüpft mit ${r}`, ed_noAreaYet: 'noch kein Bereich', ed_matchByName: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpfen`, ed_matched: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpft`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt deine Bereiche auf die Räume ziehen`, ed_invert: 'Farben umkehren', ed_detect: 'Räume automatisch erkennen', ed_detectHelp: 'Vorher den Maßstab setzen (Ausmessen). Klappt am besten mit sauberen Plänen – Ergebnis prüfen und Räume anpassen.', ed_detectFail: 'Das Bild konnte nicht ausgewertet werden', ed_detectNone: 'Keine Räume gefunden – bitte von Hand zeichnen', ed_detectNothingNew: 'Keine neuen Räume gefunden', ed_detected: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt benennen`, ed_title: 'Grundriss', ed_undo: 'Rückgängig', ed_redo: 'Wiederholen', ed_preview: 'Vorschau', ed_cancel: 'Abbrechen', ed_done: 'Fertig', ed_fit: 'Einpassen',
   ed_unsaved: 'Nicht gespeichert – nochmal „Abbrechen“ verwirft die Änderungen', ed_summary: (r, d) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Gerät', 'Geräte')}`,
   ed_tool_sketch: 'Vorlage', ed_tool_rooms: 'Räume', ed_tool_furniture: 'Möbel', ed_tool_openings: 'Fenster & Türen', ed_tool_devices: 'Geräte', ed_tool_layers: 'Ebenen', ed_tool_tiles: 'Kacheln', ed_tool_settings: 'Optionen',
   ed_room: 'Raum', ed_open_window: 'Fenster', ed_open_door: 'Durchgang', ed_open_entrance: 'Haustür',
@@ -7032,6 +7056,213 @@ Object.assign(GfcEditor.prototype, {
       this._toast(t(Object.keys(this._hs()?.areas || {}).length ? 'ed_detectedAreas' : 'ed_detected', fresh.length, res.doors.length));
     };
     img.src = this._ulSrc;
+  },
+});
+
+/* ================================================================== Floor plan editor: import / export of a floor plan file
+ * The Claude skill turns a photo into a small JSON file ("glass-floorplan" format, centimetres): rooms with the names
+ * read from the plan, windows, doors, the front door and furniture. The editor imports it (file or pasted text),
+ * then rooms are linked to Home Assistant areas by name or by dragging. A whole card configuration works as well. */
+const GFP_FORMAT = 'glass-floorplan';
+
+/* text from a file or a chat answer → object (```json fences and text around it are ignored) */
+function parsePlanText(text) {
+  const s = String(text || '').trim();
+  const tries = [s];
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) tries.push(fence[1]);
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a >= 0 && b > a) tries.push(s.slice(a, b + 1));
+  for (const x of tries) { try { const o = JSON.parse(x); if (o && typeof o === 'object') return o; } catch (e) { /* next */ } }
+  return null;
+}
+
+/* plan file or card configuration → what the editor can take over */
+function readPlanData(o) {
+  if (!o || typeof o !== 'object') return null;
+  const rooms = (Array.isArray(o.rooms) ? o.rooms : []).map((r, i) => {
+    const rect = normRect(r?.rect);
+    if (!rect) return null;
+    const room = { id: String(r.id || slug(r.name) || `room_${i + 1}`), name: String(r.name || `Room ${i + 1}`), rect: rect.map(r0) };
+    if (r.area) room.area = String(r.area);
+    if (r.label === 'bottom') room.label = 'bottom';
+    const furn = (Array.isArray(r.furniture) ? r.furniture : []).map((f) => (normFurn(f) ? f : null)).filter(Boolean);
+    if (furn.length) room.furniture = furn;
+    return room;
+  }).filter(Boolean);
+  if (!rooms.length) return null;
+  const segs = (k) => (Array.isArray(o[k]) ? o[k] : []).map(normSeg).filter(Boolean).map((s) => s.map(r0));
+  const ents = (Array.isArray(o.entities) ? o.entities : []).map(normEntity).filter(Boolean)
+    .map((e) => { const x = { entity: e.entity }; if (e.at) x.at = e.at.map(r0); if (e.icon) x.icon = e.icon; if (e.name) x.name = e.name; if (e.watt) x.watt = e.watt; if (e.beams) x.beams = e.beams; return x; });
+  const ul = normRect(o.image_rect || o.underlay?.rect);
+  return {
+    isCard: String(o.type || '').includes(CARD_TAG),
+    rooms, windows: segs('windows'), doors: segs('doors'), entrance: normSeg(o.entrance)?.map(r0) || null, entities: ents,
+    estimated: o.format === GFP_FORMAT && o.scale !== 'measured', imageRect: ul ? ul.map(r0) : null, full: o,
+  };
+}
+
+Object.assign(GfcEditor.prototype, {
+  /* a dropped file: pictures become the template, JSON is imported */
+  _readDropped(file) {
+    if (!file) return;
+    if (file.type.startsWith('image/')) this._readImage(file);
+    else this._readPlanFile(file);
+  },
+  _readPlanFile(file) {
+    if (!file) return;
+    const fr = new FileReader();
+    fr.onload = () => this._importText(String(fr.result || ''));
+    fr.readAsText(file);
+  },
+  _importText(text) {
+    const d = readPlanData(parsePlanText(text));
+    if (!d) { this._toast(t('ed_importBad')); return; }
+    this._pending = d;
+    this._pasting = false;
+    this._tool = 'sketch';
+    this._s = null;
+    this._fit();
+    this._draw();
+    this._panel();
+  },
+
+  /* take the pending import over: the floor plan is replaced, placed devices and layers stay */
+  _applyImport() {
+    const d = this._pending;
+    if (!d) return;
+    this._pending = null;
+    this._change(() => {
+      const c = this._c;
+      if (d.isCard) {
+        // a whole card configuration: take everything
+        const keepLang = c.language;
+        for (const k of Object.keys(c)) delete c[k];
+        Object.assign(c, normEditorConfig(deep(d.full)));
+        if (keepLang && !c.language) c.language = keepLang;
+      } else {
+        c.rooms = d.rooms;
+        c.windows = d.windows;
+        c.doors = d.doors;
+        if (d.entrance) c.entrance = d.entrance; else delete c.entrance;
+        for (const e of d.entities) {
+          const i = c.entities.findIndex((x) => x.entity === e.entity);
+          if (i >= 0) Object.assign(c.entities[i], e); else c.entities.push(e);
+        }
+        if (d.imageRect) c.underlay = { ...(c.underlay || { opacity: 0.6 }), rect: d.imageRect };
+        delete c.widgets;
+      }
+      this._tool = d.estimated ? 'sketch' : 'rooms';
+    });
+    this._scaleCheck = d.estimated && !d.isCard;
+    this._fit();
+    this._draw();
+    this._panel();
+    this._toast(t('ed_imported', d.rooms.length));
+  },
+
+  /* everything grows / shrinks around the top-left corner (wrong estimate of the size) */
+  _rescale(k) {
+    if (!(k > 0) || Math.abs(k - 1) < 0.001) return;
+    const c = this._c, P = (p) => p && p.map((v) => r0(v * k)), R = (r) => r.map((v) => r0(v * k));
+    this._change(() => {
+      for (const r of c.rooms) { r.rect = R(r.rect); r.furniture = (r.furniture || []).map((f) => { const F = deep(f); setFurnRect(F, normFurn(f).r.map((v) => v * k)); return F; }); }
+      c.windows = c.windows.map(R); c.doors = c.doors.map(R);
+      if (c.entrance) c.entrance = R(c.entrance);
+      for (const e of c.entities) if (e.at) e.at = P(e.at);
+      if (c.door?.at) c.door.at = P(c.door.at);
+      if (c.vacuum?.dock) c.vacuum.dock = P(c.vacuum.dock);
+      if (c.underlay?.rect) c.underlay.rect = R(c.underlay.rect);
+      if (c.widgets) for (const w of Object.keys(c.widgets)) if (Array.isArray(c.widgets[w])) c.widgets[w] = R(c.widgets[w]);
+    });
+    this._fit();
+    this._draw();
+  },
+
+  /* the floor plan as a file (backup, sharing, a starting point for others) */
+  _exportPlan() {
+    const c = cleanConfig(this._c);
+    const out = { format: GFP_FORMAT, version: 1, scale: 'measured', rooms: c.rooms || [], windows: c.windows || [], doors: c.doors || [], ...(c.entrance ? { entrance: c.entrance } : {}) };
+    const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'grundriss.floorplan.json';
+    this.shadowRoot.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  },
+
+  /* ---------------------------------------------------------------- panel parts (in the "Template" tool) */
+  _importSection(I) {
+    const d = this._pending;
+    if (d) {
+      const nf = d.rooms.reduce((n, r) => n + (r.furniture?.length || 0), 0);
+      const box = this._el(`<b style="font-size:15px">${esc(t('ed_importReady'))}</b>
+        <p class="small" style="margin:4px 0 0">${esc(t('ed_importSummary', d.rooms.length, d.doors.length, d.windows.length, nf))}</p>
+        <p class="small" style="margin:6px 0 0;color:var(--t2)">${esc(d.rooms.map((r) => r.name).join(' · '))}</p>
+        ${this._c.rooms.length && !d.isCard ? `<p class="small" style="margin:6px 0 0;color:rgb(var(--orange))">${esc(t('ed_importReplaces'))}</p>` : ''}`, 'ecard');
+      box.style.boxShadow = 'inset 0 0 0 1.5px rgba(var(--blue), .7)';
+      const row = mk('div', 'ebtns');
+      row.append(this._btn(`${icon('check')}<span>${esc(t('ed_importApply'))}</span>`, 'blue', () => this._applyImport()), this._btn(esc(t('ed_cancel')), '', () => { this._pending = null; this._fit(); this._draw(); this._panel(); }));
+      box.append(row);
+      I.append(box);
+      return;
+    }
+    if (this._scaleCheck) {
+      const rooms = this._c.rooms;
+      const big = rooms.slice().sort((a, b) => rectArea(b.rect) - rectArea(a.rect))[0];
+      if (big) {
+        let pick = rooms.indexOf(big), axis = 'w';
+        const box = this._el(`<b style="font-size:15px">${esc(t('ed_scaleTitle'))}</b><p class="small" style="margin:4px 0 10px">${esc(t('ed_scaleText'))}</p>`, 'ecard');
+        box.style.boxShadow = 'inset 0 0 0 1.5px rgba(var(--orange), .7)';
+        const sel = mk('select', 'esel2');
+        sel.innerHTML = rooms.map((r, i) => `<option value="${i}"${i === pick ? ' selected' : ''}>${esc(r.name)}</option>`).join('');
+        const seg = this._segEl([['w', t('ed_width')], ['h', t('ed_depth')]], axis, (v) => { axis = v; seg.querySelectorAll('button').forEach((b) => b.classList.toggle('act', b.dataset.v === v)); upd(); });
+        const inp = mk('input', 'einp num');
+        inp.type = 'number'; inp.step = '0.01';
+        const cur = () => { const r = rooms[pick].rect; return ((axis === 'w' ? r[2] - r[0] : r[3] - r[1]) / 100); };
+        const upd = () => { inp.placeholder = fmt(cur(), 2); this._s = { t: 'room', i: pick, fresh: true }; this._draw(); };
+        sel.addEventListener('change', () => { pick = +sel.value; upd(); });
+        const apply = () => { const v = parseFloat(String(inp.value).replace(',', '.')); if (v > 0.3) { this._scaleCheck = false; this._s = null; this._rescale(v / cur()); this._toast(t('ed_measured')); this._panel(); } };
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });
+        box.append(this._fieldEl('', sel), this._fieldEl('', seg));
+        const row = mk('div', 'ebtns');
+        row.append(inp, this._btn(`${icon('check')}<span>${esc(t('ed_apply'))}</span>`, 'blue', apply));
+        box.append(row);
+        const skip = mk('button', 'ebtn sm', esc(t('ed_scaleOk')));
+        skip.style.marginTop = '8px';
+        skip.addEventListener('click', () => { this._scaleCheck = false; this._s = null; this._tool = 'rooms'; this._draw(); this._panel(); });
+        box.append(skip);
+        I.append(box);
+        upd();
+      }
+    }
+    if (this._pasting) {
+      const ta = mk('textarea', 'einp');
+      ta.style.cssText = 'height:150px;padding:10px 12px;font:12px/1.4 ui-monospace,Menlo,monospace;resize:vertical';
+      ta.placeholder = t('ed_pastePlaceholder');
+      const row = mk('div', 'ebtns');
+      row.append(this._btn(`${icon('check')}<span>${esc(t('ed_importRead'))}</span>`, 'blue', () => this._importText(ta.value)), this._btn(esc(t('ed_cancel')), '', () => { this._pasting = false; this._panel(); }));
+      const box = mk('div', 'ecard');
+      box.append(ta, row);
+      I.append(box);
+      requestAnimationFrame(() => ta.focus());
+      return;
+    }
+    const file = mk('input');
+    file.type = 'file'; file.accept = '.json,application/json,text/plain'; file.hidden = true;
+    file.addEventListener('change', () => this._readPlanFile(file.files[0]));
+    const box = this._el(`<div style="display:flex;align-items:center;gap:12px">${icon('sparkle')}<div><b style="font-size:14px">${esc(t('ed_importTitle'))}</b><div style="font-size:12px;color:var(--t3);margin-top:2px">${esc(t('ed_importSub'))}</div></div></div>`, 'ecard');
+    box.querySelector('.ic').style.fontSize = '26px';
+    const row = mk('div', 'ebtns');
+    row.style.marginTop = '10px';
+    row.append(this._btn(`${icon('copy')}<span>${esc(t('ed_importFile'))}</span>`, 'sm', () => file.click()), this._btn(`${icon('pencil')}<span>${esc(t('ed_importPaste'))}</span>`, 'sm', () => { this._pasting = true; this._panel(); }));
+    box.append(file, row);
+    box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drop'); });
+    box.addEventListener('dragleave', () => box.classList.remove('drop'));
+    box.addEventListener('drop', (e) => { e.preventDefault(); box.classList.remove('drop'); this._readPlanFile(e.dataTransfer.files[0]); });
+    I.append(box);
   },
 });
 

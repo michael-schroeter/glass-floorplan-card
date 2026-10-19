@@ -58,6 +58,7 @@ dialog.ed[open] { display: block; }
 .eroom.lb .en { top: auto; bottom: 7px; }
 .eroom.hot { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .9), 0 0 0 4px rgba(var(--blue), .18); }
 .eroom.dim { opacity: .55; }
+.eroom.ghost { pointer-events: none; background: rgba(var(--blue), .08); box-shadow: none; outline: 1.5px dashed rgba(100, 170, 255, .9); outline-offset: -2px; }
 .efu { position: absolute; border-radius: calc(var(--fr, 8) * 1px); background: linear-gradient(165deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .04)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .17); }
 .efu.c { border-radius: 50%; }
 .efu.rug { background: rgba(255, 255, 255, .03); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }

@@ -184,7 +184,7 @@ class GfcEditor extends HTMLElement {
 
   /* ---------------------------------------------------------------- view */
   _bounds() {
-    const rects = this._c.rooms.map((r) => r.rect);
+    const rects = [...this._c.rooms.map((r) => r.rect), ...(this._pending?.rooms || []).map((r) => r.rect)];
     if (this._c.underlay?.rect && this._ulSrc) rects.push(this._c.underlay.rect);
     return bboxOf(rects) || [0, 0, 1200, 800];
   }
@@ -249,6 +249,8 @@ class GfcEditor extends HTMLElement {
       html += `<div class="eroom${r.label === 'bottom' ? ' lb' : ''}${on ? ' hot' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([a + 1.5 / z, b + 1.5 / z, cc - 1.5 / z, d - 1.5 / z])}">
         <div class="en">${esc(r.name || t('ed_room'))}<small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
     });
+    // a floor plan waiting to be imported: dashed outlines
+    for (const r of this._pending?.rooms || []) html += `<div class="eroom ghost" style="${this._boxPx(r.rect)}"><div class="en">${esc(r.name)}</div></div>`;
     // furniture
     c.rooms.forEach((r, ri) => (r.furniture || []).forEach((f, fi) => {
       const F = normFurn(f);
@@ -403,6 +405,8 @@ class GfcEditor extends HTMLElement {
       if (e.ctrlKey || e.metaKey) this._zoomBy(Math.exp(-e.deltaY * 0.0045), e.clientX - r.left, e.clientY - r.top);
       else { this._viewTouched = true; this._v.x += e.deltaX / this._v.z; this._v.y += e.deltaY / this._v.z; this._draw(); }
     }, { passive: false });
+    cv.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
+    cv.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (!f) return; e.preventDefault(); this._readDropped(f); });
     cv.addEventListener('pointerdown', (e) => this._down(e));
     cv.addEventListener('pointermove', (e) => this._move(e));
     cv.addEventListener('pointerup', (e) => this._up(e));
@@ -788,13 +792,27 @@ class GfcEditor extends HTMLElement {
     this._withDevices = keep;
     this._toast(t('ed_matched', pairs.length));
   }
+  /* exact names first, then the same word stem without "room / zimmer / raum" ("Wohnen" ↔ "Wohnzimmer", "Bath" ↔ "Bathroom",
+   * "Bad" ↔ "Badezimmer") – only when exactly one area fits */
   _nameMatches() {
     const used = new Set(this._c.rooms.map((r) => r.area).filter(Boolean));
-    return this._c.rooms.map((r, i) => {
-      if (r.area) return null;
-      const a = this._areas().find((x) => !used.has(x.area_id) && normName(x.name) === normName(r.name));
-      return a ? [i, a.area_id] : null;
-    }).filter(Boolean);
+    const free = () => this._areas().filter((x) => !used.has(x.area_id));
+    const stem = (s) => {
+      let x = normName(s).replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u');
+      for (let k = 0; k < 2; k++) x = x.replace(/(zimmer|raum|room|bereich|area)$/, '');
+      return x.replace(/(en|e|s)$/, '');
+    };
+    const out = [];
+    const open = this._c.rooms.map((r, i) => (r.area ? null : i)).filter((i) => i != null);
+    for (const pass of [0, 1]) for (const i of open) {
+      if (out.some(([j]) => j === i)) continue;
+      const n = normName(this._c.rooms[i].name);
+      if (!n) continue;
+      const st = stem(this._c.rooms[i].name);
+      const hits = free().filter((x) => (pass === 0 ? normName(x.name) === n : st.length >= 3 && stem(x.name) === st));
+      if (hits.length === 1) { out.push([i, hits[0].area_id]); used.add(hits[0].area_id); }
+    }
+    return out;
   }
 
   /* ---------------------------------------------------------------- devices */
@@ -913,6 +931,7 @@ class GfcEditor extends HTMLElement {
   /* ---------------------------------------------------------------- underlay (photo / sketch of the floor plan) */
   _ulKey() { return `${CARD_TAG}:underlay:${this._c.id || 'default'}`; }
   _loadUnderlay() {
+    if (!this._c.underlay?.rect) { this._ulSrc = null; return; }
     let src = this._c.underlay?.image || null;
     if (!src) try { src = localStorage.getItem(this._ulKey()); } catch (e) { /* private mode */ }
     this._ulSrc = src || null;
