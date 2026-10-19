@@ -225,7 +225,14 @@ dialog.ed[open] { display: block; }
   .erail { grid-row: 4; flex-direction: row; overflow-x: auto; padding: 6px 8px; justify-content: flex-start; }
   .erail button { width: 64px; min-height: 56px; flex: none; }
   .erail .rsep { width: 1px; height: 36px; margin: 0 4px; }
+  .etop { padding: 0 10px; gap: 6px; }
+  .etop h1 { display: none; }
+  .etop .undo { margin-left: auto; }
   .etop .ebtn.lbl span { display: none; }
+  .etop .ebtn.lbl { padding: 0 11px; }
+  .etop .esep { display: none; }
+  .emk { width: 26px; height: 26px; margin: -13px 0 0 -13px; }
+  .emk .ic { font-size: 14px; }
   .ehint { display: none; }
 }
 `;

@@ -46,7 +46,7 @@ class GfcEditor extends HTMLElement {
     if (!this.isConnected) document.body.append(this);
     this._dlg.showModal();
     this._cv.focus({ preventScroll: true });
-    requestAnimationFrame(() => { this._fit(); this._draw(); this._panel(); });
+    requestAnimationFrame(() => { this._fit(); this._draw(); this._panel(); requestAnimationFrame(() => { if (!this._viewTouched) { this._fit(); this._draw(); } }); });
   }
 
   _useLang() {
@@ -112,7 +112,7 @@ class GfcEditor extends HTMLElement {
     this._ro?.disconnect();
     this._onKey = (e) => this._key(e);
     window.addEventListener('keydown', this._onKey, true);
-    this._ro = new ResizeObserver(() => this._draw());
+    this._ro = new ResizeObserver(() => { if (!this._viewTouched) this._fit(); this._draw(); });
     this._ro.observe(this._cv);
     this._syncTop();
   }
@@ -191,11 +191,12 @@ class GfcEditor extends HTMLElement {
   _fit() {
     const r = this._cv.getBoundingClientRect();
     if (!r.width) return;
-    const B = this._bounds(), pad = 70;
-    const z = clamp(Math.min((r.width - 2 * pad) / (B[2] - B[0]), (r.height - 2 * pad - 30) / (B[3] - B[1])), 0.05, 4);
-    this._v = { z, x: (B[0] + B[2]) / 2 - r.width / 2 / z, y: (B[1] + B[3]) / 2 - (r.height - 30) / 2 / z };
+    const narrow = r.width < 600, B = this._bounds(), pad = narrow ? 18 : 70, hint = narrow ? 0 : 30;
+    const z = clamp(Math.min((r.width - 2 * pad) / (B[2] - B[0]), (r.height - 2 * pad - hint) / (B[3] - B[1])), 0.05, 4);
+    this._v = { z, x: (B[0] + B[2]) / 2 - r.width / 2 / z, y: (B[1] + B[3]) / 2 - (r.height - hint) / 2 / z };
   }
   _zoomBy(k, cx, cy) {
+    this._viewTouched = true;
     const r = this._cv.getBoundingClientRect(), v = this._v;
     const px = cx ?? r.width / 2, py = cy ?? r.height / 2;
     const wx = v.x + px / v.z, wy = v.y + py / v.z;
@@ -397,7 +398,7 @@ class GfcEditor extends HTMLElement {
       e.preventDefault();
       const r = cv.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey) this._zoomBy(Math.exp(-e.deltaY * 0.0045), e.clientX - r.left, e.clientY - r.top);
-      else { this._v.x += e.deltaX / this._v.z; this._v.y += e.deltaY / this._v.z; this._draw(); }
+      else { this._viewTouched = true; this._v.x += e.deltaX / this._v.z; this._v.y += e.deltaY / this._v.z; this._draw(); }
     }, { passive: false });
     cv.addEventListener('pointerdown', (e) => this._down(e));
     cv.addEventListener('pointermove', (e) => this._move(e));
@@ -522,6 +523,7 @@ class GfcEditor extends HTMLElement {
     const dx = p[0] - d.p[0], dy = p[1] - d.p[1], c = this._c;
     this._guides = null;
     if (d.mode === 'pan') {
+      this._viewTouched = true;
       this._cv.classList.add('panning');
       this._v.x = d.v.x - (e.clientX - d.sx) / d.v.z;
       this._v.y = d.v.y - (e.clientY - d.sy) / d.v.z;
