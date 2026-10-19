@@ -368,7 +368,7 @@ Object.assign(GfcEditor.prototype, {
     search.style.marginTop = '14px';
     I.append(search);
     // the part of the layer you can switch on/off: lights in "Light", custom picks …
-    const unplaced = ids.filter((id) => !placed.has(id) && this._areaOf(id) && this._c.rooms.some((r) => r.area === this._areaOf(id)) && (L.type !== 'custom' || this._isPlaceable(id)));
+    const unplaced = ids.filter((id) => !placed.has(id) && this._areaOf(id) && this._c.rooms.some((r) => r.area === this._areaOf(id)) && this._isPlaceable(id));
     if (unplaced.length && !q) {
       const b = this._btn(`${icon('wand')}<span>${esc(t('ed_autoAll', unplaced.length))}</span>`, 'wide blue', () => this._autoPlace(unplaced));
       b.style.marginTop = '10px';

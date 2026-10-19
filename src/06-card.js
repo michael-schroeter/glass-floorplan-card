@@ -129,11 +129,21 @@ class GlassFloorplanCard extends HTMLElement {
     try { localStorage.setItem(this._storeKey(), JSON.stringify({ tab: this._tab, mode: this._mode, fan: this._fan, water: this._water })); } catch (e) { /* never mind */ }
   }
 
+  /* the preview in Home Assistant's card dialog / card picker (HA also sets .preview on every card in edit mode –
+   * there the card keeps filling the screen, so only the surroundings count) */
   _inPreview() {
-    if (this._previewFlag) return true;
     for (let n = this; n; n = n.parentNode || n.host) {
       const tag = n.localName || '';
       if (tag === 'hui-card-preview' || tag === 'hui-dialog-edit-card' || tag === 'hui-card-picker' || n.classList?.contains?.('gfc-preview')) return true;
+    }
+    return false;
+  }
+  /* inside Home Assistant's edit mode (card options bar below the card) */
+  _inEditMode() {
+    for (let n = this; n; n = n.parentNode || n.host) {
+      const tag = n.localName || '';
+      if (tag === 'hui-card-options' || tag === 'hui-card-edit-mode') return true;
+      if (tag === 'hui-panel-view' || tag === 'hui-sections-view') return !!n.lovelace?.editMode;
     }
     return false;
   }
@@ -231,7 +241,7 @@ class GlassFloorplanCard extends HTMLElement {
     const empty = !M.rooms.length ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
     this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}</style>
-<div class="root boot${this._m ? ' m' : ''}" style="${springVars()}">
+<div class="root boot${this._m ? ' m' : ''}${this._inPreview() ? ' pv' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
     <linearGradient id="gfcdial" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5aa8ff"/><stop offset=".5" stop-color="#7fe0c0"/><stop offset="1" stop-color="#ff9f45"/></linearGradient>
@@ -363,7 +373,7 @@ class GlassFloorplanCard extends HTMLElement {
     const screen = this._config.fit !== 'width' && !this._inPreview();
     if (screen) {
       const top = this.getBoundingClientRect().top + (window.scrollY || 0);
-      avail = Math.max(420, Math.floor(window.innerHeight - Math.max(0, top)));
+      avail = Math.max(420, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
       padY = clamp(Math.round(avail * 0.018), 8, 22);
       pu = Math.min(pu, (avail - 2 * padY) / S.h);
     }

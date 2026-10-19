@@ -301,12 +301,13 @@ function placeWidgets(M, mobile) {
   };
   const edge = (c) => ({ l: c.i === 0, r: c.i + c.w === nx, t: c.j === 0, b: c.j + c.h === ny });
 
-  const g = 13 * D;
+  // sizes in design units (+ the wall gap of 13), converted to plan units
+  const du = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, (v + 13) * D]));
   // phones draw the tiles with fixed pixel fonts: they need more room in design units
-  const TILE = mobile ? { w: 290 + g, h: 225 + g, minW: 240 + g, minH: 196 + g, maxW: 380 + g, maxH: 280 + g }
-    : { w: 209 + g, h: 118 + g, minW: 158 + g, minH: 92 + g, maxW: 300 + g, maxH: 150 + g };
-  const CARD = { w: 446 + g, h: 212 + g, minW: 318 + g, minH: 180 + g, maxW: 560 + g, maxH: 250 + g };
-  const BAR = { w: 76 + g, h: Math.max(1, M.layers.length) * 64 + 12 + g };
+  const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 196, maxW: 380, maxH: 280 }
+    : { w: 209, h: 118, minW: 158, minH: 92, maxW: 300, maxH: 150 });
+  const CARD = du({ w: 446, h: 212, minW: 318, minH: 180, maxW: 560, maxH: 250 });
+  const BAR = du({ w: 76, h: Math.max(1, M.layers.length) * 64 + 12 });
 
   for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
 

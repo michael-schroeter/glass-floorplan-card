@@ -21,7 +21,9 @@ function autoConfig(hass, { lang } = {}) {
   }
   // rooms with a thermostat don't need an extra temperature sensor marker
   for (const [a, ids] of by) if (ids.some((x) => domainOf(x) === 'climate')) by.set(a, ids.filter((x) => domainOf(x) !== 'sensor'));
-  const areas = [...by.keys()].sort((x, y) => String(h.areas[x].name).localeCompare(String(h.areas[y].name), lang || 'en')).slice(0, 16);
+  // every area becomes a room – a floor plan also has rooms without smart devices
+  for (const a of Object.keys(h.areas || {})) if (!by.has(a)) by.set(a, []);
+  const areas = [...by.keys()].sort((x, y) => String(h.areas[x].name).localeCompare(String(h.areas[y].name), lang || 'en')).slice(0, 20);
   const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(areas.length))));
   // bigger rooms for areas with many devices (rows share one height)
   const size = (a) => (by.get(a).filter((x) => domainOf(x) !== 'vacuum').length > 6 ? 520 : 420);

@@ -1070,8 +1070,9 @@ function freeSpot(R, taken) {
 
 function guessLampIcon(eid, st) {
   const n = `${eid} ${st?.attributes?.friendly_name || ''}`.toLowerCase();
-  const pairs = [['chandelier|kronleuchter|luster|lüster', 'chandelier'], ['pendant|pendel|esstisch|dining', 'pendant'], ['strip|stripe|leiste|led_|lightstrip|band', 'strip'], ['spot|strahler|downlight', 'spot'],
-    ['desk|schreibtisch', 'desklamp'], ['floor|steh', 'floorlamp'], ['bedside|nacht|lamp|lampe|leselampe|reading', 'lamp'], ['wall|wand|mirror|spiegel|sconce', 'wall'], ['plant|pflanz', 'sprout'], ['ceiling|decke', 'ceiling'], ['candle|kerze', 'candle']];
+  const pairs = [['plant|pflanz|grow', 'sprout'], ['chandelier|kronleuchter|luster|lüster', 'chandelier'], ['pendant|pendel|esstisch|dining', 'pendant'],
+    ['strip|stripe|leiste|led_|lightstrip|band', 'strip'], ['spot|strahler|downlight', 'spot'], ['desk|schreibtisch', 'desklamp'], ['floor|steh', 'floorlamp'],
+    ['wall|wand|mirror|spiegel|sconce', 'wall'], ['candle|kerze', 'candle'], ['ceiling|decke', 'ceiling'], ['bedside|nacht|lamp|lampe|leselampe|reading', 'lamp']];
   for (const [re, ic] of pairs) if (new RegExp(re).test(n)) return ic;
   return 'bulb';
 }

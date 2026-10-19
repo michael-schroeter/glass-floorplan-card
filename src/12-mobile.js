@@ -67,6 +67,8 @@ const STYLES_M = `
 .m .tabs button span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; letter-spacing: 0; }
 .m .tabs .knob { top: 5px; bottom: 5px; left: 0; right: auto; height: auto; width: 0; transition: transform var(--sp-ms) var(--sp), width var(--sp-ms) var(--sp); }
 
+/* in Home Assistant's card preview the bar stays inside the card */
+.m.pv .tabs { position: absolute; bottom: 12px; }
 /* pop-ups as a floating glass sheet from below (slightly smaller blur radii: just as soft on a phone screen, but cheaper) */
 .m .scrim { -webkit-backdrop-filter: blur(18px) saturate(140%) brightness(.78); backdrop-filter: blur(18px) saturate(140%) brightness(.78); }
 .m .pshell { -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(1.06); backdrop-filter: blur(28px) saturate(200%) brightness(1.06); }
@@ -137,7 +139,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const pad = clamp(Math.round(W * 0.022), 6, 18);
     const top = this.getBoundingClientRect().top + (window.scrollY || 0);
     const preview = this._inPreview();
-    const avail = preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top)));
+    const avail = preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
     const gH = this._M.layers.length ? 166 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
     let pu = (W - 2 * pad) / S.w;
     if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (this._sideEl ? 106 : 0)) / S.h));

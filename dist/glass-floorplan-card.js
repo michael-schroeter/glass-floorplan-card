@@ -706,12 +706,13 @@ function placeWidgets(M, mobile) {
   };
   const edge = (c) => ({ l: c.i === 0, r: c.i + c.w === nx, t: c.j === 0, b: c.j + c.h === ny });
 
-  const g = 13 * D;
+  // sizes in design units (+ the wall gap of 13), converted to plan units
+  const du = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, (v + 13) * D]));
   // phones draw the tiles with fixed pixel fonts: they need more room in design units
-  const TILE = mobile ? { w: 290 + g, h: 225 + g, minW: 240 + g, minH: 196 + g, maxW: 380 + g, maxH: 280 + g }
-    : { w: 209 + g, h: 118 + g, minW: 158 + g, minH: 92 + g, maxW: 300 + g, maxH: 150 + g };
-  const CARD = { w: 446 + g, h: 212 + g, minW: 318 + g, minH: 180 + g, maxW: 560 + g, maxH: 250 + g };
-  const BAR = { w: 76 + g, h: Math.max(1, M.layers.length) * 64 + 12 + g };
+  const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 196, maxW: 380, maxH: 280 }
+    : { w: 209, h: 118, minW: 158, minH: 92, maxW: 300, maxH: 150 });
+  const CARD = du({ w: 446, h: 212, minW: 318, minH: 180, maxW: 560, maxH: 250 });
+  const BAR = du({ w: 76, h: Math.max(1, M.layers.length) * 64 + 12 });
 
   for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
 
@@ -1567,11 +1568,21 @@ class GlassFloorplanCard extends HTMLElement {
     try { localStorage.setItem(this._storeKey(), JSON.stringify({ tab: this._tab, mode: this._mode, fan: this._fan, water: this._water })); } catch (e) { /* never mind */ }
   }
 
+  /* the preview in Home Assistant's card dialog / card picker (HA also sets .preview on every card in edit mode –
+   * there the card keeps filling the screen, so only the surroundings count) */
   _inPreview() {
-    if (this._previewFlag) return true;
     for (let n = this; n; n = n.parentNode || n.host) {
       const tag = n.localName || '';
       if (tag === 'hui-card-preview' || tag === 'hui-dialog-edit-card' || tag === 'hui-card-picker' || n.classList?.contains?.('gfc-preview')) return true;
+    }
+    return false;
+  }
+  /* inside Home Assistant's edit mode (card options bar below the card) */
+  _inEditMode() {
+    for (let n = this; n; n = n.parentNode || n.host) {
+      const tag = n.localName || '';
+      if (tag === 'hui-card-options' || tag === 'hui-card-edit-mode') return true;
+      if (tag === 'hui-panel-view' || tag === 'hui-sections-view') return !!n.lovelace?.editMode;
     }
     return false;
   }
@@ -1669,7 +1680,7 @@ class GlassFloorplanCard extends HTMLElement {
     const empty = !M.rooms.length ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
     this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}</style>
-<div class="root boot${this._m ? ' m' : ''}" style="${springVars()}">
+<div class="root boot${this._m ? ' m' : ''}${this._inPreview() ? ' pv' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
     <linearGradient id="gfcdial" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5aa8ff"/><stop offset=".5" stop-color="#7fe0c0"/><stop offset="1" stop-color="#ff9f45"/></linearGradient>
@@ -1801,7 +1812,7 @@ class GlassFloorplanCard extends HTMLElement {
     const screen = this._config.fit !== 'width' && !this._inPreview();
     if (screen) {
       const top = this.getBoundingClientRect().top + (window.scrollY || 0);
-      avail = Math.max(420, Math.floor(window.innerHeight - Math.max(0, top)));
+      avail = Math.max(420, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
       padY = clamp(Math.round(avail * 0.018), 8, 22);
       pu = Math.min(pu, (avail - 2 * padY) / S.h);
     }
@@ -2787,7 +2798,12 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (lights.length) S.lights = () => this._lightsSection(lights, upd);
     if (clim.length) S.climate = () => this._climateSection(clim, upd);
     if (covers.length) S.covers = () => this._coverSection(covers, upd);
-    if (media.length) S.media = () => { const w = mk('div', 'psec'); media.forEach((e) => w.append(this._mediaSection(e, upd))); return w; };
+    if (media.length) S.media = () => {
+      const w = mk('div', 'psec'), tv = media.every((e) => this._hass.states[e.entity]?.attributes?.device_class === 'tv');
+      w.append(this._secHead(t(tv ? 'mediaTv' : 'mediaGeneric'), true));
+      media.forEach((e) => w.append(this._mediaSection(e, upd)));
+      return w;
+    };
     if (others.length) S.devices = () => this._devicesSection(others, upd);
     if (helpers.length) S.helpers = () => this._helperSection(helpers, upd);
     if (hasDoor) S.door = () => this._doorSection(upd);
@@ -2994,9 +3010,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const E = e.entity, nm = this._name(e);
     const w = mk('div', 'media');
     w.dataset.focus = E;
-    const dc = this._hass.states[E]?.attributes?.device_class;
-    w.innerHTML = `<div class="sec first"><span>${esc(t(dc === 'tv' ? 'mediaTv' : dc === 'speaker' || dc === 'receiver' ? 'mediaSpeaker' : 'mediaGeneric'))}</span></div>
-      <div class="np"><div class="art">${icon('tv')}</div><div><div class="t1"></div><div class="t2"></div></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>
+    w.innerHTML = `<div class="np"><div class="art">${icon('tv')}</div><div><div class="t1"></div><div class="t2"></div></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>
       <div class="ctrls"><button class="cbtn pv" aria-label="${esc(t('previous'))}">${icon('prev')}</button><button class="cbtn lg pp" aria-label="${esc(t('playPause'))}">${icon('play')}</button><button class="cbtn nx" aria-label="${esc(t('next'))}">${icon('next')}</button></div>
       <div class="hs vol" role="slider" aria-label="${esc(t('volume'))}" tabindex="0"><i class="fl"></i>${icon('speaker')}</div>`;
     const call = (svc, data = {}) => this._call('media_player', svc, { entity_id: E, ...data }).catch(() => {});
@@ -3955,7 +3969,6 @@ const VAC_KEYS = {
 };
 const VAC_MODES = [{ v: 'vacuum', i: 'robot', rate: 1.2 }, { v: 'vac_and_mop', i: 'vacmop', rate: 1.8 }, { v: 'mop', i: 'drop', rate: 1.6 }];
 const FAN_PREF = ['quiet', 'balanced', 'turbo', 'max', 'max_plus'];
-const WATER_PREF = ['low', 'mild', 'medium', 'moderate', 'high', 'intense'];
 const normName = (s) => slug(s).replace(/_/g, '');
 
 Object.assign(GlassFloorplanCard.prototype, {
@@ -4026,7 +4039,9 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
   _vacWaters() {
     const list = this._vs('water')?.attributes?.options || [];
-    let w = WATER_PREF.filter((x) => list.includes(x)).slice(0, 4);
+    // one value per level (Roborock offers e.g. low / medium / moderate / high – "medium" and "moderate" mean the same)
+    const levels = [['low', 'mild', 'slight'], ['medium', 'moderate'], ['high', 'intense', 'extreme']];
+    let w = levels.map((alts) => alts.find((x) => list.includes(x))).filter(Boolean);
     if (w.length < 2) w = list.filter((x) => !['off', 'custom', 'custom_water_flow', 'smart_mode'].includes(x)).slice(0, 4);
     return w.map((v) => ({ v, t: tf(`water_${v}`, v.charAt(0).toUpperCase() + v.slice(1).replace(/_/g, ' ')) }));
   },
@@ -4379,6 +4394,8 @@ const STYLES_M = `
 .m .tabs button span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; letter-spacing: 0; }
 .m .tabs .knob { top: 5px; bottom: 5px; left: 0; right: auto; height: auto; width: 0; transition: transform var(--sp-ms) var(--sp), width var(--sp-ms) var(--sp); }
 
+/* in Home Assistant's card preview the bar stays inside the card */
+.m.pv .tabs { position: absolute; bottom: 12px; }
 /* pop-ups as a floating glass sheet from below (slightly smaller blur radii: just as soft on a phone screen, but cheaper) */
 .m .scrim { -webkit-backdrop-filter: blur(18px) saturate(140%) brightness(.78); backdrop-filter: blur(18px) saturate(140%) brightness(.78); }
 .m .pshell { -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(1.06); backdrop-filter: blur(28px) saturate(200%) brightness(1.06); }
@@ -4449,7 +4466,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const pad = clamp(Math.round(W * 0.022), 6, 18);
     const top = this.getBoundingClientRect().top + (window.scrollY || 0);
     const preview = this._inPreview();
-    const avail = preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top)));
+    const avail = preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
     const gH = this._M.layers.length ? 166 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
     let pu = (W - 2 * pad) / S.w;
     if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (this._sideEl ? 106 : 0)) / S.h));
@@ -5863,8 +5880,9 @@ function freeSpot(R, taken) {
 
 function guessLampIcon(eid, st) {
   const n = `${eid} ${st?.attributes?.friendly_name || ''}`.toLowerCase();
-  const pairs = [['chandelier|kronleuchter|luster|lüster', 'chandelier'], ['pendant|pendel|esstisch|dining', 'pendant'], ['strip|stripe|leiste|led_|lightstrip|band', 'strip'], ['spot|strahler|downlight', 'spot'],
-    ['desk|schreibtisch', 'desklamp'], ['floor|steh', 'floorlamp'], ['bedside|nacht|lamp|lampe|leselampe|reading', 'lamp'], ['wall|wand|mirror|spiegel|sconce', 'wall'], ['plant|pflanz', 'sprout'], ['ceiling|decke', 'ceiling'], ['candle|kerze', 'candle']];
+  const pairs = [['plant|pflanz|grow', 'sprout'], ['chandelier|kronleuchter|luster|lüster', 'chandelier'], ['pendant|pendel|esstisch|dining', 'pendant'],
+    ['strip|stripe|leiste|led_|lightstrip|band', 'strip'], ['spot|strahler|downlight', 'spot'], ['desk|schreibtisch', 'desklamp'], ['floor|steh', 'floorlamp'],
+    ['wall|wand|mirror|spiegel|sconce', 'wall'], ['candle|kerze', 'candle'], ['ceiling|decke', 'ceiling'], ['bedside|nacht|lamp|lampe|leselampe|reading', 'lamp']];
   for (const [re, ic] of pairs) if (new RegExp(re).test(n)) return ic;
   return 'bulb';
 }
@@ -6239,7 +6257,7 @@ Object.assign(GfcEditor.prototype, {
     search.style.marginTop = '14px';
     I.append(search);
     // the part of the layer you can switch on/off: lights in "Light", custom picks …
-    const unplaced = ids.filter((id) => !placed.has(id) && this._areaOf(id) && this._c.rooms.some((r) => r.area === this._areaOf(id)) && (L.type !== 'custom' || this._isPlaceable(id)));
+    const unplaced = ids.filter((id) => !placed.has(id) && this._areaOf(id) && this._c.rooms.some((r) => r.area === this._areaOf(id)) && this._isPlaceable(id));
     if (unplaced.length && !q) {
       const b = this._btn(`${icon('wand')}<span>${esc(t('ed_autoAll', unplaced.length))}</span>`, 'wide blue', () => this._autoPlace(unplaced));
       b.style.marginTop = '10px';
@@ -6639,7 +6657,9 @@ function autoConfig(hass, { lang } = {}) {
   }
   // rooms with a thermostat don't need an extra temperature sensor marker
   for (const [a, ids] of by) if (ids.some((x) => domainOf(x) === 'climate')) by.set(a, ids.filter((x) => domainOf(x) !== 'sensor'));
-  const areas = [...by.keys()].sort((x, y) => String(h.areas[x].name).localeCompare(String(h.areas[y].name), lang || 'en')).slice(0, 16);
+  // every area becomes a room – a floor plan also has rooms without smart devices
+  for (const a of Object.keys(h.areas || {})) if (!by.has(a)) by.set(a, []);
+  const areas = [...by.keys()].sort((x, y) => String(h.areas[x].name).localeCompare(String(h.areas[y].name), lang || 'en')).slice(0, 20);
   const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(areas.length))));
   // bigger rooms for areas with many devices (rows share one height)
   const size = (a) => (by.get(a).filter((x) => domainOf(x) !== 'vacuum').length > 6 ? 520 : 420);

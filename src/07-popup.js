@@ -301,7 +301,12 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (lights.length) S.lights = () => this._lightsSection(lights, upd);
     if (clim.length) S.climate = () => this._climateSection(clim, upd);
     if (covers.length) S.covers = () => this._coverSection(covers, upd);
-    if (media.length) S.media = () => { const w = mk('div', 'psec'); media.forEach((e) => w.append(this._mediaSection(e, upd))); return w; };
+    if (media.length) S.media = () => {
+      const w = mk('div', 'psec'), tv = media.every((e) => this._hass.states[e.entity]?.attributes?.device_class === 'tv');
+      w.append(this._secHead(t(tv ? 'mediaTv' : 'mediaGeneric'), true));
+      media.forEach((e) => w.append(this._mediaSection(e, upd)));
+      return w;
+    };
     if (others.length) S.devices = () => this._devicesSection(others, upd);
     if (helpers.length) S.helpers = () => this._helperSection(helpers, upd);
     if (hasDoor) S.door = () => this._doorSection(upd);
@@ -508,9 +513,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const E = e.entity, nm = this._name(e);
     const w = mk('div', 'media');
     w.dataset.focus = E;
-    const dc = this._hass.states[E]?.attributes?.device_class;
-    w.innerHTML = `<div class="sec first"><span>${esc(t(dc === 'tv' ? 'mediaTv' : dc === 'speaker' || dc === 'receiver' ? 'mediaSpeaker' : 'mediaGeneric'))}</span></div>
-      <div class="np"><div class="art">${icon('tv')}</div><div><div class="t1"></div><div class="t2"></div></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>
+    w.innerHTML = `<div class="np"><div class="art">${icon('tv')}</div><div><div class="t1"></div><div class="t2"></div></div><button class="cbtn pw" aria-label="${esc(t('power'))}">${icon('power')}</button></div>
       <div class="ctrls"><button class="cbtn pv" aria-label="${esc(t('previous'))}">${icon('prev')}</button><button class="cbtn lg pp" aria-label="${esc(t('playPause'))}">${icon('play')}</button><button class="cbtn nx" aria-label="${esc(t('next'))}">${icon('next')}</button></div>
       <div class="hs vol" role="slider" aria-label="${esc(t('volume'))}" tabindex="0"><i class="fl"></i>${icon('speaker')}</div>`;
     const call = (svc, data = {}) => this._call('media_player', svc, { entity_id: E, ...data }).catch(() => {});

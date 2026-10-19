@@ -10,7 +10,6 @@ const VAC_KEYS = {
 };
 const VAC_MODES = [{ v: 'vacuum', i: 'robot', rate: 1.2 }, { v: 'vac_and_mop', i: 'vacmop', rate: 1.8 }, { v: 'mop', i: 'drop', rate: 1.6 }];
 const FAN_PREF = ['quiet', 'balanced', 'turbo', 'max', 'max_plus'];
-const WATER_PREF = ['low', 'mild', 'medium', 'moderate', 'high', 'intense'];
 const normName = (s) => slug(s).replace(/_/g, '');
 
 Object.assign(GlassFloorplanCard.prototype, {
@@ -81,7 +80,9 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
   _vacWaters() {
     const list = this._vs('water')?.attributes?.options || [];
-    let w = WATER_PREF.filter((x) => list.includes(x)).slice(0, 4);
+    // one value per level (Roborock offers e.g. low / medium / moderate / high – "medium" and "moderate" mean the same)
+    const levels = [['low', 'mild', 'slight'], ['medium', 'moderate'], ['high', 'intense', 'extreme']];
+    let w = levels.map((alts) => alts.find((x) => list.includes(x))).filter(Boolean);
     if (w.length < 2) w = list.filter((x) => !['off', 'custom', 'custom_water_flow', 'smart_mode'].includes(x)).slice(0, 4);
     return w.map((v) => ({ v, t: tf(`water_${v}`, v.charAt(0).toUpperCase() + v.slice(1).replace(/_/g, ' ')) }));
   },
