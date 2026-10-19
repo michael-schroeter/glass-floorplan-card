@@ -960,12 +960,15 @@ class GfcEditor extends HTMLElement {
         const bright = L / 1024 > 150;
         const B = this._c.rooms.length ? bboxOf(this._c.rooms.map((r) => r.rect)) : null;
         const w = B ? B[2] - B[0] : 1200, h = (w * img.height) / img.width;
-        this._change(() => { this._c.underlay = { rect: [B ? B[0] : 0, B ? B[1] : 0, (B ? B[0] : 0) + w, (B ? B[1] : 0) + h].map(r0), opacity: bright ? 0.5 : 0.6, ...(bright ? { invert: true } : {}) }; });
+        // an imported plan already knows where its picture lies (image_rect): keep that if the proportions fit
+        const old = !this._ulSrc && this._c.underlay?.rect, ar = img.height / img.width;
+        const keep = old && Math.abs((old[3] - old[1]) / (old[2] - old[0]) - ar) < ar * 0.03;
+        this._change(() => { this._c.underlay = { rect: keep ? old : [B ? B[0] : 0, B ? B[1] : 0, (B ? B[0] : 0) + w, (B ? B[1] : 0) + h].map(r0), opacity: bright ? 0.5 : 0.6, ...(bright ? { invert: true } : {}) }; });
         this._setUnderlay(url);
         this._fit();
         this._draw();
         this._panel();
-        this._toast(t('ed_ulLoaded'));
+        this._toast(t(keep ? 'ed_ulAligned' : 'ed_ulLoaded'));
       };
       img.src = fr.result;
     };

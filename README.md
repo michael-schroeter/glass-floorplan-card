@@ -25,7 +25,8 @@ Your home as a glass floor plan for Home Assistant. Lamps glow in their real col
 - **Room pop-ups** grow out of the room with spring animations. They contain dimming tiles, colour and white tone, media controls, a thermostat dial, cover tiles, device rows and helper sliders.
 - **Phone layout** in the same card, switched automatically by width. A landscape plan is turned upright, the layers sit in a bar at the bottom, and pop-ups become sheets you can swipe away.
 - **Visual editor** with no YAML needed:
-  - Load a photo, screenshot or sketch of your floor plan, set the scale by measuring one wall, and let the editor **find the rooms and passages automatically**. You can also trace them by hand.
+  - Load a photo, screenshot or sketch of your floor plan, set the scale by measuring one wall, and let the editor **find the rooms and passages automatically**. You can also trace them by hand, or import a floor plan file made by the Claude skill.
+  - Link your **Home Assistant areas** to the rooms: automatically by name, or by dragging an area onto its room. The area's devices are placed right away.
   - Create rooms from your **Home Assistant areas** in one click and place their devices automatically.
   - Drag furniture from a palette and click walls to add windows, passages and the front door.
   - Drag devices from a searchable list (grouped by area) onto the plan, and pick symbols, power and light cones.
@@ -59,8 +60,8 @@ Copy `dist/glass-floorplan-card.js` to `/config/www/` and add it as a resource (
 
 1. Create a dashboard view of type **Panel** (best) or **Sections**, then add the card *Glass Floorplan Card*. If you have areas in Home Assistant, the card starts with one room per area and their devices already placed.
 2. In the card editor, click **Open floor plan editor**.
-3. **Template**: load a picture of your floor plan → **Measure** (click both ends of a wall, enter its length) → **Find rooms automatically**. You can also draw rooms by dragging rectangles.
-4. **Rooms**: name each room and link its Home Assistant area. The area is used by the vacuum and for placing devices.
+3. **Template**: load a picture of your floor plan → **Measure** (click both ends of a wall, enter its length) → **Find rooms automatically**. You can also draw rooms by dragging rectangles, or import a file from the Claude skill (see below).
+4. **Rooms**: drag your Home Assistant areas onto the rooms, or use *Link by name*. Each room gets the area's name and its devices. The area is also used by the vacuum.
 5. **Windows & doors**, **Furniture**: optional, purely for the looks.
 6. **Devices**: choose a layer and drag devices onto the plan, or use *Place automatically*.
 7. **Layers**: switch built-in layers on or off, or create your own, e.g. *Night = Light + Covers + front door lock + window contacts*.
@@ -146,9 +147,18 @@ widgets:                   # optional fixed positions of the tiles (normally aut
 
 Furniture kinds: `sofa armchair bed bed_single table round_table chair desk wardrobe shelf sideboard tv counter fridge bath shower toilet sink washer plant rug stairs block`. A `tv` piece glows while a media player in the room is on.
 
-## Setup with Claude
+## Hard-to-read plan? Let Claude do it
 
-`skills/floorplan-setup/` contains a Claude skill that turns a photo of your floor plan and your entity list into a ready configuration. You then fine-tune it in the editor. See [its SKILL.md](skills/floorplan-setup/SKILL.md).
+For phone photos at an angle, hand sketches or busy listing plans, the Claude skill in [`skills/floorplan-setup`](skills/floorplan-setup/SKILL.md) turns **just the picture** into a floor plan file. The skill reads the room names and dimensions, finds the exact rectangles with a small script, and adds windows, doors and furniture. You don't need Home Assistant data or any explanation.
+
+1. Install the skill once:
+   - **claude.ai** (web/desktop/app): download `floorplan-setup-skill.zip` from the latest release and add it under *Settings → Capabilities → Skills* (code execution must be on).
+   - **Claude Code**: copy the folder to `~/.claude/skills/floorplan-setup/`.
+2. Send Claude your floor plan picture with a short note such as *“Glass Floorplan”*. You get `<home>.floorplan.json` to download.
+3. In Home Assistant: edit the card → **Open floor plan editor** → **Template** → **Import a floor plan file**. You can also paste Claude's answer with *Paste text*.
+4. **Rooms** → **Link by name**: rooms whose names match your areas are linked and their devices placed. Drag any remaining area onto its room.
+
+If the size was only estimated, the editor asks for one real length and rescales everything. If you load the same picture as template, it lines up exactly under the plan. `demo/sketch-example.png` and `demo/sketch-example.floorplan.json` show the whole round trip.
 
 ## Development
 
