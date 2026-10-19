@@ -1,0 +1,6 @@
+{
+  "name": "Glass Floorplan Card",
+  "filename": "glass-floorplan-card.js",
+  "render_readme": true,
+  "homeassistant": "2024.8.0"
+}

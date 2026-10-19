@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Glass Floorplan Card – Demo</title>
+<!--
+  Demo without Home Assistant: a made-up flat with a simulated `hass` (nothing leaves the browser).
+  The page imitates the Home Assistant frame (sidebar 256 px, header 56 px).
+  Parameters: ?scene=evening|day|off|cleaning|playing|cold|nomodes · ?lang=en|de · ?mobile=1 (phone frame, see phone.html) · ?blank=1 empty plan · ?reset=1 forget edits
+              ?sidebar=0 hides the sidebar · ?edit=1 opens the floor plan editor
+  Local: python3 -m http.server 8765 --bind 127.0.0.1  →  http://127.0.0.1:8765/demo/
+-->
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #111; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: #e1e1e1; }
+  .sb { position: fixed; left: 0; top: 0; bottom: 0; width: 255px; background: #1c1c1c; border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; overflow-y: auto; }
+  .sb .t { height: 56px; flex: none; display: flex; align-items: center; padding-left: 20px; font-size: 18px; font-weight: 500; }
+  .sb h3 { margin: 18px 20px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #8a8a8f; }
+  .sb a, .sb button { display: flex; align-items: center; gap: 10px; height: 38px; margin: 0 8px; padding: 0 12px; border-radius: 10px; color: #e1e1e1; text-decoration: none; font: inherit; font-size: 14px; background: none; border: 0; cursor: pointer; text-align: left; }
+  .sb a:hover, .sb button:hover { background: #2a2a2e; }
+  .sb a.on { background: rgba(3, 169, 244, .16); color: #4fc3f7; }
+  .sb .seg { display: flex; gap: 6px; margin: 0 16px; }
+  .sb .seg a { flex: 1; justify-content: center; margin: 0; padding: 0; border: 1px solid #333; }
+  .sb .note { margin: auto 20px 18px; padding-top: 18px; font-size: 12px; line-height: 1.45; color: #8a8a8f; }
+  .sb .note a { display: inline; margin: 0; padding: 0; height: auto; color: #4fc3f7; }
+  .hd { position: fixed; left: 256px; right: 0; top: 0; height: 56px; background: #1c1c1c; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; padding-left: 24px; font-size: 20px; z-index: 2; }
+  main { position: absolute; left: 256px; right: 0; top: 56px; }
+  body.nosb .sb { display: none; } body.nosb .hd, body.nosb main { left: 0; }
+  body.mob .sb { display: none; } body.mob .hd, body.mob main { left: 0; } body.mob .hd { padding-left: 64px; border: 0; }
+  dialog.yaml { width: min(760px, 92vw); max-height: 84vh; border: 0; border-radius: 18px; padding: 0; background: #1c1c1e; color: #eee; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  dialog.yaml::backdrop { background: rgba(0, 0, 0, .55); }
+  dialog.yaml header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #2c2c2e; font-weight: 600; }
+  dialog.yaml pre { margin: 0; padding: 16px 18px; max-height: 68vh; overflow: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
+  dialog.yaml button { font: inherit; padding: 7px 14px; border-radius: 10px; border: 0; background: #2c2c2e; color: #eee; cursor: pointer; margin-left: 8px; }
+</style>
+</head>
+<body>
+<div class="sb">
+  <div class="t">Glass Floorplan</div>
+  <h3 data-i="scenes">Scenes</h3>
+  <nav id="scenes"></nav>
+  <h3 data-i="language">Language</h3>
+  <div class="seg" id="langs"></div>
+  <h3 data-i="tools">Tools</h3>
+  <button id="edit">✎&nbsp; <span data-i="editPlan">Edit floor plan</span></button>
+  <button id="yaml">{ }&nbsp; <span data-i="showYaml">Show configuration</span></button>
+  <a id="phone" href="phone.html">▯&nbsp; <span data-i="phoneView">Phone view</span></a>
+  <div class="note" data-i="note">Demo with a made-up flat and simulated devices – nothing is switched for real. Made with Claude.</div>
+</div>
+<div class="hd" id="hd">Home</div>
+<main id="main"></main>
+<dialog class="yaml" id="yamlDlg"><header><span>YAML</span><span><button id="copy">Copy</button><button id="closeY">Close</button></span></header><pre id="yamlPre"></pre></dialog>
+<script src="hass.js"></script>
+<script>
+const P = new URLSearchParams(location.search);
+const SCENE = P.get('scene') || 'evening';
+const LANG = P.get('lang') || (navigator.language.startsWith('de') ? 'de' : 'en');
+const MOBILE = P.get('mobile') === '1';
+if (MOBILE) document.body.classList.add('mob');
+if (P.get('sidebar') === '0') document.body.classList.add('nosb');
+const T = {
+  en: { scenes: 'Scenes', language: 'Language', tools: 'Tools', editPlan: 'Edit floor plan', showYaml: 'Show configuration', phoneView: 'Phone view', note: 'Demo with a made-up flat and simulated devices – nothing is switched for real. Made with Claude.', home: 'Home',
+    sc: { evening: 'Evening', day: 'Day', off: 'All off', cleaning: 'Robot cleaning', playing: 'TV playing', cold: 'Cold day' } },
+  de: { scenes: 'Szenen', language: 'Sprache', tools: 'Werkzeuge', editPlan: 'Grundriss bearbeiten', showYaml: 'Konfiguration zeigen', phoneView: 'Handy-Ansicht', note: 'Demo mit erfundener Wohnung und simulierten Geräten – nichts wird wirklich geschaltet. Entwickelt mit Claude.', home: 'Zuhause',
+    sc: { evening: 'Abend', day: 'Tag', off: 'Alles aus', cleaning: 'Roboter reinigt', playing: 'Fernseher läuft', cold: 'Kalter Tag' } },
+}[LANG];
+document.documentElement.lang = LANG;
+document.querySelectorAll('[data-i]').forEach((el) => { if (T[el.dataset.i]) el.textContent = T[el.dataset.i]; });
+document.getElementById('hd').textContent = T.home;
+const link = (o) => { const q = new URLSearchParams(location.search); for (const [k, v] of Object.entries(o)) q.set(k, v); return `?${q}`; };
+document.getElementById('scenes').innerHTML = Object.entries(T.sc).map(([k, v]) => `<a href="${link({ scene: k })}" class="${k === SCENE ? 'on' : ''}">${v}</a>`).join('');
+document.getElementById('langs').innerHTML = ['en', 'de'].map((l) => `<a href="${link({ lang: l })}" class="${l === LANG ? 'on' : ''}">${l.toUpperCase()}</a>`).join('');
+document.getElementById('phone').href = `phone.html${link({})}`;
+
+let config = null;
+let card;
+const sim = GFC_HASS(SCENE, LANG, () => { if (card) card.hass = sim.hass(); });
+window.__sim = sim;
+
+function mount() {
+  card = document.createElement('glass-floorplan-card');
+  card.id = 'card';
+  document.getElementById('main').replaceChildren(card);
+  card.setConfig(config);
+  card.hass = sim.hass();
+  window.__card = card;
+}
+function start() {
+  config = P.get('blank') === '1' ? { type: 'custom:glass-floorplan-card', language: LANG } : GFC_EXAMPLE(LANG);
+  if (P.get('blank') !== '1') try { const saved = JSON.parse(localStorage.getItem(`gfc-demo-config-${LANG}`) || 'null'); if (saved && P.get('reset') !== '1') config = saved; } catch (e) { /* ignore */ }
+  mount();
+  document.getElementById('yaml').onclick = () => {
+    const y = window.GFC_TOYAML ? window.GFC_TOYAML(config) : JSON.stringify(config, null, 2);
+    document.getElementById('yamlPre').textContent = y;
+    document.getElementById('yamlDlg').showModal();
+  };
+  document.getElementById('closeY').onclick = () => document.getElementById('yamlDlg').close();
+  document.getElementById('copy').onclick = () => navigator.clipboard?.writeText(document.getElementById('yamlPre').textContent);
+  document.getElementById('edit').onclick = openEditor;
+  if (P.get('edit') === '1') openEditor();
+}
+function openEditor() {
+  if (!window.GFC_OPEN_EDITOR) return;
+  window.GFC_OPEN_EDITOR({ config, hass: sim.hass, onSave: (c) => { config = c; if (P.get('blank') !== '1') try { localStorage.setItem(`gfc-demo-config-${LANG}`, JSON.stringify(c)); } catch (e) { /* ignore */ } card.setConfig(c); } });
+}
+const js = document.createElement('script');
+js.src = `../dist/glass-floorplan-card.js?t=${Date.now()}`;
+js.onload = start;
+js.onerror = () => document.body.insertAdjacentHTML('beforeend', '<p style="color:#ff6b6b;padding:80px 280px">dist/glass-floorplan-card.js missing – run python3 tools/build.py</p>');
+document.head.append(js);
+</script>
+</body>
+</html>

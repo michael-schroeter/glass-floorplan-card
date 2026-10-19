@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glass Floorplan Card – Phone</title>
+<!-- Shows the demo at iPhone size (default 390 × 844 CSS px). Parameters are passed on to index.html,
+     e.g. phone.html?scene=cleaning · w/h change the device size (phone.html?w=430&h=932). -->
+<style>
+  html, body { margin: 0; height: 100%; background: #2a2b30; display: grid; justify-items: center; align-items: start; font-family: -apple-system, system-ui, sans-serif; }
+  .dev { position: relative; margin-top: 8px; transform-origin: 50% 0; border-radius: 54px; padding: 14px; background: #0b0b0d; box-shadow: 0 0 0 2px #3a3b40, 0 30px 80px rgba(0, 0, 0, .6); }
+  iframe { display: block; border: 0; border-radius: 42px; background: #000; }
+  .back { position: fixed; left: 16px; top: 14px; color: #c8c8d0; font-size: 14px; text-decoration: none; padding: 8px 14px; border-radius: 10px; background: rgba(255,255,255,.08); }
+</style>
+</head>
+<body>
+<a class="back" id="back" href="index.html">← Laptop</a>
+<div class="dev"><iframe id="f" title="Demo"></iframe></div>
+<script>
+  const P = new URLSearchParams(location.search);
+  const w = +P.get('w') || 390, h = +P.get('h') || 844;
+  const f = document.getElementById('f');
+  f.width = w; f.height = h;
+  P.set('mobile', '1'); P.delete('w'); P.delete('h');
+  f.src = 'index.html?' + P.toString();
+  const q = new URLSearchParams(location.search); q.delete('w'); q.delete('h');
+  document.getElementById('back').href = 'index.html?' + q.toString();
+  const fit = () => { const k = Math.min(1, (innerHeight - 16) / (h + 28)); document.querySelector('.dev').style.transform = `scale(${k})`; };
+  addEventListener('resize', fit); fit();
+</script>
+</body>
+</html>

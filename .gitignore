@@ -1,0 +1,12 @@
+# niemals veröffentlichen
+.env
+*.env
+backup/
+secrets*
+# lokal
+.DS_Store
+__pycache__/
+node_modules/
+# private working notes (contain private examples) – never publish
+CLAUDE.md
+.claude/
