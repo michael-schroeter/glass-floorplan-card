@@ -58,7 +58,8 @@ class GlassFloorplanCard extends HTMLElement {
   }
 
   static getConfigElement() { return document.createElement(`${CARD_TAG}-editor`); }
-  static getStubConfig(hass) { return typeof autoConfig === 'function' ? autoConfig(hass) : { rooms: [] }; }
+  /* a new card starts empty – the floor plan editor begins with the template (rooms from the areas are one click there) */
+  static getStubConfig() { return {}; }
   setConfig(config) {
     if (!config || typeof config !== 'object') throw new Error('Invalid configuration');
     this._config = JSON.parse(JSON.stringify(config));
@@ -68,6 +69,16 @@ class GlassFloorplanCard extends HTMLElement {
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 'full', rows: 'auto', min_columns: 6 }; }
   set preview(v) { this._previewFlag = !!v; }
+
+  /* The floor plan editor shows the card live on a virtual screen: { w, h } size of that screen, the layer `tab`,
+   * optionally a fixed `stage` (so the plan does not move while something is dragged) or a fixed scale and origin
+   * `fix` (while rooms are drawn). Nothing is stored for the viewer. */
+  setEditorView(config, ev) {
+    this._ev = ev || null;
+    this._config = JSON.parse(JSON.stringify(config));
+    if (ev?.tab) this._tab = ev.tab;
+    if (this._built && this._hass) this._rebuild();
+  }
   get preview() { return !!this._previewFlag; }
 
   connectedCallback() {
@@ -173,9 +184,11 @@ class GlassFloorplanCard extends HTMLElement {
   _build() {
     this._built = true;
     this._useLang();
-    const W = this.getBoundingClientRect().width || this.parentElement?.getBoundingClientRect().width || window.innerWidth;
+    const W = this._ev?.w || this.getBoundingClientRect().width || this.parentElement?.getBoundingClientRect().width || window.innerWidth;
     this._m = this._wantMobile(W);
     const M = this._M = buildModel(this._config, this._hass, { mobile: this._m });
+    if (this._ev?.stage) M.stage = { ...this._ev.stage };
+    if (this._ev?.tab && M.layers.some((l) => l.id === this._ev.tab)) this._tab = this._ev.tab;
     if (!M.layers.some((l) => l.id === this._tab)) this._tab = M.layers[0].id;
     this._sel = this._sel.filter((k) => M.byRoom[k]);
     const S = M.stage, G = this._G = geo(S), D = M.D;
@@ -238,10 +251,10 @@ class GlassFloorplanCard extends HTMLElement {
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';
     const bar = M.widgets.bar || this._m ? `<div class="tabs" role="tablist" aria-orientation="${this._m ? 'horizontal' : 'vertical'}" style="${M.widgets.bar && !this._m ? G.at(center(M.widgets.bar)) : ''}"><i class="knob"></i>
       ${M.layers.map((L) => `<button data-tab="${esc(L.id)}" role="tab" aria-label="${esc(this._layerName(L))}">${this._iconHtml(L.icon)}<span>${esc(this._layerName(L))}</span></button>`).join('')}</div>` : '';
-    const empty = !M.rooms.length ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
+    const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
     this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}</style>
-<div class="root boot${this._m ? ' m' : ''}${this._inPreview() ? ' pv' : ''}" style="${springVars()}">
+<div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
     <linearGradient id="gfcdial" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5aa8ff"/><stop offset=".5" stop-color="#7fe0c0"/><stop offset="1" stop-color="#ff9f45"/></linearGradient>
@@ -362,7 +375,7 @@ class GlassFloorplanCard extends HTMLElement {
   /* Everything at a glance: the plan gets as large as width AND visible window height allow; the card fills
    * exactly the space below the header – the page does not scroll. "fit: width" scales by width only. */
   _layout() {
-    const W = this._root?.clientWidth;
+    const ev = this._ev, W = ev ? ev.w : this._root?.clientWidth;
     if (!W) return;
     if (this._wantMobile(W) !== this._m && this._hass) { clearTimeout(this._rbT); this._rbT = setTimeout(() => this._rebuild(), 30); return; }
     if (this._m) { this._layoutMobile(W); return; }
@@ -370,19 +383,25 @@ class GlassFloorplanCard extends HTMLElement {
     const padX = clamp(Math.round(W * 0.02), 12, 34);
     const sideW = side ? clamp(Math.round(W * 0.2), 220, 320) : 0, sgap = side ? clamp(Math.round(W * 0.014), 12, 22) : 0;
     let pu = (W - 2 * padX - sideW - sgap) / S.w, avail = 0, padY;
-    const screen = this._config.fit !== 'width' && !this._inPreview();
+    const screen = this._config.fit !== 'width' && (!!ev || !this._inPreview());
     if (screen) {
-      const top = this.getBoundingClientRect().top + (window.scrollY || 0);
-      avail = Math.max(420, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
+      const top = ev ? 0 : this.getBoundingClientRect().top + (window.scrollY || 0);
+      avail = ev ? ev.h : Math.max(420, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
       padY = clamp(Math.round(avail * 0.018), 8, 22);
       pu = Math.min(pu, (avail - 2 * padY) / S.h);
     }
-    const u = clamp(pu * D, 0.4, 1.45);
+    let u = clamp(pu * D, 0.4, 1.45);
     pu = u / D;
     if (!screen) padY = clamp(Math.round(14 * u), 8, 22);
-    const sw = S.w * pu, sh = S.h * pu;
+    let sw = S.w * pu, sh = S.h * pu;
     const H = avail || Math.round(sh + 2 * padY);
-    const sx = Math.round((W - sw - sideW - sgap) / 2), sy = Math.round((H - sh) / 2);
+    let sx = Math.round((W - sw - sideW - sgap) / 2), sy = Math.round((H - sh) / 2);
+    // the editor keeps plan → screen fixed while rooms are drawn ({ pu, ox, oy }: pixels per cm and where 0 / 0 is)
+    if (ev?.fix) {
+      pu = ev.fix.pu; u = pu * D;
+      sw = S.w * pu; sh = S.h * pu;
+      sx = ev.fix.ox + S.x * pu; sy = ev.fix.oy + S.y * pu;
+    }
     if (this._h !== H) { this._h = H; this.style.height = `${H}px`; }
     if (side) {
       const g = 13 * u, top = sy + (B[1] - S.y) * pu + g / 2, h = (B[3] - B[1]) * pu - g;
@@ -400,6 +419,7 @@ class GlassFloorplanCard extends HTMLElement {
     s.setProperty('--dy', `${(sy + (B[1] - S.y) * pu).toFixed(1)}px`);
     this._u = u;
     this._pu = pu;
+    this._lv = { S, pu, sx, sy, H };
     this._placeKnob(true);
     this._fitLabels();
     this._declutter();
@@ -413,7 +433,8 @@ class GlassFloorplanCard extends HTMLElement {
   _declutter() {
     const M = this._M, sr = this._stage?.getBoundingClientRect();
     if (!sr?.width || !this._pu) return;
-    const S = M.stage, pu = this._pu, g = 13 * this._u;
+    // (shown scaled in the floor plan editor: measured boxes are converted back)
+    const S = M.stage, pu = this._pu, g = 13 * this._u, sc = sr.width / (S.w * pu) || 1;
     const items = [];
     for (const [eid, el] of Object.entries(this._mk)) {
       const e = eid === '__door' ? M.door : M.ents.find((x) => x.entity === eid);
@@ -429,7 +450,7 @@ class GlassFloorplanCard extends HTMLElement {
       const rg = document.createRange();
       rg.selectNodeContents(el);
       const b = rg.getBoundingClientRect();
-      if (b.width) boxes.push([b.left - sr.left - 3, b.top - sr.top - 2, b.right - sr.left + 3, b.bottom - sr.top + 2]);
+      if (b.width) boxes.push([(b.left - sr.left) / sc - 3, (b.top - sr.top) / sc - 2, (b.right - sr.left) / sc + 3, (b.bottom - sr.top) / sc + 2]);
     }
     for (let it = 0; it < 48; it++) {
       let moved = false;

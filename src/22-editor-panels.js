@@ -3,14 +3,41 @@ const SHOW_LABEL = { light: 'layer_light', media: 'ed_kind_media', door: 'frontD
 const LAYER_ICONS = ['bulb', 'thermo', 'blinds', 'robot', 'moon', 'shield', 'sparkle', 'home', 'sofa', 'plug', 'fan', 'leaf', 'flame', 'drop', 'bolt', 'tv', 'lock', 'bell'];
 
 Object.assign(GfcEditor.prototype, {
+  /* The right side: the tool's list, or the settings of what was tapped – with a back arrow to the list
+   * (the list keeps its scroll position). Things just added from the list stay "quietly" selected there. */
   _panel() {
     if (!this._ins) return;
     const I = this._ins, s = this._s;
+    const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid' };
+    const detail = s && !s.quiet && this._selObj() ? map[s.t] : null;
+    const layer = !detail && this._tool === 'layers' && this._editLayer ? this._layerDef(this._editLayer) : null;
+    const view = detail ? `d:${s.t}` : layer ? `e:${layer.id}` : `t:${this._tool}`;
+    if (this._view?.startsWith('t:')) this._scrollMem[this._view] = I.scrollTop;
+    const keep = view === this._view ? I.scrollTop : null;
     I.innerHTML = '';
-    const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid', ul: '_p_sketch' };
-    const fn = s && this._selObj() ? map[s.t] : `_p_${this._tool}`;
-    this[fn]?.(I);
+    if (detail || layer) {
+      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(t(`ed_tool_${this._tool}`))}</span>`);
+      back.addEventListener('click', () => this._back());
+      I.append(back);
+    }
+    if (detail) this[detail](I);
+    else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
+    else this[`_p_${this._tool}`]?.(I);
+    I.scrollTop = keep ?? (view.startsWith('t:') ? this._scrollMem[view] || 0 : 0);
+    this._view = view;
     this._syncTop();
+  },
+  _back() {
+    this._s = null;
+    this._editLayer = null;
+    this._draw();
+    this._panel();
+  },
+  /* a red button that deletes (hovering it shows in red what goes) */
+  _delBtn(label, onClick, scope = 'sel', cls = '') {
+    const b = this._btn(`${icon('trash')}<span>${esc(label)}</span>`, `red ${cls}`, onClick);
+    b.dataset.del = scope;
+    return b;
   },
 
   /* ---------------------------------------------------------------- small UI builders */
@@ -117,7 +144,7 @@ Object.assign(GfcEditor.prototype, {
       const row = mk('div', 'ebtns');
       row.append(
         this._btn(`${icon('fit')}<span>${esc(t(m ? 'ed_measure_stop' : 'ed_measure'))}</span>`, m ? 'blue' : '', () => { this._measure = m ? null : {}; this._s = null; this._draw(); this._panel(); }),
-        this._btn(`${icon('trash')}<span>${esc(t('ed_ulRemove'))}</span>`, 'red', () => this._change(() => { delete this._c.underlay; this._setUnderlay(null); })),
+        this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._setUnderlay(null); }), 'none'),
       );
       I.append(row);
       I.append(this._el(`<p class="small">${esc(t('ed_ulNote'))}</p>`));
@@ -138,7 +165,7 @@ Object.assign(GfcEditor.prototype, {
       this._fit(); this._draw(); this._toast(t('ed_exampleLoaded'));
     }));
     if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide', () => this._exportPlan()));
-    if (c.rooms.length) q.append(this._btn(`${icon('trash')}<span>${esc(t('ed_clear'))}</span>`, 'wide red', () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; })));
+    if (c.rooms.length) q.append(this._delBtn(t('ed_clear'), () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; }), 'all', 'wide'));
     I.append(q);
     I.append(this._el(`<p class="small">${esc(t('ed_claudeTip'))}</p>`));
   },
@@ -267,7 +294,7 @@ Object.assign(GfcEditor.prototype, {
       }
     }
     const row = mk('div', 'ebtns');
-    row.append(this._btn(`${icon('copy')}<span>${esc(t('ed_duplicate'))}</span>`, '', () => this._duplicateSel()), this._btn(`${icon('trash')}<span>${esc(t('ed_delete'))}</span>`, 'red', () => this._deleteSel()));
+    row.append(this._btn(`${icon('copy')}<span>${esc(t('ed_duplicate'))}</span>`, '', () => this._duplicateSel()), this._delBtn(t('ed_delete'), () => this._deleteSel()));
     I.append(row);
   },
   /* lights, climate, covers, media … – not helpers, groups of sensors etc. */
@@ -295,17 +322,22 @@ Object.assign(GfcEditor.prototype, {
     if (!this._c.rooms.length) { I.append(this._el(esc(t('ed_needRoom')), 'eempty')); return; }
     this._palette(I);
   },
-  /* the palette stays where it is; rotate / duplicate / delete float next to the piece on the plan */
+  /* one piece: kind and size (rotate / duplicate / delete also float next to it on the plan) */
   _pFurn(I) {
-    this._p_furniture(I);
     const f = this._selObj(), F = normFurn(f);
-    I.append(this._el(`<h3>${esc(t('ed_selected'))}: ${esc(t(`furn_${F.kind}`))}</h3>`));
+    I.append(this._el(`<h2>${esc(t(`furn_${F.kind}`))}</h2>`));
     I.append(this._fieldEl(t('ed_kind'), this._drop(Object.keys(FURN_KINDS).map((k) => [k, t(`furn_${k}`)]), F.kind, (v) => {
       if (Array.isArray(f)) { f.length = 4; f.push(v); } else f.kind = v;
     })));
     const R = F.r;
     I.append(this._fieldEl(t('ed_widthCm'), this._inp(R[2] - R[0], (v) => { if (v >= 5) setFurnRect(f, [R[0], R[1], R[0] + v, normFurn(f).r[3]]); }, { num: true, type: 'number' }), true));
     I.append(this._fieldEl(t('ed_depthCm'), this._inp(R[3] - R[1], (v) => { if (v >= 5) setFurnRect(f, [R[0], R[1], normFurn(f).r[2], R[1] + v]); }, { num: true, type: 'number' }), true));
+    const row = mk('div', 'ebtns');
+    row.append(this._btn(`${icon('rotate')}<span>${esc(t('ed_rotate'))}</span>`, '', () => this._rotateFurn()), this._btn(`${icon('copy')}<span>${esc(t('ed_duplicate'))}</span>`, '', () => this._duplicateSel()));
+    I.append(row);
+    const del = mk('div', 'ebtns');
+    del.append(this._delBtn(t('ed_delete'), () => this._deleteSel()));
+    I.append(del);
   },
 
   /* ---------------------------------------------------------------- windows, passages, front door */
@@ -317,9 +349,8 @@ Object.assign(GfcEditor.prototype, {
     I.append(this._el(`<p class="small">${esc(t('ed_open_counts', c.windows.length, c.doors.length, c.entrance ? 1 : 0))}</p>`));
   },
   _pOpen(I) {
-    this._p_openings(I);
     const s = this._s, seg = normSeg(this._selObj()), h = segH(seg);
-    I.append(this._el(`<h3>${esc(t('ed_selected'))}: ${esc(t(`ed_open_${s.k}`))}</h3>`));
+    I.append(this._el(`<h2>${esc(t(`ed_open_${s.k}`))}</h2>`));
     const len = h ? seg[2] - seg[0] : seg[3] - seg[1];
     I.append(this._fieldEl(t('ed_lengthCm'), this._inp(len, (v) => {
       if (!(v >= 20)) return;
@@ -327,7 +358,7 @@ Object.assign(GfcEditor.prototype, {
       this._setOpening(s, h ? [r0(m - v / 2), seg[1], r0(m + v / 2), seg[3]] : [seg[0], r0(m - v / 2), seg[2], r0(m + v / 2)]);
     }, { num: true, type: 'number' }), true));
     const row = mk('div', 'ebtns');
-    row.append(this._btn(`${icon('trash')}<span>${esc(t('ed_delete'))}</span>`, 'red', () => this._deleteSel()));
+    row.append(this._delBtn(t('ed_delete'), () => this._deleteSel()));
     I.append(row);
     I.append(this._el(`<p class="small">${esc(t('ed_open_move'))}</p>`));
   },
@@ -374,15 +405,29 @@ Object.assign(GfcEditor.prototype, {
       b.style.marginTop = '10px';
       I.append(b);
     }
-    // grouped by area
-    const groups = new Map();
-    for (const id of ids) { const a = this._areaOf(id) || ''; if (!groups.has(a)) groups.set(a, []); groups.get(a).push(id); }
-    const order = [...groups.keys()].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || String(h.areas?.[a]?.name || a).localeCompare(String(h.areas?.[b]?.name || b), LOCALE));
+    // grouped by area or by label; groups fold away (while searching everything is open)
+    const by = this._groupBy, groups = new Map(), add = (g, id) => { if (!groups.has(g)) groups.set(g, []); groups.get(g).push(id); };
+    for (const id of ids) {
+      if (by === 'label') { const ls = this._labelsOf(id); if (ls.length) ls.forEach((l) => add(l, id)); else add('', id); }
+      else add(this._areaOf(id) || '', id);
+    }
+    const gname = (g) => (!g ? t(by === 'label' ? 'ed_noLabelGroup' : 'ed_noAreaGroup') : by === 'label' ? this._labels?.find((x) => x.label_id === g)?.name || g : h.areas?.[g]?.name || g);
+    const order = [...groups.keys()].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || String(gname(a)).localeCompare(String(gname(b)), LOCALE));
+    const keyOf = (g) => `${by}:${g}`, allClosed = order.length > 0 && order.every((g) => this._collapsed.has(keyOf(g)));
+    const bar = mk('div', 'egroupby');
+    bar.append(this._segEl([['area', t('ed_byArea')], ['label', t('ed_byLabel')]], by, (v) => { this._groupBy = v; this._panel(); }));
+    const fold = mk('button', 'efoldall', esc(t(allClosed ? 'ed_unfoldAll' : 'ed_foldAll')));
+    fold.addEventListener('click', () => { for (const g of order) { if (allClosed) this._collapsed.delete(keyOf(g)); else this._collapsed.add(keyOf(g)); } this._panel(); });
+    bar.append(fold);
+    I.append(bar);
     const list = mk('div', 'elist');
-    for (const a of order) {
-      const gids = groups.get(a).sort((x, y) => (placed.has(x) ? 1 : 0) - (placed.has(y) ? 1 : 0) || this._fname(x).localeCompare(this._fname(y), LOCALE));
-      list.append(this._el(`<span>${esc(a ? h.areas?.[a]?.name || a : t('ed_noAreaGroup'))}</span>`, 'egrp'));
-      for (const id of gids.slice(0, q ? 200 : 60)) list.append(this._entityRow(id, placed.has(id), L));
+    for (const g of order) {
+      const gids = groups.get(g).sort((x, y) => (placed.has(x) ? 1 : 0) - (placed.has(y) ? 1 : 0) || this._fname(x).localeCompare(this._fname(y), LOCALE));
+      const closed = !q && this._collapsed.has(keyOf(g)), np = gids.filter((id) => placed.has(id)).length;
+      const head = mk('button', `egrp fold${closed ? ' closed' : ''}`, `${icon('chevD')}<span>${esc(gname(g))}</span><small>${np ? `${np} / ` : ''}${gids.length}</small>`);
+      head.addEventListener('click', () => { if (this._collapsed.has(keyOf(g))) this._collapsed.delete(keyOf(g)); else this._collapsed.add(keyOf(g)); this._panel(); });
+      list.append(head);
+      if (!closed) for (const id of gids.slice(0, q ? 200 : 60)) list.append(this._entityRow(id, placed.has(id), L));
     }
     if (!ids.length) list.append(this._el(esc(t(q ? 'ed_noMatch' : 'ed_noEntities')), 'eempty'));
     I.append(list);
@@ -390,6 +435,11 @@ Object.assign(GfcEditor.prototype, {
     if (L.type === 'custom') {
       I.append(this._el(`<p class="small">${esc(t('ed_customDevHint', L.name))}</p>`));
     }
+  },
+
+  _labelsOf(id) {
+    const h = this._hs() || {}, e = h.entities?.[id];
+    return [...new Set([...(e?.labels || []), ...(h.devices?.[e?.device_id]?.labels || [])])];
   },
 
   _entityRow(id, isPlaced, L) {
@@ -435,7 +485,7 @@ Object.assign(GfcEditor.prototype, {
     I.append(this._el(`<h2>${esc(t('frontDoor'))}</h2>`));
     this._doorPanel(I);
     const row = mk('div', 'ebtns');
-    row.append(this._btn(`${icon('trash')}<span>${esc(t('ed_removeMarker'))}</span>`, 'red', () => this._deleteSel()));
+    row.append(this._delBtn(t('ed_removeMarker'), () => this._deleteSel()));
     I.append(row);
   },
 
@@ -528,7 +578,7 @@ Object.assign(GfcEditor.prototype, {
       I.append(chips);
     }
     const row = mk('div', 'ebtns');
-    row.append(this._btn(`${icon('trash')}<span>${esc(t('ed_removeFromPlan'))}</span>`, 'red', () => this._deleteSel()));
+    row.append(this._delBtn(t('ed_removeFromLayers'), () => this._deleteSel()));
     I.append(row);
     if (M && !room) I.append(this._el(`<p class="small" style="color:rgb(var(--orange))">${esc(t('ed_outside'))}</p>`));
   },
@@ -544,6 +594,7 @@ Object.assign(GfcEditor.prototype, {
       const id = `layer_${uid()}`;
       this._c.layers.push({ id, name: `${t('ed_layerName')} ${n}`, icon: 'sparkle', show: [], entities: [] });
       this._editLayer = id;
+      this._layerSel = id;
       this._tool = 'layers';
     });
   },
@@ -555,7 +606,8 @@ Object.assign(GfcEditor.prototype, {
     const list = mk('div', '');
     defs.forEach((L) => {
       const on = active.has(L.id);
-      const box = this._el(`<div class="elayer"><span class="ei">${this._iconHtml(L.icon)}</span><div><b>${esc(L.name)}</b><small>${esc(this._layerSummary(L))}</small></div><div class="mv"></div></div>`, 'ecard');
+      const box = this._el(`<div class="elayer"><span class="ei">${this._iconHtml(L.icon)}</span><div><b>${esc(L.name)}</b><small>${esc(this._layerSummary(L))}</small></div><div class="mv"></div></div>`, `ecard${on ? ' pick' : ''}${on && L.id === this._layerSel ? ' cur' : ''}`);
+      if (on) box.addEventListener('click', (e) => { if (e.target.closest('button')) return; this._layerSel = L.id; this._draw(); this._panel(); });
       const mv = box.querySelector('.mv');
       if (on) {
         const up = mk('button', '', icon('chevU')), dn = mk('button', '', icon('chevD'));
@@ -567,7 +619,7 @@ Object.assign(GfcEditor.prototype, {
       if (L.type === 'custom') {
         const ed = mk('button', '', icon('pencil'));
         ed.title = t('ed_edit');
-        ed.addEventListener('click', () => { this._editLayer = this._editLayer === L.id ? null : L.id; this._panel(); });
+        ed.addEventListener('click', () => { this._editLayer = L.id; this._layerSel = L.id; this._draw(); this._panel(); });
         mv.append(ed);
       } else if (L.type !== 'vacuum' || c.vacuum) {
         box.querySelector('.elayer').append(this._tglEl(on, (v) => this._change(() => {
@@ -575,7 +627,6 @@ Object.assign(GfcEditor.prototype, {
           if (v) c.layers.push(L.type); else c.layers = c.layers.filter((l) => (typeof l === 'string' ? l : l.type) !== L.type || (typeof l === 'object' && (l.show || l.entities)));
         })));
       }
-      if (L.type === 'custom' && this._editLayer === L.id) box.append(this._layerEditor(L));
       list.append(box);
     });
     I.append(list);
@@ -625,23 +676,25 @@ Object.assign(GfcEditor.prototype, {
     for (const id of ents) {
       const row = this._el(`<span class="ei">${icon(GlassFloorplanCard.prototype._autoIcon(id, this._hs()?.states?.[id]))}</span><div><b>${esc(this._fname(id))}</b><small>${esc(id)}</small></div><button class="eadd" title="${esc(t('ed_delete'))}">${icon('minus')}</button>`, 'erow');
       row.style.cursor = 'default';
+      row.querySelector('.eadd').classList.add('del');
       row.querySelector('.eadd').addEventListener('click', () => this._change(() => { raw.entities = raw.entities.filter((x) => x !== id); }));
       list.append(row);
     }
     w.append(this._fieldEl(t('ed_layerDevices', ents.length), list));
     const row = mk('div', 'ebtns');
     row.append(
-      this._btn(`${icon('plus')}<span>${esc(t('ed_addDevices'))}</span>`, 'blue', () => { this._layerSel = L.id; this._tool = 'devices'; this._s = null; this._draw(); this._panel(); }),
-      this._btn(icon('trash'), 'icon red', () => this._change(() => { this._c.layers = this._c.layers.filter((l) => l !== raw); this._editLayer = null; })),
+      this._btn(`${icon('plus')}<span>${esc(t('ed_addDevices'))}</span>`, 'blue', () => { this._layerSel = L.id; this._tool = 'devices'; this._s = null; this._editLayer = null; this._draw(); this._panel(); }),
     );
-    w.append(row);
+    const del = mk('div', 'ebtns');
+    del.append(this._delBtn(t('ed_deleteLayer'), () => this._change(() => { this._c.layers = this._c.layers.filter((l) => l !== raw); this._editLayer = null; this._layerSel = 'light'; }), 'none'));
+    w.append(row, del);
     return w;
   },
 
   /* ---------------------------------------------------------------- tiles */
   _p_tiles(I) {
     const c = this._c;
-    I.append(this._el(`<h2>${esc(t('ed_tool_tiles'))}</h2><p class="lead">${esc(t('ed_tiles_lead'))}</p>`));
+    I.append(this._el(`<h2>${esc(t('ed_tool_tiles'))}</h2><p class="lead">${esc(t(this._mode === 'phone' ? 'ed_tiles_phone' : 'ed_tiles_lead'))}</p>`));
     const tg = (label, on, fn) => I.append(this._fieldEl(label, this._tglEl(on, (v) => this._change(() => fn(v))), true));
     tg(t('ed_tile_weather'), c.weather !== false, (v) => { if (v) delete c.weather; else c.weather = false; });
     tg(t('ed_tile_indoor'), c.indoor !== false, (v) => { if (v) delete c.indoor; else c.indoor = false; });

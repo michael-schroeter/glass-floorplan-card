@@ -139,7 +139,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const pad = clamp(Math.round(W * 0.022), 6, 18);
     const top = this.getBoundingClientRect().top + (window.scrollY || 0);
     const preview = this._inPreview();
-    const avail = preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
+    const avail = this._ev ? this._ev.h : preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
     const gH = this._M.layers.length ? 156 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
     let pu = (W - 2 * pad) / S.w;
     if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (this._sideEl ? 106 : 0)) / S.h));
@@ -163,6 +163,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (this._sideEl) Object.assign(this._sideEl.style, { left: `${l.toFixed(1)}px`, top: `${Math.round(sy + sh + 8)}px`, width: `${w.toFixed(1)}px`, height: `${rowH}px` });
     this._u = u;
     this._pu = pu;
+    this._lv = { S, pu, sx, sy, H };
     this._placeKnob(true);
     this._fitLabels();
     this._declutter();

@@ -105,7 +105,8 @@ function start() {
 }
 function openEditor() {
   if (!window.GFC_OPEN_EDITOR) return;
-  window.GFC_OPEN_EDITOR({ config, hass: sim.hass, onSave: (c) => { config = c; if (P.get('blank') !== '1') try { localStorage.setItem(`gfc-demo-config-${LANG}`, JSON.stringify(c)); } catch (e) { /* ignore */ } card.setConfig(c); } });
+  const r = document.getElementById('main').getBoundingClientRect();
+  window.GFC_OPEN_EDITOR({ config, hass: sim.hass, viewport: { w: Math.round(r.width), h: Math.round(innerHeight - r.top) }, onSave: (c) => { config = c; if (P.get('blank') !== '1') try { localStorage.setItem(`gfc-demo-config-${LANG}`, JSON.stringify(c)); } catch (e) { /* ignore */ } card.setConfig(c); } });
 }
 const js = document.createElement('script');
 js.src = `../dist/glass-floorplan-card.js?t=${Date.now()}`;

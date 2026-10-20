@@ -58,9 +58,9 @@ Copy `dist/glass-floorplan-card.js` to `/config/www/` and add it as a resource (
 
 ## Getting started
 
-1. Create a dashboard view of type **Panel** (best) or **Sections**, then add the card *Glass Floorplan Card*. If you have areas in Home Assistant, the card starts with one room per area and their devices already placed.
-2. In the card editor, click **Open floor plan editor**.
-3. **Template**: load a picture of your floor plan → **Measure** (click both ends of a wall, enter its length) → **Find rooms automatically**. You can also draw rooms by dragging rectangles, or import a file from the Claude skill (see below).
+1. Create a dashboard view of type **Panel** (best) or **Sections**, then add the card *Glass Floorplan Card*. It starts empty.
+2. In the card editor, click **Open floor plan editor**. It shows your card live, at the size of your screen (switch between *Laptop* and *Phone* at the top). Tapping a lamp there opens its settings instead of switching it.
+3. **Template**: load a picture of your floor plan → **Measure** (click both ends of a wall, enter its length) → **Find rooms automatically**. You can also draw rooms by dragging rectangles, import a file from the Claude skill (see below), or start with one room per Home Assistant area. **Start over** (bottom left) empties everything.
 4. **Rooms**: drag your Home Assistant areas onto the rooms, or use *Link by name*. Each room gets the area's name and its devices. The area is also used by the vacuum.
 5. **Windows & doors**, **Furniture**: optional, purely for the looks.
 6. **Devices**: choose a layer and drag devices onto the plan, or use *Place automatically*.
@@ -69,7 +69,7 @@ Copy `dist/glass-floorplan-card.js` to `/config/www/` and add it as a resource (
 
 ### Modes
 
-Give scenes or scripts the label **Dashboard mode** (or `Dashboard-Modus`) in Home Assistant. They appear under *Modes* with their name and icon. A leading number (`1 Evening`) only sets the order.
+Give scenes or scripts the label **Dashboard mode** (or `Dashboard-Modus`) in Home Assistant. They appear under *Mode* with their name and icon. A leading number (`1 Evening`) only sets the order.
 
 ### Vacuum (Roborock)
 
@@ -180,7 +180,7 @@ python3 tools/build.py 0.2.0    # with a version
 
 ## Kurz auf Deutsch
 
-Glas-Grundriss für Home Assistant. Lampen leuchten in echter Farbe, Räume öffnen sich als Pop-ups, und es gibt Ebenen für Licht, Klima, Rollläden, Roborock-Saugroboter sowie eigene Kombinationen. Installation über HACS als benutzerdefiniertes Repository (Kategorie *Dashboard*). Danach die Karte hinzufügen und **Grundriss-Editor öffnen**: Foto oder Skizze des Grundrisses laden, ausmessen, *Räume automatisch erkennen*, Geräte auf den Plan ziehen, fertig. Modi sind Szenen und Skripte mit dem Label **Dashboard-Modus**.
+Glas-Grundriss für Home Assistant. Lampen leuchten in echter Farbe, Räume öffnen sich als Pop-ups, und es gibt Ebenen für Licht, Klima, Rollläden, Roborock-Saugroboter sowie eigene Kombinationen. Installation über HACS als benutzerdefiniertes Repository (Kategorie *Dashboard*). Danach die Karte hinzufügen und **Grundriss-Editor öffnen**: Foto oder Skizze des Grundrisses laden, ausmessen, *Räume automatisch erkennen*, Geräte auf den Plan ziehen, fertig. Unter *Mode* erscheinen Szenen und Skripte mit dem Label **Dashboard-Modus**.
 
 ## License
 

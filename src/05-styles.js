@@ -215,6 +215,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .08), 0 22px 50px rgba(0, 0, 0, .34);
   -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%); transition: background 1s ease; }
 .gcard > .gv { display: flex; flex-direction: column; height: 100%; animation: fadein .5s cubic-bezier(.2, .8, .2, 1) both; }
+.root.ev .gcard > .gv { animation: none; }
 @keyframes fadein { from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
 .gk { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: max(11px, calc(14 * var(--u))); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t2); }
 .gk > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

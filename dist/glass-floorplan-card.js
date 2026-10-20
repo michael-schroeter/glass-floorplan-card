@@ -124,7 +124,7 @@ const STR = {
     activated: (n) => `“${n}” activated`, started: (n) => `“${n}” started`,
     emptyTitle: 'No floor plan yet', emptyText: 'Open the card editor and draw your home: rooms, furniture, lamps and devices – or let a photo of your floor plan guide you.',
     nOn: (n) => `${n} on`, nActive: (n) => `${n} active`, lightsOn: (n) => `${n} ${pl(n, 'light', 'lights')} on`, allOffState: 'All off',
-    modes: 'Modes', mode: 'Mode', allOff: 'All off', switchedOff: (n, lights) => `${n} ${lights ? pl(n, 'light', 'lights') : pl(n, 'device', 'devices')} switched off`,
+    modes: 'Mode', mode: 'Mode', allOff: 'All off', switchedOff: (n, lights) => `${n} ${lights ? pl(n, 'light', 'lights') : pl(n, 'device', 'devices')} switched off`,
     outside: 'Outside', inside: 'Inside', insideAvg: 'Inside Ø', weather: 'Weather', weatherForecast: 'Weather – forecast for the week',
     humidityPct: (n) => `${n} % humidity`, noReadings: 'No readings', frontDoor: 'Front door',
     close_: 'Close', hourly: 'Hourly', days8: '8 days', compass: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
@@ -185,7 +185,7 @@ const STR = {
     activated: (n) => `„${n}“ aktiviert`, started: (n) => `„${n}“ gestartet`,
     emptyTitle: 'Noch kein Grundriss', emptyText: 'Öffne den Karten-Editor und zeichne deine Wohnung: Räume, Möbel, Lampen und Geräte – gern mit einem Foto deines Grundrisses als Vorlage.',
     nOn: (n) => `${n} an`, nActive: (n) => `${n} aktiv`, lightsOn: (n) => `${n} ${pl(n, 'Licht', 'Lichter')} an`, allOffState: 'Alles aus',
-    modes: 'Modi', mode: 'Modus', allOff: 'Alle aus', switchedOff: (n, lights) => `${n} ${lights ? pl(n, 'Licht', 'Lichter') : pl(n, 'Gerät', 'Geräte')} ausgeschaltet`,
+    modes: 'Mode', mode: 'Mode', allOff: 'Alle aus', switchedOff: (n, lights) => `${n} ${lights ? pl(n, 'Licht', 'Lichter') : pl(n, 'Gerät', 'Geräte')} ausgeschaltet`,
     outside: 'Außen', inside: 'Innen', insideAvg: 'Innen Ø', weather: 'Wetter', weatherForecast: 'Wetter – Vorhersage für die Woche',
     humidityPct: (n) => `${n} % Luftfeuchte`, noReadings: 'Keine Messwerte', frontDoor: 'Haustür',
     hourly: 'Stündlich', days8: '8 Tage', compass: ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'],
@@ -322,6 +322,9 @@ const ICONS = {
   close: '<path d="M7 7l10 10M17 7 7 17"/>',
   chevR: '<path d="M9.4 5.8l6.2 6.2-6.2 6.2"/>',
   chevL: '<path d="M14.6 5.8 8.4 12l6.2 6.2"/>',
+  laptop: '<rect x="4.4" y="5.2" width="15.2" height="10.6" rx="1.6"/><path d="M2.4 18.8h19.2"/>',
+  phone: '<rect x="7.2" y="2.8" width="9.6" height="18.4" rx="2.3"/><path d="M11 18.1h2"/>',
+  restart: '<path d="M4.9 13.2a7.3 7.3 0 1 0 1.9-6.4"/><path d="M5.8 3.6v3.8h3.8"/>',
   chevD: '<path d="M6.6 9.4 12 14.8l5.4-5.4"/>',
   chevU: '<path d="M6.6 14.6 12 9.2l5.4 5.4"/>',
   up: '<path d="M12 19.4V5"/><path d="M6.4 10.6 12 5l5.6 5.6"/>',
@@ -529,6 +532,9 @@ function rotateModel(M, dir) {
   const B = bboxOf(M.rooms.map((r) => r.r));
   if (!B) return;
   const P = dir > 0 ? ([x, y]) => [B[0] + (B[3] - y), B[1] + (x - B[0])] : ([x, y]) => [B[0] + (y - B[1]), B[1] + (B[2] - x)];
+  // and back (the editor maps pointer positions on a turned plan to the configuration)
+  M.rotP = P;
+  M.rotI = dir > 0 ? ([x, y]) => [B[0] + (y - B[1]), B[3] - (x - B[0])] : ([x, y]) => [B[2] - (y - B[1]), B[1] + (x - B[0])];
   const R = (r) => { const a = P([r[0], r[1]]), b = P([r[2], r[3]]); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]; };
   const S = (s) => { const a = P([s[0], s[1]]), b = P([s[2], s[3]]); return normSeg([a[0], a[1], b[0], b[1]]); };
   for (const r of M.rooms) { r.r = R(r.r); for (const f of r.furn) f.r = R(f.r); }
@@ -1055,6 +1061,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .08), 0 22px 50px rgba(0, 0, 0, .34);
   -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%); transition: background 1s ease; }
 .gcard > .gv { display: flex; flex-direction: column; height: 100%; animation: fadein .5s cubic-bezier(.2, .8, .2, 1) both; }
+.root.ev .gcard > .gv { animation: none; }
 @keyframes fadein { from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
 .gk { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: max(11px, calc(14 * var(--u))); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t2); }
 .gk > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1518,7 +1525,8 @@ class GlassFloorplanCard extends HTMLElement {
   }
 
   static getConfigElement() { return document.createElement(`${CARD_TAG}-editor`); }
-  static getStubConfig(hass) { return typeof autoConfig === 'function' ? autoConfig(hass) : { rooms: [] }; }
+  /* a new card starts empty – the floor plan editor begins with the template (rooms from the areas are one click there) */
+  static getStubConfig() { return {}; }
   setConfig(config) {
     if (!config || typeof config !== 'object') throw new Error('Invalid configuration');
     this._config = JSON.parse(JSON.stringify(config));
@@ -1528,6 +1536,16 @@ class GlassFloorplanCard extends HTMLElement {
   getCardSize() { return 12; }
   getGridOptions() { return { columns: 'full', rows: 'auto', min_columns: 6 }; }
   set preview(v) { this._previewFlag = !!v; }
+
+  /* The floor plan editor shows the card live on a virtual screen: { w, h } size of that screen, the layer `tab`,
+   * optionally a fixed `stage` (so the plan does not move while something is dragged) or a fixed scale and origin
+   * `fix` (while rooms are drawn). Nothing is stored for the viewer. */
+  setEditorView(config, ev) {
+    this._ev = ev || null;
+    this._config = JSON.parse(JSON.stringify(config));
+    if (ev?.tab) this._tab = ev.tab;
+    if (this._built && this._hass) this._rebuild();
+  }
   get preview() { return !!this._previewFlag; }
 
   connectedCallback() {
@@ -1633,9 +1651,11 @@ class GlassFloorplanCard extends HTMLElement {
   _build() {
     this._built = true;
     this._useLang();
-    const W = this.getBoundingClientRect().width || this.parentElement?.getBoundingClientRect().width || window.innerWidth;
+    const W = this._ev?.w || this.getBoundingClientRect().width || this.parentElement?.getBoundingClientRect().width || window.innerWidth;
     this._m = this._wantMobile(W);
     const M = this._M = buildModel(this._config, this._hass, { mobile: this._m });
+    if (this._ev?.stage) M.stage = { ...this._ev.stage };
+    if (this._ev?.tab && M.layers.some((l) => l.id === this._ev.tab)) this._tab = this._ev.tab;
     if (!M.layers.some((l) => l.id === this._tab)) this._tab = M.layers[0].id;
     this._sel = this._sel.filter((k) => M.byRoom[k]);
     const S = M.stage, G = this._G = geo(S), D = M.D;
@@ -1698,10 +1718,10 @@ class GlassFloorplanCard extends HTMLElement {
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';
     const bar = M.widgets.bar || this._m ? `<div class="tabs" role="tablist" aria-orientation="${this._m ? 'horizontal' : 'vertical'}" style="${M.widgets.bar && !this._m ? G.at(center(M.widgets.bar)) : ''}"><i class="knob"></i>
       ${M.layers.map((L) => `<button data-tab="${esc(L.id)}" role="tab" aria-label="${esc(this._layerName(L))}">${this._iconHtml(L.icon)}<span>${esc(this._layerName(L))}</span></button>`).join('')}</div>` : '';
-    const empty = !M.rooms.length ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
+    const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
     this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}</style>
-<div class="root boot${this._m ? ' m' : ''}${this._inPreview() ? ' pv' : ''}" style="${springVars()}">
+<div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
     <linearGradient id="gfcdial" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5aa8ff"/><stop offset=".5" stop-color="#7fe0c0"/><stop offset="1" stop-color="#ff9f45"/></linearGradient>
@@ -1822,7 +1842,7 @@ class GlassFloorplanCard extends HTMLElement {
   /* Everything at a glance: the plan gets as large as width AND visible window height allow; the card fills
    * exactly the space below the header – the page does not scroll. "fit: width" scales by width only. */
   _layout() {
-    const W = this._root?.clientWidth;
+    const ev = this._ev, W = ev ? ev.w : this._root?.clientWidth;
     if (!W) return;
     if (this._wantMobile(W) !== this._m && this._hass) { clearTimeout(this._rbT); this._rbT = setTimeout(() => this._rebuild(), 30); return; }
     if (this._m) { this._layoutMobile(W); return; }
@@ -1830,19 +1850,25 @@ class GlassFloorplanCard extends HTMLElement {
     const padX = clamp(Math.round(W * 0.02), 12, 34);
     const sideW = side ? clamp(Math.round(W * 0.2), 220, 320) : 0, sgap = side ? clamp(Math.round(W * 0.014), 12, 22) : 0;
     let pu = (W - 2 * padX - sideW - sgap) / S.w, avail = 0, padY;
-    const screen = this._config.fit !== 'width' && !this._inPreview();
+    const screen = this._config.fit !== 'width' && (!!ev || !this._inPreview());
     if (screen) {
-      const top = this.getBoundingClientRect().top + (window.scrollY || 0);
-      avail = Math.max(420, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
+      const top = ev ? 0 : this.getBoundingClientRect().top + (window.scrollY || 0);
+      avail = ev ? ev.h : Math.max(420, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
       padY = clamp(Math.round(avail * 0.018), 8, 22);
       pu = Math.min(pu, (avail - 2 * padY) / S.h);
     }
-    const u = clamp(pu * D, 0.4, 1.45);
+    let u = clamp(pu * D, 0.4, 1.45);
     pu = u / D;
     if (!screen) padY = clamp(Math.round(14 * u), 8, 22);
-    const sw = S.w * pu, sh = S.h * pu;
+    let sw = S.w * pu, sh = S.h * pu;
     const H = avail || Math.round(sh + 2 * padY);
-    const sx = Math.round((W - sw - sideW - sgap) / 2), sy = Math.round((H - sh) / 2);
+    let sx = Math.round((W - sw - sideW - sgap) / 2), sy = Math.round((H - sh) / 2);
+    // the editor keeps plan → screen fixed while rooms are drawn ({ pu, ox, oy }: pixels per cm and where 0 / 0 is)
+    if (ev?.fix) {
+      pu = ev.fix.pu; u = pu * D;
+      sw = S.w * pu; sh = S.h * pu;
+      sx = ev.fix.ox + S.x * pu; sy = ev.fix.oy + S.y * pu;
+    }
     if (this._h !== H) { this._h = H; this.style.height = `${H}px`; }
     if (side) {
       const g = 13 * u, top = sy + (B[1] - S.y) * pu + g / 2, h = (B[3] - B[1]) * pu - g;
@@ -1860,6 +1886,7 @@ class GlassFloorplanCard extends HTMLElement {
     s.setProperty('--dy', `${(sy + (B[1] - S.y) * pu).toFixed(1)}px`);
     this._u = u;
     this._pu = pu;
+    this._lv = { S, pu, sx, sy, H };
     this._placeKnob(true);
     this._fitLabels();
     this._declutter();
@@ -1873,7 +1900,8 @@ class GlassFloorplanCard extends HTMLElement {
   _declutter() {
     const M = this._M, sr = this._stage?.getBoundingClientRect();
     if (!sr?.width || !this._pu) return;
-    const S = M.stage, pu = this._pu, g = 13 * this._u;
+    // (shown scaled in the floor plan editor: measured boxes are converted back)
+    const S = M.stage, pu = this._pu, g = 13 * this._u, sc = sr.width / (S.w * pu) || 1;
     const items = [];
     for (const [eid, el] of Object.entries(this._mk)) {
       const e = eid === '__door' ? M.door : M.ents.find((x) => x.entity === eid);
@@ -1889,7 +1917,7 @@ class GlassFloorplanCard extends HTMLElement {
       const rg = document.createRange();
       rg.selectNodeContents(el);
       const b = rg.getBoundingClientRect();
-      if (b.width) boxes.push([b.left - sr.left - 3, b.top - sr.top - 2, b.right - sr.left + 3, b.bottom - sr.top + 2]);
+      if (b.width) boxes.push([(b.left - sr.left) / sc - 3, (b.top - sr.top) / sc - 2, (b.right - sr.left) / sc + 3, (b.bottom - sr.top) / sc + 2]);
     }
     for (let it = 0; it < 48; it++) {
       let moved = false;
@@ -4507,7 +4535,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const pad = clamp(Math.round(W * 0.022), 6, 18);
     const top = this.getBoundingClientRect().top + (window.scrollY || 0);
     const preview = this._inPreview();
-    const avail = preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
+    const avail = this._ev ? this._ev.h : preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
     const gH = this._M.layers.length ? 156 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
     let pu = (W - 2 * pad) / S.w;
     if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (this._sideEl ? 106 : 0)) / S.h));
@@ -4531,6 +4559,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (this._sideEl) Object.assign(this._sideEl.style, { left: `${l.toFixed(1)}px`, top: `${Math.round(sy + sh + 8)}px`, width: `${w.toFixed(1)}px`, height: `${rowH}px` });
     this._u = u;
     this._pu = pu;
+    this._lv = { S, pu, sx, sy, H };
     this._placeKnob(true);
     this._fitLabels();
     this._declutter();
@@ -4626,7 +4655,10 @@ dialog.ed[open] { display: block; }
 .ebtn.white { background: linear-gradient(180deg, #fff, #ebebef); color: #0c0c0e; box-shadow: 0 4px 14px rgba(0, 0, 0, .25); }
 .ebtn.white .ic, .ebtn.blue .ic { --ip: currentColor; }
 .ebtn.blue { background: linear-gradient(180deg, #2b95ff, rgb(var(--blue))); color: #fff; box-shadow: 0 6px 18px rgba(var(--blue), .3); }
-.ebtn.red { color: rgb(255, 120, 110); }
+.ebtn.red { color: rgb(255, 128, 118); background: rgba(var(--red), .13); box-shadow: inset 0 0 0 1px rgba(var(--red), .32); }
+.ebtn.red .ic, .ebtn.redfill .ic { --ip: currentColor; }
+.ebtn.red:hover { background: rgba(var(--red), .22); }
+.ebtn.redfill { background: linear-gradient(180deg, rgb(255, 92, 82), rgb(var(--red))); color: #fff; box-shadow: 0 6px 18px rgba(var(--red), .32); }
 .ebtn.sm { height: 30px; padding: 0 11px; font-size: 13px; border-radius: 9px; }
 .ebtn.wide { width: 100%; }
 .esep { width: 1px; height: 24px; background: rgba(255, 255, 255, .1); margin: 0 4px; }
@@ -4643,78 +4675,82 @@ dialog.ed[open] { display: block; }
 .erail button.act { background: linear-gradient(180deg, #fff, #ececf0); color: #0c0c0e; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); }
 .erail button.act .ic { --ip: currentColor; }
 .erail .rsep { width: 40px; height: 1px; margin: 6px 0; background: rgba(255, 255, 255, .08); flex: none; }
+.erail .ereset { margin-top: auto; color: rgb(255, 128, 118); flex: none; }
+.erail .ereset .ic { --ip: currentColor; }
+.erail .ereset:hover { background: rgba(var(--red), .14); color: rgb(255, 150, 140); }
 
-/* canvas */
-.ecv { position: relative; z-index: 1; overflow: hidden; touch-action: none; cursor: default; background: radial-gradient(80% 70% at 30% 10%, rgba(46, 64, 120, .18), rgba(30, 40, 80, 0) 70%); }
+/* laptop / phone */
+.eview { padding: 2px; border-radius: 11px; }
+.eview button { height: 30px; padding: 0 11px; font-size: 13px; }
+.eview button .ic { font-size: 16px; }
+
+/* canvas: the live card on a screen of the real size, invisible handles on top */
+.ecv { position: relative; z-index: 1; overflow: hidden; touch-action: none; cursor: default; background: radial-gradient(90% 80% at 50% 0%, rgba(40, 46, 70, .35), rgba(10, 11, 16, 0) 70%), #050608; }
 .ecv.pan, .ecv.panning { cursor: grab; }
 .ecv.panning { cursor: grabbing; }
 .ecv.draw { cursor: crosshair; }
-.ecv .grid { position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(circle, rgba(255, 255, 255, .1) .9px, rgba(255, 255, 255, 0) 1.3px); }
-.ecv .ul { position: absolute; pointer-events: none; transform-origin: 0 0; user-select: none; -webkit-user-drag: none; }
-.world { position: absolute; inset: 0; pointer-events: none; }
+.elive { position: absolute; left: 0; top: 0; z-index: 0; transform-origin: 0 0; pointer-events: none; overflow: hidden; }
+.elive > * { display: block; width: 100%; }
+.eframe { position: absolute; z-index: 1; pointer-events: none; border-radius: 12px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 30px 90px rgba(0, 0, 0, .65); }
+.eframe.phone { border-radius: 30px; box-shadow: 0 0 0 7px #0c0c0e, 0 0 0 8.5px #3a3b40, 0 30px 90px rgba(0, 0, 0, .65); }
+.eframe small { position: absolute; left: 4px; bottom: calc(100% + 9px); font-size: 12px; font-weight: 600; color: var(--t3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.eframe.phone small { bottom: calc(100% + 16px); left: 12px; }
+.ecv .ul { position: absolute; z-index: 2; pointer-events: none; transform-origin: 0 0; user-select: none; -webkit-user-drag: none; }
+.world { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .world > * { pointer-events: auto; }
-.eroom { position: absolute; border-radius: 10px; overflow: hidden;
-  background: linear-gradient(165deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .025)), rgba(22, 22, 28, .55);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), 0 6px 18px rgba(0, 0, 0, .2); }
-.ul-on .eroom { background: rgba(30, 32, 40, .38); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .55); }
+.eroom { position: absolute; border-radius: 12px; transition: box-shadow .15s, background .15s; }
+.tool-rooms .eroom:hover, .tool-sketch .eroom:hover { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .55); background: rgba(255, 255, 255, .04); }
+.ul-on .eroom { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .5); }
+.eroom.hot { box-shadow: inset 0 0 0 2px rgba(var(--blue), .95), 0 0 0 5px rgba(var(--blue), .2) !important; background: rgba(var(--blue), .1); }
+.eroom.na em { position: absolute; left: 8px; bottom: 8px; padding: 3px 8px; border-radius: 99px; font-style: normal; font-size: 11px; font-weight: 650; white-space: nowrap; pointer-events: none;
+  background: rgba(var(--orange), .2); color: rgb(255, 190, 90); box-shadow: inset 0 0 0 1px rgba(var(--orange), .45); }
+.eroom.ghost { pointer-events: none; background: rgba(var(--blue), .1); box-shadow: none; outline: 1.5px dashed rgba(100, 170, 255, .95); outline-offset: -2px; }
 .eroom .en { position: absolute; left: 9px; top: 7px; right: 6px; font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; text-shadow: 0 1px 6px rgba(0, 0, 0, .5); }
 .eroom .en b { display: block; font-weight: inherit; overflow: hidden; text-overflow: ellipsis; }
-.eroom .en small { display: block; margin-top: 1px; font-size: 11px; font-weight: 500; color: var(--t2); overflow: hidden; text-overflow: ellipsis; }
-.eroom.lb .en { top: auto; bottom: 7px; }
-.eroom.hot { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .9), 0 0 0 4px rgba(var(--blue), .18); }
-.eroom.dim { opacity: .55; }
-.eroom.ghost { pointer-events: none; background: rgba(var(--blue), .08); box-shadow: none; outline: 1.5px dashed rgba(100, 170, 255, .9); outline-offset: -2px; }
-.efu { position: absolute; border-radius: calc(var(--fr, 8) * 1px); background: linear-gradient(165deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .04)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .17); }
+.efu { position: absolute; border-radius: calc(var(--fr, 8) * 1px); }
 .efu.c { border-radius: 50%; }
-.efu.rug { background: rgba(255, 255, 255, .03); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
-.efu.tv { background: linear-gradient(180deg, rgba(190, 210, 255, .3), rgba(120, 160, 255, .2)); }
-.efu .fic { position: absolute; inset: 0; display: grid; place-items: center; font-size: min(22px, 70%); opacity: .55; pointer-events: none; }
-.tool-furniture .efu:hover, .tool-furniture .efu.sel { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .9); }
 .tool-furniture .efu { cursor: move; }
-.eopen { position: absolute; border-radius: 4px; cursor: pointer; }
-.eopen.win { background: rgb(205, 222, 248); box-shadow: 0 0 8px rgba(200, 220, 255, .55); }
-.eopen.pas { background: rgba(255, 255, 255, .5); box-shadow: 0 0 0 1px rgba(255, 255, 255, .3); }
-.eopen.ent { background: #fff; box-shadow: 0 0 10px rgba(255, 255, 255, .7); }
-.eopen.ghost { opacity: .55; pointer-events: none; }
-.eopen.sel { box-shadow: 0 0 0 2px rgb(var(--blue)), 0 0 12px rgba(var(--blue), .6); }
-.emk { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; display: grid; place-items: center; cursor: grab; touch-action: none;
-  background: rgba(255, 255, 255, .14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 4px 12px rgba(0, 0, 0, .35); transition: transform .25s var(--snap), opacity .2s; }
-.emk .ic { font-size: 18px; pointer-events: none; }
-.emk.light { background: radial-gradient(circle at 50% 28%, rgb(252, 236, 196), rgb(246, 200, 89) 72%); }
-.emk.light .ic { --ip: currentColor; color: rgba(44, 30, 2, .9); }
-.emk.cover { background: radial-gradient(circle at 50% 28%, #fff, rgb(206, 226, 255) 72%); }
-.emk.cover .ic, .emk.climate .ic, .emk.dock .ic, .emk.door .ic { --ip: currentColor; color: rgba(10, 24, 60, .85); }
-.emk.climate { background: radial-gradient(circle at 50% 28%, rgb(255, 214, 170), rgb(255, 150, 62) 72%); }
-.emk.dock { background: radial-gradient(circle at 50% 28%, #fff, #c8ccd6 72%); border-radius: 30%; }
-.emk.door { background: radial-gradient(circle at 50% 28%, #e8ffe9, rgb(48, 209, 88) 75%); }
-.emk.media { background: radial-gradient(circle at 50% 28%, rgb(220, 232, 255), rgb(150, 185, 255) 72%); }
-.emk.media .ic { --ip: currentColor; color: rgba(10, 24, 60, .85); }
-.emk.other { background: rgba(255, 255, 255, .2); }
-.emk.off { opacity: .28; transform: scale(.82); }
-.emk:hover { transform: scale(1.1); }
-.emk.sel { box-shadow: 0 0 0 3px rgb(var(--blue)), 0 0 0 7px rgba(var(--blue), .25), 0 6px 16px rgba(0, 0, 0, .45); }
-.emk.drag { cursor: grabbing; transform: scale(1.15); }
+.tool-furniture .efu:hover { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .6); }
+.efu.sel { box-shadow: inset 0 0 0 2px rgba(var(--blue), .95), 0 0 0 4px rgba(var(--blue), .2); }
+.eopen { position: absolute; border-radius: 6px; cursor: pointer; }
+.tool-openings .eopen { background: rgba(100, 170, 255, .28); box-shadow: inset 0 0 0 1px rgba(140, 195, 255, .55); }
+.tool-openings .eopen:hover { background: rgba(100, 170, 255, .5); }
+.eopen.ghost { opacity: .8; pointer-events: none; background: rgba(255, 255, 255, .55) !important; box-shadow: 0 0 12px rgba(255, 255, 255, .5); }
+.eopen.sel { background: rgba(var(--blue), .45); box-shadow: 0 0 0 2px rgb(var(--blue)), 0 0 14px rgba(var(--blue), .6); }
+.emk { position: absolute; width: var(--s, 36px); height: var(--s, 36px); margin: calc(var(--s, 36px) / -2) 0 0 calc(var(--s, 36px) / -2); border-radius: 50%; cursor: grab; touch-action: none; transition: box-shadow .15s; }
+.emk:hover { box-shadow: 0 0 0 2px rgba(255, 255, 255, .75); }
+.emk.sel { box-shadow: 0 0 0 3px rgb(var(--blue)), 0 0 0 8px rgba(var(--blue), .25); }
+.emk.ghost { box-shadow: 0 0 0 2px rgba(var(--blue), .9); outline: 1.5px dashed rgba(255, 255, 255, .7); outline-offset: 3px; }
+.emk.dock { border-radius: 30%; }
 .emk.warn::after { content: '!'; position: absolute; right: -4px; top: -4px; width: 15px; height: 15px; border-radius: 50%; background: rgb(var(--orange)); color: #1a0e00; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
-.ewid { position: absolute; border-radius: 14px; display: grid; place-items: center; text-align: center; font-size: 12px; font-weight: 600; color: var(--t2); cursor: move;
-  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .05) 0 8px, rgba(255, 255, 255, .02) 8px 16px); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .22); }
-.ewid .ic { font-size: 20px; margin: 0 auto 3px; }
-.ewid.sel { box-shadow: inset 0 0 0 2px rgb(var(--blue)); color: var(--t1); }
-.ewid.auto { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .14); }
+.ewid { position: absolute; border-radius: 14px; cursor: move; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .5); outline: 1.5px dashed rgba(255, 255, 255, .45); outline-offset: 3px; }
+.ewid span { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 650; color: #0c0c0e; background: rgba(255, 255, 255, .85); pointer-events: none; }
+.ewid.auto { outline-color: rgba(255, 255, 255, .25); }
+.ewid.sel { box-shadow: inset 0 0 0 2px rgb(var(--blue)); outline-color: rgba(var(--blue), .7); }
+.ehl { position: absolute; z-index: 4; pointer-events: none; border-radius: 34px; box-shadow: 0 0 0 2.5px rgb(var(--blue)), 0 0 0 9px rgba(var(--blue), .22), 0 0 46px rgba(var(--blue), .5); animation: ehl 2.4s ease-in-out infinite; }
+@keyframes ehl { 50% { box-shadow: 0 0 0 2.5px rgb(var(--blue)), 0 0 0 14px rgba(var(--blue), .12), 0 0 60px rgba(var(--blue), .35); } }
 .ehd { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgb(var(--blue)), 0 2px 6px rgba(0, 0, 0, .4); z-index: 20; touch-action: none; }
-.ehd.e, .ehd.w { cursor: ew-resize; } .ehd.n, .ehd.s { cursor: ns-resize; } .ehd.nw, .ehd.se { cursor: nwse-resize; } .ehd.ne, .ehd.sw { cursor: nesw-resize; }
-.esel { position: absolute; pointer-events: none; border-radius: 10px; box-shadow: 0 0 0 2px rgb(var(--blue)), 0 0 0 6px rgba(var(--blue), .18); z-index: 19; }
+.ehd.ew { cursor: ew-resize; } .ehd.ns { cursor: ns-resize; } .ehd.nwse { cursor: nwse-resize; } .ehd.nesw { cursor: nesw-resize; }
+.esel { position: absolute; pointer-events: none; border-radius: 12px; box-shadow: 0 0 0 2px rgb(var(--blue)), 0 0 0 6px rgba(var(--blue), .18); z-index: 19; }
 .eguide { position: absolute; pointer-events: none; background: rgba(255, 70, 200, .85); z-index: 18; }
 .eguide.v { width: 1px; top: 0; bottom: 0; } .eguide.h { height: 1px; left: 0; right: 0; }
-.edraw { position: absolute; pointer-events: none; border-radius: 10px; background: rgba(var(--blue), .14); box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .9); z-index: 17; }
+.edraw { position: absolute; pointer-events: none; border-radius: 12px; background: rgba(var(--blue), .16); box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .95); z-index: 17; }
 .edim { position: absolute; z-index: 21; pointer-events: none; padding: 3px 8px; border-radius: 7px; font-size: 11.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap;
   background: rgba(var(--blue), .92); color: #fff; transform: translate(-50%, -130%); }
 .emeas { position: absolute; z-index: 21; pointer-events: none; }
 .emeas i { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: rgb(255, 70, 200); box-shadow: 0 0 0 2px #fff; }
+/* red: what a delete button would remove */
+.del-sel .esel, .del-sel .emk.sel, .del-sel .eopen.sel, .del-sel .efu.sel, .del-sel .eroom.hot { box-shadow: 0 0 0 2.5px rgb(var(--red)), 0 0 0 7px rgba(var(--red), .25) !important; background: rgba(var(--red), .24) !important; }
+.del-all .eroom, .del-all .efu, .del-all .emk { background: rgba(var(--red), .2); box-shadow: inset 0 0 0 1.5px rgba(var(--red), .85); }
 .ezoom { position: absolute; right: 14px; bottom: 14px; z-index: 6; display: flex; gap: 4px; padding: 4px; border-radius: 14px;
   background: rgba(30, 30, 36, .75); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 10px 28px rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
 .ezoom button { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 17px; }
 .ezoom button:hover { background: rgba(255, 255, 255, .1); }
-.ehint { position: absolute; left: 50%; bottom: 16px; z-index: 6; transform: translateX(-50%); max-width: min(560px, calc(100% - 140px)); padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--t2);
+.ecv .elight { position: absolute; left: 14px; bottom: 14px; z-index: 6; align-items: center; padding: 4px; border-radius: 14px;
+  background: rgba(30, 30, 36, .75); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 10px 28px rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.ecv .elight .lbl { display: grid; place-items: center; width: 30px; font-size: 17px; }
+.ecv .elight button { height: 34px; padding: 0 11px; border-radius: 10px; flex: none; }
+.ehint { position: absolute; left: 50%; bottom: 16px; z-index: 6; transform: translateX(-50%); max-width: min(560px, calc(100% - 420px)); padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--t2);
   background: rgba(30, 30, 36, .75); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); text-align: center; pointer-events: none; transition: opacity .3s; }
 .ehint:empty { opacity: 0; }
 
@@ -4725,12 +4761,16 @@ dialog.ed[open] { display: block; }
 .efloat button { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-size: 17px; }
 .efloat button:hover { background: rgba(255, 255, 255, .12); }
 .efloat button[data-act="del"] .ic { --ip: rgb(255, 120, 110); }
+.efloat button[data-act="del"]:hover { background: rgba(var(--red), .22); }
 .ecv:focus { outline: none; }
 
 /* inspector */
 .eins { position: relative; z-index: 4; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 18px 18px 30px;
   background: linear-gradient(270deg, rgba(24, 24, 30, .78), rgba(20, 20, 26, .6)); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .06); }
 .eins h2 { margin: 0 0 4px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+.eback { display: inline-flex; align-items: center; gap: 2px; height: 32px; margin: -6px 0 10px -8px; padding: 0 12px 0 4px; border-radius: 10px; font-size: 14.5px; font-weight: 600; color: rgb(100, 170, 255); transition: background .15s; }
+.eback .ic { --ip: currentColor; font-size: 20px; }
+.eback:hover { background: rgba(var(--blue), .14); }
 .eins h3 { margin: 22px 0 9px; font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t3); display: flex; align-items: center; justify-content: space-between; }
 .eins p.lead { margin: 0 0 14px; font-size: 13.5px; line-height: 1.45; color: var(--t2); }
 .eins p.small { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--t3); }
@@ -4781,6 +4821,15 @@ dialog.ed[open] { display: block; }
 .elist { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
 .egrp { margin: 12px 4px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--t3); display: flex; justify-content: space-between; align-items: center; }
 .egrp button { font-size: 11.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: rgb(100, 170, 255); }
+.egrp.fold { width: calc(100% - 8px); height: 30px; margin: 8px 4px 2px; justify-content: flex-start; gap: 6px; border-radius: 9px; }
+.egrp.fold:hover { color: var(--t2); }
+.egrp.fold .ic { font-size: 14px; transition: transform .25s var(--snap); }
+.egrp.fold.closed .ic { transform: rotate(-90deg); }
+.egrp.fold span { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.egrp.fold small { font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--t3); font-variant-numeric: tabular-nums; }
+.egroupby { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.egroupby .eseg { flex: 1; }
+.efoldall { flex: none; height: 32px; padding: 0 6px; font-size: 12.5px; font-weight: 600; color: rgb(100, 170, 255); }
 .erow { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 8px 6px 10px; border-radius: 12px; cursor: grab; touch-action: none; transition: background .15s; }
 .erow:hover { background: rgba(255, 255, 255, .07); }
 .erow .ei { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; background: rgba(255, 255, 255, .08); }
@@ -4793,9 +4842,15 @@ dialog.ed[open] { display: block; }
 .erow.placed .eadd { background: none; color: rgb(var(--green)); cursor: pointer; }
 .erow.placed .eadd .ic { --ip: currentColor; }
 .erow.on { background: rgba(var(--blue), .16); }
+.erow .eadd.del { color: rgb(255, 128, 118); background: rgba(var(--red), .14); }
+.erow .eadd.del .ic { --ip: currentColor; }
+.erow .eadd.del:hover { background: rgba(var(--red), .26); }
 .eempty { padding: 16px; border-radius: 14px; background: rgba(255, 255, 255, .04); font-size: 13px; line-height: 1.45; color: var(--t2); }
 .ecard { margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
 .ecard.drop { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .7); }
+.ecard.pick { cursor: pointer; transition: box-shadow .2s, background .2s; }
+.ecard.pick:hover { background: rgba(255, 255, 255, .08); }
+.ecard.cur { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .9); background: rgba(var(--blue), .1); }
 .elayer { display: flex; align-items: center; gap: 10px; min-height: 48px; }
 .elayer .ei { flex: none; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; background: rgba(255, 255, 255, .09); }
 .elayer > div { flex: 1; min-width: 0; }
@@ -4817,13 +4872,13 @@ dialog.ed[open] { display: block; }
 .echip.area.empty { opacity: .55; }
 .eroom .en em { display: block; margin-top: 2px; font-style: normal; font-size: 10.5px; font-weight: 600; color: rgb(var(--orange)); }
 
-/* preview */
-.eprev { position: absolute; inset: 60px 0 0 0; z-index: 30; display: none; background: #08090c; }
-.eprev.on { display: block; }
-.eprev .pbar { position: absolute; left: 50%; top: 12px; z-index: 3; transform: translateX(-50%); }
-.eprev .frame { position: absolute; inset: 60px 0 0 0; overflow: auto; }
-.eprev .frame.phone { inset: 60px 0 0 0; display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
-.eprev .phonebox { width: 390px; height: min(780px, calc(100% - 20px)); border-radius: 40px; overflow-y: auto; overflow-x: hidden; box-shadow: 0 0 0 10px #000, 0 0 0 12px #3a3b40, 0 30px 80px rgba(0, 0, 0, .6); scrollbar-width: none; }
+/* a question (start over …) */
+.econfirm { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.ecbox { width: min(420px, 100%); padding: 22px 22px 18px; border-radius: 22px; background: linear-gradient(160deg, rgba(52, 52, 60, .92), rgba(30, 30, 36, .94));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 30px 80px rgba(0, 0, 0, .55); }
+.ecbox h2 { margin: 0 0 8px; font-size: 19px; font-weight: 700; letter-spacing: -.02em; }
+.ecbox p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--t2); }
+.ecbox .ebtns { margin-top: 18px; }
 
 /* toast */
 .etoast { position: absolute; left: 50%; top: 74px; z-index: 40; padding: 10px 18px; border-radius: 999px; font-size: 13.5px; font-weight: 600; white-space: nowrap;
@@ -4845,16 +4900,18 @@ dialog.ed[open] { display: block; }
   .etop .ebtn.lbl span { display: none; }
   .etop .ebtn.lbl { padding: 0 11px; }
   .etop .esep { display: none; }
-  .emk { width: 26px; height: 26px; margin: -13px 0 0 -13px; }
-  .emk .ic { font-size: 14px; }
   .ehint { display: none; }
+  .eview button span, .elight .lbl { display: none; }
+  .eview button { padding: 0 9px; }
+  .erail .ereset { margin-top: 0; margin-left: auto; }
 }
 `;
 
 /* ================================================================== Floor plan editor (full screen)
- * Draw the home on top of a photo/sketch of the floor plan: rooms as rectangles (snap to each other), furniture
- * from a palette, windows / passages / the front door by clicking a wall, devices dragged from a list of
- * Home Assistant entities (grouped by area) onto the plan. Everything is stored in the card configuration. */
+ * The canvas shows the real card, live, on a screen of the real size (laptop or phone) – what you see is what you get.
+ * Invisible handles lie on top: rooms as rectangles (snap to each other), furniture from a palette, windows / passages /
+ * the front door by clicking a wall, devices dragged from a list of Home Assistant entities onto the plan. Tapping a
+ * lamp opens its settings instead of switching it. Everything is stored in the card configuration. */
 const ED_GRID = 5;
 const ED_TOOLS = [
   ['sketch', 'image'], ['rooms', 'plan'], ['furniture', 'sofa'], ['openings', 'window'], ['devices', 'bulb'], null, ['layers', 'layers'], ['tiles', 'widget'], ['settings', 'sliders'],
@@ -4868,6 +4925,10 @@ const LAYER_FILTER = {
   vacuum: (d) => d === 'vacuum',
   custom: (d) => !NO_DEVICE_DOMAINS.includes(d),
 };
+/* the screen of a phone in the Home Assistant app (below the header) */
+const ED_PHONE = { w: 390, h: 788 };
+/* tools that show the template picture (and keep it inside the visible plan) */
+const ED_UL_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
 const r0 = (v) => Math.round(v);
 const deep = (o) => JSON.parse(JSON.stringify(o ?? null));
 
@@ -4882,19 +4943,27 @@ class GfcEditor extends HTMLElement {
     this._openKind = 'window';
     this._layerSel = 'light';
     this._q = '';
-    this._v = { x: 0, y: 0, z: 0.6 };
+    this._f = null;
+    this._light = 'on';
+    this._groupBy = 'area';
+    this._collapsed = new Set();
+    this._scrollMem = {};
   }
 
   /* ---------------------------------------------------------------- open / close */
-  open({ config, hass, onSave, onClose } = {}) {
+  open({ config, hass, onSave, onClose, viewport } = {}) {
     this._hs = typeof hass === 'function' ? hass : () => hass;
     this._onSave = onSave;
     this._onClose = onClose;
+    this._vp = viewport || null;
     this._c = normEditorConfig(deep(config) || {});
     this._orig = JSON.stringify(this._c);
     this._useLang();
+    // nothing drawn yet: start with the template, empty
     this._tool = this._c.rooms.length ? 'rooms' : 'sketch';
+    this._mode = window.innerWidth < 700 ? 'phone' : 'laptop';
     this._loadUnderlay();
+    this._loadLabels();
     this._shell();
     if (!this.isConnected) document.body.append(this);
     this._dlg.showModal();
@@ -4909,10 +4978,20 @@ class GfcEditor extends HTMLElement {
     LOCALE = h?.locale?.language || h?.language || (LANG === 'de' ? 'de-DE' : 'en');
   }
 
+  /* Home Assistant labels (to sort devices by label) */
+  _loadLabels() {
+    const h = this._hs?.();
+    if (this._labelsP || !h?.callWS) return;
+    this._labelsP = h.callWS({ type: 'config/label_registry/list' })
+      .then((l) => { this._labels = l || []; if (this._tool === 'devices' && this._groupBy === 'label') this._panel(); })
+      .catch(() => { this._labels = []; });
+  }
+
   _close(save) {
     if (save) this._onSave?.(cleanConfig(this._c));
     this._dlg?.close();
     window.removeEventListener('keydown', this._onKey, true);
+    clearInterval(this._liveT);
     this._onClose?.();
     this.remove();
   }
@@ -4926,19 +5005,22 @@ class GfcEditor extends HTMLElement {
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs><linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient></defs></svg>
   <div class="etop">
     <h1>${esc(t('ed_title'))}<small></small></h1>
+    <div class="eseg eview">${['laptop', 'phone'].map((m) => `<button data-m="${m}">${icon(m)}<span>${esc(t(`ed_prev_${m}`))}</span></button>`).join('')}</div>
+    <i class="esep"></i>
     <button class="ebtn icon undo" title="${esc(t('ed_undo'))}">${icon('undo')}</button>
     <button class="ebtn icon redo" title="${esc(t('ed_redo'))}">${icon('redo')}</button>
     <i class="esep"></i>
-    <button class="ebtn lbl prev">${icon('eye')}<span>${esc(t('ed_preview'))}</span></button>
     <button class="ebtn lbl cancel">${esc(t('ed_cancel'))}</button>
     <button class="ebtn white save">${icon('check')}<span>${esc(t('ed_done'))}</span></button>
   </div>
-  <nav class="erail">${ED_TOOLS.map((x) => (x ? `<button data-tool="${x[0]}">${icon(x[1])}<span>${esc(t(`ed_tool_${x[0]}`))}</span></button>` : '<i class="rsep"></i>')).join('')}</nav>
-  <div class="ecv" tabindex="-1" autofocus><div class="grid"></div><img class="ul" alt="" hidden><div class="world"></div>
+  <nav class="erail">${ED_TOOLS.map((x) => (x ? `<button data-tool="${x[0]}">${icon(x[1])}<span>${esc(t(`ed_tool_${x[0]}`))}</span></button>` : '<i class="rsep"></i>')).join('')}
+    <button class="ereset" data-del="all">${icon('restart')}<span>${esc(t('ed_reset'))}</span></button></nav>
+  <div class="ecv" tabindex="-1" autofocus><div class="eframe"><small></small></div><div class="elive"></div><img class="ul" alt="" hidden><div class="world"></div>
+    <div class="elight eseg" title="${esc(t('ed_lightPreview'))}"><span class="lbl">${icon('bulb')}</span>${['on', 'off', 'real'].map((m) => `<button data-l="${m}">${esc(t(`ed_light_${m}`))}</button>`).join('')}</div>
     <div class="ezoom"><button class="zo" title="−">${icon('minus')}</button><button class="zf" title="${esc(t('ed_fit'))}">${icon('fit')}</button><button class="zi" title="+">${icon('plus')}</button></div>
     <div class="ehint"></div></div>
   <aside class="eins"></aside>
-  <div class="eprev"><div class="pbar"></div><div class="frame"></div></div>
+  <div class="econfirm" hidden></div>
   <div class="etoast"></div>
 </div></dialog>`;
     const $ = (s) => this.shadowRoot.querySelector(s);
@@ -4948,18 +5030,33 @@ class GfcEditor extends HTMLElement {
     this._world = $('.world');
     this._ins = $('.eins');
     this._ulEl = $('.ul');
+    this._liveEl = $('.elive');
+    this._frameEl = $('.eframe');
+    // the real card, live (it never gets pointer events – the handles on top do the work)
+    this._card = document.createElement(CARD_TAG);
+    this._liveEl.append(this._card);
+    this._liveKey = null;
     // keys and clicks stay in the editor (Home Assistant's edit dialog must not react to them, e.g. close on Escape)
     for (const type of ['keydown', 'keyup', 'click', 'pointerdown', 'wheel']) this._dlg.addEventListener(type, (e) => e.stopPropagation());
-    this._dlg.addEventListener('cancel', (e) => { e.preventDefault(); if (this.$('.eprev.on')) this._preview(false); else if (this._s) { this._s = null; this._draw(); this._panel(); } else this._tryClose(); });
+    this._dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      if (!this.$('.econfirm').hidden) this._confirmClose();
+      else if (this._s || this._editLayer) this._back();
+      else this._tryClose();
+    });
     $('.undo').addEventListener('click', () => this._doUndo());
     $('.redo').addEventListener('click', () => this._doRedo());
     $('.save').addEventListener('click', () => this._close(true));
     $('.cancel').addEventListener('click', () => this._tryClose());
-    $('.prev').addEventListener('click', () => this._preview(!this.$('.eprev.on')));
+    $('.ereset').addEventListener('click', () => this._askReset());
+    this.shadowRoot.querySelectorAll('.eview button').forEach((b) => b.addEventListener('click', () => this._setMode(b.dataset.m)));
+    this.shadowRoot.querySelectorAll('.elight button').forEach((b) => b.addEventListener('click', () => { this._light = b.dataset.l; this._draw(); }));
     $('.zi').addEventListener('click', () => this._zoomBy(1.25));
     $('.zo').addEventListener('click', () => this._zoomBy(0.8));
-    $('.zf').addEventListener('click', () => { this._fit(); this._draw(); });
-    this.shadowRoot.querySelectorAll('.erail button').forEach((b) => b.addEventListener('click', () => this._setTool(b.dataset.tool)));
+    $('.zf').addEventListener('click', () => { this._viewTouched = false; this._fit(); this._draw(); });
+    this.shadowRoot.querySelectorAll('.erail button[data-tool]').forEach((b) => b.addEventListener('click', () => this._setTool(b.dataset.tool)));
+    // delete buttons: show in red what would be deleted
+    this.shadowRoot.addEventListener('pointerover', (e) => { const b = e.target.closest?.('[data-del]'); this._cv.classList.toggle('del-sel', b?.dataset.del === 'sel'); this._cv.classList.toggle('del-all', b?.dataset.del === 'all'); });
     this._wireCanvas();
     if (this._onKey) window.removeEventListener('keydown', this._onKey, true);
     this._ro?.disconnect();
@@ -4967,6 +5064,9 @@ class GfcEditor extends HTMLElement {
     window.addEventListener('keydown', this._onKey, true);
     this._ro = new ResizeObserver(() => { if (!this._viewTouched) this._fit(); this._draw(); });
     this._ro.observe(this._cv);
+    // new states from Home Assistant reach the live card
+    clearInterval(this._liveT);
+    this._liveT = setInterval(() => { if (!this.isConnected) { clearInterval(this._liveT); return; } const h = this._liveHass(this._hs()); if (this._card && h && this._card.hass !== h) this._card.hass = h; }, 500);
     this._syncTop();
   }
 
@@ -4988,22 +5088,68 @@ class GfcEditor extends HTMLElement {
     this._tT = setTimeout(() => el.classList.remove('show'), 2600);
   }
 
+  /* a small question in the editor's own glass (instead of the browser's confirm) */
+  _confirm({ title, text, ok, danger }, onOk) {
+    const box = this.$('.econfirm');
+    box.innerHTML = `<div class="ecbox"><h2>${esc(title)}</h2><p>${esc(text)}</p><div class="ebtns"><button class="ebtn no">${esc(t('ed_cancel'))}</button><button class="ebtn yes ${danger ? 'redfill' : 'blue'}">${esc(ok)}</button></div></div>`;
+    box.hidden = false;
+    box.querySelector('.no').addEventListener('click', () => this._confirmClose());
+    box.querySelector('.yes').addEventListener('click', () => { this._confirmClose(); onOk(); });
+    box.addEventListener('pointerdown', (e) => { if (e.target === box) this._confirmClose(); }, { once: true });
+    requestAnimationFrame(() => box.querySelector('.no').focus());
+  }
+  _confirmClose() { const box = this.$('.econfirm'); box.hidden = true; box.innerHTML = ''; this._cv.classList.remove('del-all'); }
+
+  /* start over: everything empty, back to the template */
+  _askReset() {
+    this._confirm({ title: t('ed_resetTitle'), text: t('ed_resetText'), ok: t('ed_reset'), danger: true }, () => {
+      this._change(() => {
+        const keep = { type: this._c.type, language: this._c.language };
+        for (const k of Object.keys(this._c)) delete this._c[k];
+        Object.assign(this._c, normEditorConfig(keep));
+        if (!this._c.language) delete this._c.language;
+      }, { panel: false });
+      this._ulSrc = null;
+      this._pending = null; this._scaleCheck = null; this._pasting = false; this._measure = null; this._editLayer = null;
+      this._tool = 'sketch'; this._layerSel = 'light'; this._s = null; this._scrollMem = {};
+      this._viewTouched = false;
+      this._fit(); this._draw(); this._panel();
+      this._toast(t('ed_resetDone'));
+    });
+  }
+
   _setTool(tool) {
-    if (this._tool === tool) return;
+    if (this._tool === tool && !this._s && !this._editLayer) return;
     this._tool = tool;
     this._s = null;
     this._measure = null;
+    this._editLayer = null;
+    this._draw();
+    this._panel();
+  }
+  _setMode(m) {
+    if (this._mode === m) return;
+    this._mode = m;
+    this._fix = null;
+    this._s = this._s?.t === 'ul' || this._s?.t === 'wid' ? null : this._s;
+    this._measure = null;
+    this._viewTouched = false;
+    this._liveKey = null;
+    this._draw();
+    this._fit();
     this._draw();
     this._panel();
   }
 
   _syncTop() {
-    this.shadowRoot.querySelectorAll('.erail button').forEach((b) => b.classList.toggle('act', b.dataset.tool === this._tool));
+    this.shadowRoot.querySelectorAll('.erail button[data-tool]').forEach((b) => b.classList.toggle('act', b.dataset.tool === this._tool));
+    this.shadowRoot.querySelectorAll('.eview button').forEach((b) => b.classList.toggle('act', b.dataset.m === this._mode));
+    this.shadowRoot.querySelectorAll('.elight button').forEach((b) => b.classList.toggle('act', b.dataset.l === this._light));
     this.$('.undo').disabled = !this._undo.length;
     this.$('.redo').disabled = !this._redo.length;
     const n = this._c.rooms.length, e = this._c.entities.filter((x) => x.at).length;
     this.$('.etop h1 small').textContent = n ? t('ed_summary', n, e) : '';
-    this._cv.className = `ecv tool-${this._tool}${this._ulSrc ? ' ul-on' : ''}${this._tool === 'rooms' || (this._tool === 'sketch' && this._measure) ? ' draw' : ''}`;
+    this._cv.className = `ecv tool-${this._tool}${this._showUl() ? ' ul-on' : ''}${this._tool === 'rooms' || (this._tool === 'sketch' && this._measure) ? ' draw' : ''}${this._cv.classList.contains('del-sel') ? ' del-sel' : ''}${this._cv.classList.contains('del-all') ? ' del-all' : ''}`;
   }
 
   /* ---------------------------------------------------------------- undo / redo */
@@ -5018,6 +5164,7 @@ class GfcEditor extends HTMLElement {
     this._redo.push(JSON.stringify(this._c));
     this._c = JSON.parse(this._undo.pop());
     this._s = null;
+    this._loadUnderlay();
     this._draw(); this._panel();
   }
   _doRedo() {
@@ -5025,6 +5172,7 @@ class GfcEditor extends HTMLElement {
     this._undo.push(JSON.stringify(this._c));
     this._c = JSON.parse(this._redo.pop());
     this._s = null;
+    this._loadUnderlay();
     this._draw(); this._panel();
   }
   _change(fn, opts = {}) {
@@ -5035,156 +5183,267 @@ class GfcEditor extends HTMLElement {
     if (opts.panel !== false) this._panel();
   }
 
-  /* ---------------------------------------------------------------- view */
-  _bounds() {
-    const rects = [...this._c.rooms.map((r) => r.rect), ...(this._pending?.rooms || []).map((r) => r.rect)];
-    if (this._c.underlay?.rect && this._ulSrc) rects.push(this._c.underlay.rect);
-    return bboxOf(rects) || [0, 0, 1200, 800];
+  /* ---------------------------------------------------------------- the live card on its screen */
+  /* size of the real screen: the dashboard next to Home Assistant's sidebar, or a phone */
+  _screen() {
+    if (this._mode === 'phone') return ED_PHONE;
+    if (this._vp) return this._vp;
+    let sb = 0;
+    try {
+      const main = document.querySelector('home-assistant')?.shadowRoot?.querySelector('home-assistant-main');
+      const r = main?.shadowRoot?.querySelector('ha-sidebar')?.getBoundingClientRect();
+      if (r && r.right > 0 && r.width < window.innerWidth / 2) sb = r.right;
+    } catch (e) { /* not in Home Assistant */ }
+    return { w: Math.max(760, Math.round(window.innerWidth - sb)), h: Math.max(460, window.innerHeight - 56) };
+  }
+  _showUl() { return !!(this._ulSrc && this._c.underlay?.rect && this._mode !== 'phone' && ED_UL_TOOLS.includes(this._tool)); }
+  _liveCfg() {
+    const c = cleanConfig(this._c);
+    c.layout = this._mode === 'phone' || c.layout === 'mobile' ? 'mobile' : 'desktop';
+    delete c.underlay;
+    return c;
+  }
+  /* The visible part of the plan is exactly the card's own – except: fixed while something is dragged, and the
+   * template picture stays inside while tracing */
+  _liveStage(cfg) {
+    if (this._pin) return this._pin;
+    if (!this._showUl() || cfg.layout === 'mobile') return null;
+    try {
+      const S = buildModel(cfg, this._hs()).stage, U = this._c.underlay.rect, m = 20;
+      const R = bboxOf([[S.x, S.y, S.x + S.w, S.y + S.h], [U[0] - m, U[1] - m, U[2] + m, U[3] + m]]);
+      return { x: R[0], y: R[1], w: R[2] - R[0], h: R[3] - R[1] };
+    } catch (e) { return null; }
+  }
+  /* while rooms are drawn the plan stays where it is on the screen (a new room must not make it jump);
+   * the fit button – or another tool – shows the exact view again */
+  _drawing(cfg) { return ['sketch', 'rooms'].includes(this._tool) && cfg.layout !== 'mobile'; }
+  /* lights shown switched on / off while editing (or as they really are) */
+  _liveHass(h) {
+    if (!h || this._light === 'real') return h;
+    const ids = this._c.entities.map((e) => e.entity).filter((id) => domainOf(id) === 'light' && h.states?.[id]);
+    const key = `${this._light}|${ids.join(',')}|${ids.map((id) => this._c.entities.find((e) => e.entity === id)?.kelvin || '').join(',')}`;
+    if (this._lh?.src === h && this._lh.key === key) return this._lh.out;
+    const states = { ...h.states };
+    for (const id of ids) {
+      const st = h.states[id], a = st.attributes || {}, modes = a.supported_color_modes || [];
+      if (this._light === 'off') { states[id] = { ...st, state: 'off', attributes: { ...a, brightness: null, color_mode: null } }; continue; }
+      if (st.state === 'on') { states[id] = { ...st, attributes: { ...a, brightness: Math.max(a.brightness || 0, 180) } }; continue; }
+      const ct = modes.includes('color_temp'), k = this._c.entities.find((e) => e.entity === id)?.kelvin || 2900;
+      states[id] = { ...st, state: 'on', attributes: { ...a, brightness: 220, color_mode: ct ? 'color_temp' : modes.find((m) => m !== 'onoff') || 'onoff', ...(ct ? { color_temp_kelvin: k } : {}) } };
+    }
+    const out = { ...h, states };
+    this._lh = { src: h, key, out };
+    return out;
+  }
+  _syncLive() {
+    const card = this._card, h = this._hs();
+    if (!card || !h) return;
+    const scr = this._screen(), cfg = this._liveCfg(), lh = this._liveHass(h), draw = this._drawing(cfg);
+    if (!draw) this._fix = null;
+    const fix = draw ? this._fix : null, stage = fix ? null : this._liveStage(cfg);
+    const key = JSON.stringify([cfg, scr, stage, fix]);
+    if (key !== this._liveKey) {
+      this._liveKey = key;
+      card.style.width = `${scr.w}px`;
+      card.setEditorView(cfg, { w: scr.w, h: scr.h, stage, fix, tab: this._layerSel });
+    }
+    if (card.hass !== lh) card.hass = lh;
+    if (card._M && card._tab !== this._layerSel && card._M.layers.some((l) => l.id === this._layerSel)) { card._tab = this._layerSel; card._applyTab(true); }
+    const lv = card._lv, M = card._M;
+    this._map = lv && M ? { S: lv.S, pu: lv.pu, sx: lv.sx, sy: lv.sy, H: lv.H, rot: M.rot ? M.rotP : null, inv: M.rot ? M.rotI : null } : null;
+    if (draw && !this._fix && lv) this._fix = { pu: lv.pu, ox: lv.sx - lv.S.x * lv.pu, oy: lv.sy - lv.S.y * lv.pu };
   }
   _fit() {
     const r = this._cv.getBoundingClientRect();
     if (!r.width) return;
-    const narrow = r.width < 600, B = this._bounds(), pad = narrow ? 18 : 70, hint = narrow ? 0 : 30;
-    const z = clamp(Math.min((r.width - 2 * pad) / (B[2] - B[0]), (r.height - 2 * pad - hint) / (B[3] - B[1])), 0.05, 4);
-    this._v = { z, x: (B[0] + B[2]) / 2 - r.width / 2 / z, y: (B[1] + B[3]) / 2 - (r.height - hint) / 2 / z };
+    if (this._fix) { this._fix = null; this._syncLive(); }
+    const scr = this._screen(), H = this._map?.H || scr.h, narrow = r.width < 600;
+    const pad = narrow ? 10 : 30, top = narrow ? 10 : 46, bottom = narrow ? 52 : 66;
+    const k = clamp(Math.min((r.width - 2 * pad) / scr.w, (r.height - top - bottom) / H), 0.08, 1.4);
+    this._f = { k, ox: (r.width - scr.w * k) / 2, oy: top + Math.max(0, (r.height - top - bottom - H * k) / 2) };
   }
-  _zoomBy(k, cx, cy) {
+  _zoomBy(f, cx, cy) {
     this._viewTouched = true;
-    const r = this._cv.getBoundingClientRect(), v = this._v;
-    const px = cx ?? r.width / 2, py = cy ?? r.height / 2;
-    const wx = v.x + px / v.z, wy = v.y + py / v.z;
-    v.z = clamp(v.z * k, 0.05, 6);
-    v.x = wx - px / v.z;
-    v.y = wy - py / v.z;
+    const r = this._cv.getBoundingClientRect(), F = this._f;
+    const px = cx ?? r.width / 2, py = cy ?? r.height / 2, k = clamp(F.k * f, 0.08, 6);
+    F.ox = px - ((px - F.ox) * k) / F.k;
+    F.oy = py - ((py - F.oy) * k) / F.k;
+    F.k = k;
     this._draw();
   }
-  X(x) { return (x - this._v.x) * this._v.z; }
-  Y(y) { return (y - this._v.y) * this._v.z; }
+  /* plan (centimetres) → canvas pixels, through the live card's own layout (also on a turned phone plan) */
+  P(x, y) {
+    const m = this._map || { S: { x: 0, y: 0 }, pu: 0.5, sx: 0, sy: 0 }, F = this._f || { k: 1, ox: 0, oy: 0 };
+    const [a, b] = m.rot ? m.rot([x, y]) : [x, y];
+    return [F.ox + F.k * (m.sx + (a - m.S.x) * m.pu), F.oy + F.k * (m.sy + (b - m.S.y) * m.pu)];
+  }
+  _unP(X, Y) {
+    const m = this._map || { S: { x: 0, y: 0 }, pu: 0.5, sx: 0, sy: 0 }, F = this._f || { k: 1, ox: 0, oy: 0 };
+    const cx = (X - F.ox) / F.k, cy = (Y - F.oy) / F.k;
+    const p = [m.S.x + (cx - m.sx) / m.pu, m.S.y + (cy - m.sy) / m.pu];
+    return m.inv ? m.inv(p) : p;
+  }
+  /* canvas pixels per centimetre */
+  _z() { return (this._f?.k || 1) * (this._map?.pu || 0.5); }
   _pt(e) {
     const r = this._cv.getBoundingClientRect();
-    return [this._v.x + (e.clientX - r.left) / this._v.z, this._v.y + (e.clientY - r.top) / this._v.z];
+    return this._unP(e.clientX - r.left, e.clientY - r.top);
   }
-  _boxPx([a, b, c, d]) { return `left:${this.X(a).toFixed(1)}px;top:${this.Y(b).toFixed(1)}px;width:${((c - a) * this._v.z).toFixed(1)}px;height:${((d - b) * this._v.z).toFixed(1)}px`; }
+  _rectS(R) {
+    const a = this.P(R[0], R[1]), b = this.P(R[2], R[3]);
+    return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+  }
+  _boxPx(R) { const q = this._rectS(R); return `left:${q[0].toFixed(1)}px;top:${q[1].toFixed(1)}px;width:${(q[2] - q[0]).toFixed(1)}px;height:${(q[3] - q[1]).toFixed(1)}px`; }
+  /* a line along a plan wall, drawn as a bar of thickness th */
+  _segPx(s, th) {
+    const a = this.P(s[0], s[1]), b = this.P(s[2], s[3]), l = Math.min(a[0], b[0]), tp = Math.min(a[1], b[1]);
+    return Math.abs(a[0] - b[0]) >= Math.abs(a[1] - b[1])
+      ? `left:${l}px;top:${a[1] - th / 2}px;width:${Math.abs(a[0] - b[0])}px;height:${th}px`
+      : `left:${a[0] - th / 2}px;top:${tp}px;width:${th}px;height:${Math.abs(a[1] - b[1])}px`;
+  }
+  /* where the live card draws an element (its bounding box on the canvas) */
+  _cardBox(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect(), c = this._cv.getBoundingClientRect();
+    return r.width ? [r.left - c.left, r.top - c.top, r.right - c.left, r.bottom - c.top] : null;
+  }
 
-  /* the model the card would build (for auto placed tiles, rooms of devices …) */
+  /* the model the card would build on a laptop (for auto placed tiles, rooms of devices …) */
   _model() {
     try { return buildModel(cleanConfig(this._c), this._hs()); } catch (e) { return null; }
   }
 
-  /* ---------------------------------------------------------------- draw */
+  /* ---------------------------------------------------------------- draw (handles on top of the live card) */
   _draw() {
     if (!this._world) return;
+    this._syncLive();
+    if (!this._f) this._fit();
     this._syncTop();
-    const v = this._v, c = this._c, z = v.z;
-    const g = this.$('.grid'), step = 50 * z;
-    g.style.backgroundSize = `${step}px ${step}px`;
-    g.style.backgroundPosition = `${(-v.x * z) % step}px ${(-v.y * z) % step}px`;
-    // underlay
+    const c = this._c, F = this._f, z = this._z(), scr = this._screen(), H = this._map?.H || scr.h;
+    // the screen with the live card
+    Object.assign(this._liveEl.style, { width: `${scr.w}px`, height: `${H}px`, transform: `translate(${F.ox}px, ${F.oy}px) scale(${F.k})` });
+    Object.assign(this._frameEl.style, { left: `${F.ox}px`, top: `${F.oy}px`, width: `${scr.w * F.k}px`, height: `${H * F.k}px` });
+    this._frameEl.classList.toggle('phone', this._mode === 'phone');
+    this._frameEl.querySelector('small').textContent = `${t(`ed_prev_${this._mode}`)} · ${scr.w} × ${scr.h}`;
+    // template picture (on top of the card, so the plan can be traced)
     const ul = this._ulEl;
-    if (this._ulSrc && c.underlay?.rect) {
+    if (this._showUl()) {
       if (ul.getAttribute('src') !== this._ulSrc) ul.src = this._ulSrc;
       ul.hidden = false;
-      const [a, b, cc, d] = c.underlay.rect;
-      Object.assign(ul.style, { left: `${this.X(a)}px`, top: `${this.Y(b)}px`, width: `${(cc - a) * z}px`, height: `${(d - b) * z}px`, opacity: String(c.underlay.opacity ?? 0.6),
-        filter: c.underlay.invert ? 'invert(1) hue-rotate(180deg) contrast(1.1)' : '' });
+      const q = this._rectS(c.underlay.rect);
+      Object.assign(ul.style, { left: `${q[0]}px`, top: `${q[1]}px`, width: `${q[2] - q[0]}px`, height: `${q[3] - q[1]}px`, opacity: String(c.underlay.opacity ?? 0.6),
+        filter: c.underlay.invert ? 'invert(1) hue-rotate(180deg) contrast(1.1)' : '', mixBlendMode: c.underlay.invert ? 'screen' : 'normal' });
     } else ul.hidden = true;
 
-    const tool = this._tool, sel = this._s, M = this._model();
+    const tool = this._tool, sel = this._s, card = this._card;
     const hs = this._hs() || {};
     let html = '';
-    // rooms
+    // rooms: invisible, outlined on hover / when selected; rooms without an area are marked while linking
     const hasAreas = Object.keys(hs.areas || {}).length > 0;
     c.rooms.forEach((r, i) => {
-      const [a, b, cc, d] = r.rect, w = (cc - a) / 100, h = (d - b) / 100;
-      const on = (sel?.t === 'room' && sel.i === i) || this._dropRoom === i;
-      const an = r.area ? hs.areas?.[r.area]?.name || r.area : null;
-      const area = an && an !== r.name ? ` · ${esc(an)}` : '';
-      html += `<div class="eroom${r.label === 'bottom' ? ' lb' : ''}${on ? ' hot' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([a + 1.5 / z, b + 1.5 / z, cc - 1.5 / z, d - 1.5 / z])}">
-        <div class="en"><b>${esc(r.name || t('ed_room'))}</b><small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
+      const on = this._dropRoom === i;
+      const noArea = !r.area && hasAreas && tool === 'rooms';
+      html += `<div class="eroom${on ? ' hot' : ''}${noArea ? ' na' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([r.rect[0] + 6.5, r.rect[1] + 6.5, r.rect[2] - 6.5, r.rect[3] - 6.5])}">${noArea ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div>`;
     });
     // a floor plan waiting to be imported: dashed outlines
     for (const r of this._pending?.rooms || []) html += `<div class="eroom ghost" style="${this._boxPx(r.rect)}"><div class="en"><b>${esc(r.name)}</b></div></div>`;
     // furniture
     c.rooms.forEach((r, ri) => (r.furniture || []).forEach((f, fi) => {
-      const F = normFurn(f);
-      if (!F) return;
+      const Fu = normFurn(f);
+      if (!Fu) return;
       const on = sel?.t === 'furn' && sel.r === ri && sel.i === fi;
-      const def = FURN_KINDS[F.kind] || FURN_KINDS.block, small = Math.min(F.r[2] - F.r[0], F.r[3] - F.r[1]) * z;
-      html += `<div class="efu ${esc(F.kind)}${F.circle ? ' c' : ''}${on ? ' sel' : ''}" data-k="furn" data-r="${ri}" data-i="${fi}" style="${this._boxPx(F.r)};--fr:${(F.rad * z * 1.3).toFixed(1)}">${small > 26 && tool === 'furniture' ? `<span class="fic">${icon(def.icon)}</span>` : ''}</div>`;
+      html += `<div class="efu${Fu.circle ? ' c' : ''}${on ? ' sel' : ''}" data-k="furn" data-r="${ri}" data-i="${fi}" style="${this._boxPx(Fu.r)};--fr:${(Fu.rad * z * 1.3).toFixed(1)}"></div>`;
     }));
-    // openings
-    const th = Math.max(5, 9 * z);
-    const segBox = (s) => (s[1] === s[3]
-      ? `left:${this.X(s[0])}px;top:${this.Y(s[1]) - th / 2}px;width:${(s[2] - s[0]) * z}px;height:${th}px`
-      : `left:${this.X(s[0]) - th / 2}px;top:${this.Y(s[1])}px;width:${th}px;height:${(s[3] - s[1]) * z}px`);
+    // windows, passages, front door
+    const th = Math.max(8, 11 * z);
     for (const [kind, { key }] of Object.entries(OPEN_KINDS)) {
       const list = key === 'entrance' ? (c.entrance ? [c.entrance] : []) : c[key];
       list.forEach((s0, i) => {
         const s = normSeg(s0);
         if (!s) return;
         const on = sel?.t === 'open' && sel.k === kind && sel.i === i;
-        html += `<div class="eopen ${kind === 'window' ? 'win' : kind === 'door' ? 'pas' : 'ent'}${on ? ' sel' : ''}" data-k="open" data-o="${kind}" data-i="${i}" style="${segBox(s)}" title="${esc(t(`ed_open_${kind}`))}"></div>`;
+        html += `<div class="eopen ${kind === 'window' ? 'win' : kind === 'door' ? 'pas' : 'ent'}${on ? ' sel' : ''}" data-k="open" data-o="${kind}" data-i="${i}" style="${this._segPx(s, th)}" title="${esc(t(`ed_open_${kind}`))}"></div>`;
       });
     }
-    if (this._hover && tool === 'openings') html += `<div class="eopen ghost ${this._openKind === 'window' ? 'win' : this._openKind === 'door' ? 'pas' : 'ent'}" style="${segBox(this._hover.seg)}"></div>`;
-    // tiles (auto or manual)
-    if (tool === 'tiles' && M) {
+    if (this._hover && tool === 'openings') html += `<div class="eopen ghost ${this._openKind === 'window' ? 'win' : this._openKind === 'door' ? 'pas' : 'ent'}" style="${this._segPx(this._hover.seg, th)}"></div>`;
+    // tiles (auto or manual) – on a laptop
+    const M = this._model();
+    if (tool === 'tiles' && M && this._mode !== 'phone') {
       for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) {
         const R = M.widgets[k];
         if (!R) continue;
         const manual = Array.isArray(c.widgets?.[k]), on = sel?.t === 'wid' && sel.k === k;
-        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${k}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><div>${icon({ card: 'widget', weather: 'partly', indoor: 'thermo', door: 'door', bar: 'layers' }[k])}${esc(t(`ed_tile_${k}`))}</div></div>`;
+        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${k}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(t(`ed_tile_${k}`))}</span></div>`;
       }
     }
-    // device markers
-    const L = this._layerSel, layer = this._layerDef(L);
+    // device markers: exactly over the buttons the live card shows in its current layer (tap → settings)
+    const onCard = (el) => { const b = !el || el.classList.contains('hid') ? null : this._cardBox(el); return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]]; };
     c.entities.forEach((e, i) => {
-      if (!e.at) return;
-      const st = hs.states?.[e.entity], kind = kindOf(e.entity, st);
-      const vis = tool === 'devices' && layer && this._inLayerDef(layer, e.entity, kind);
-      const on = sel?.t === 'ent' && sel.i === i;
-      const ic = e.icon && ICONS[e.icon] ? e.icon : e.icon && MDI_MAP[e.icon] ? MDI_MAP[e.icon] : kind === 'light' ? 'bulb' : GlassFloorplanCard.prototype._autoIcon(e.entity, st);
+      const on = sel?.t === 'ent' && sel.i === i, m = e.at && onCard(card?._mk?.[e.entity]);
+      // a selected device without a button there (plan: false, another layer) is shown where it is
+      const [x, y, w] = m || (on && e.at ? [...this.P(e.at[0], e.at[1]), 34 * F.k] : []);
+      if (x == null) return;
       const out = !c.rooms.some((r) => inRect(r.rect, e.at));
-      html += `<div class="emk ${kind}${vis ? '' : ' off'}${on ? ' sel' : ''}${out && vis ? ' warn' : ''}" data-k="mk" data-i="${i}" style="left:${this.X(e.at[0])}px;top:${this.Y(e.at[1])}px;${vis ? '' : 'pointer-events:none;'}" title="${esc(e.name || st?.attributes?.friendly_name || e.entity)}">${icon(ic)}</div>`;
+      html += `<div class="emk${on ? ' sel' : ''}${m ? '' : ' ghost'}${out ? ' warn' : ''}" data-k="mk" data-i="${i}" style="left:${x}px;top:${y}px;--s:${w.toFixed(1)}px" title="${esc(e.name || hs.states?.[e.entity]?.attributes?.friendly_name || e.entity)}"></div>`;
     });
-    if (c.door?.at) {
-      const vis = tool === 'devices' && L === 'light';
-      html += `<div class="emk door${vis ? '' : ' off'}${sel?.t === 'door' ? ' sel' : ''}" data-k="mk" data-m="door" style="left:${this.X(c.door.at[0])}px;top:${this.Y(c.door.at[1])}px;${vis ? '' : 'pointer-events:none;'}">${icon('door')}</div>`;
+    const dm = c.door?.at && onCard(card?._mk?.__door);
+    if (c.door?.at && (dm || sel?.t === 'door')) {
+      const [x, y, w] = dm || [...this.P(c.door.at[0], c.door.at[1]), 36 * F.k];
+      html += `<div class="emk${sel?.t === 'door' ? ' sel' : ''}" data-k="mk" data-m="door" style="left:${x}px;top:${y}px;--s:${w.toFixed(1)}px"></div>`;
     }
-    if (c.vacuum?.entity && c.vacuum.dock) {
-      const vis = tool === 'devices' && L === 'vacuum';
-      html += `<div class="emk dock${vis ? '' : ' off'}${sel?.t === 'dock' ? ' sel' : ''}" data-k="mk" data-m="dock" style="left:${this.X(c.vacuum.dock[0])}px;top:${this.Y(c.vacuum.dock[1])}px;${vis ? '' : 'pointer-events:none;'}">${icon('dock')}</div>`;
+    const mkSize = (el, dflt) => (el?.offsetWidth || dflt) * F.k;
+    if (c.vacuum?.entity && c.vacuum.dock && (sel?.t === 'dock' || card?._layer?.()?.type === 'vacuum')) {
+      const [x, y] = this.P(c.vacuum.dock[0], c.vacuum.dock[1]);
+      html += `<div class="emk dock${sel?.t === 'dock' ? ' sel' : ''}" data-k="mk" data-m="dock" style="left:${x}px;top:${y}px;--s:${mkSize(card?.$?.('.bot'), 30).toFixed(1)}px"></div>`;
     }
-    // selection handles
-    const hd = (x, y, cls, extra = '') => `<i class="ehd ${cls}" data-k="hd" data-h="${cls}"${extra} style="left:${x}px;top:${y}px"></i>`;
-    const rectHandles = (R, list = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se']) => {
-      const [a, b, cc, d] = [this.X(R[0]), this.Y(R[1]), this.X(R[2]), this.Y(R[3])], mx = (a + cc) / 2, my = (b + d) / 2;
-      const P = { n: [mx, b], s: [mx, d], e: [cc, my], w: [a, my], nw: [a, b], ne: [cc, b], sw: [a, d], se: [cc, d] };
-      return `<i class="esel" style="left:${a}px;top:${b}px;width:${cc - a}px;height:${d - b}px"></i>${list.map((k) => hd(P[k][0], P[k][1], k)).join('')}`;
-    };
+    // layers: the layer bar of the card, highlighted
+    if (tool === 'layers') {
+      const b = this._cardBox(card?.shadowRoot?.querySelector('.tabs'));
+      if (b) html += `<i class="ehl" style="left:${b[0]}px;top:${b[1]}px;width:${b[2] - b[0]}px;height:${b[3] - b[1]}px"></i>`;
+    }
+    // selection handles (named after the plan's sides – on a turned phone plan they sit where that side is)
     const so = this._selObj();
-    if (so) {
+    const hd = (pt, name, cx, cy, extra = '') => {
+      const [x, y] = this.P(pt[0], pt[1]), dx = x - cx, dy = y - cy;
+      const cur = Math.abs(dx) < 2 ? 'ns' : Math.abs(dy) < 2 ? 'ew' : dx * dy > 0 ? 'nwse' : 'nesw';
+      return `<i class="ehd ${cur}" data-k="hd" data-h="${name}"${extra} style="left:${x}px;top:${y}px"></i>`;
+    };
+    const rectHandles = (R, list = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se']) => {
+      const q = this._rectS(R), cx = (q[0] + q[2]) / 2, cy = (q[1] + q[3]) / 2, mx = (R[0] + R[2]) / 2, my = (R[1] + R[3]) / 2;
+      const Pp = { n: [mx, R[1]], s: [mx, R[3]], e: [R[2], my], w: [R[0], my], nw: [R[0], R[1]], ne: [R[2], R[1]], sw: [R[0], R[3]], se: [R[2], R[3]] };
+      return `<i class="esel" style="${this._boxPx(R)}"></i>${list.map((k) => hd(Pp[k], k, cx, cy)).join('')}`;
+    };
+    if (so && !sel.quiet) {
       if (sel.t === 'room') html += sel.fresh ? `<i class="esel" style="${this._boxPx(so.rect)};opacity:.55"></i>` : rectHandles(so.rect);
       else if (sel.t === 'furn') html += rectHandles(normFurn(so).r);
       else if (sel.t === 'wid') html += rectHandles(so);
       else if (sel.t === 'ul') html += rectHandles(so.rect, ['nw', 'ne', 'sw', 'se']);
       else if (sel.t === 'open') {
-        const s = normSeg(so);
-        html += hd(this.X(s[0]), this.Y(s[1]), segH(s) ? 'w' : 'n', ' data-end="0"') + hd(this.X(s[2]), this.Y(s[3]), segH(s) ? 'e' : 's', ' data-end="1"');
+        const s = normSeg(so), q = this._rectS(s), cx = (q[0] + q[2]) / 2, cy = (q[1] + q[3]) / 2;
+        html += hd([s[0], s[1]], segH(s) ? 'w' : 'n', cx, cy, ' data-end="0"') + hd([s[2], s[3]], segH(s) ? 'e' : 's', cx, cy, ' data-end="1"');
       }
+    } else if (so && sel.quiet && sel.t === 'furn') html += `<i class="esel" style="${this._boxPx(normFurn(so).r)}"></i>`;
+    if (sel?.t === 'room' && so && !sel.fresh) {
+      const q = this._rectS(so.rect);
+      html += `<div class="edim" style="left:${(q[0] + q[2]) / 2}px;top:${q[1]}px">${fmt((so.rect[2] - so.rect[0]) / 100, 2)} × ${fmt((so.rect[3] - so.rect[1]) / 100, 2)} m</div>`;
     }
     if (sel?.t === 'furn' && so) {
-      const R = normFurn(so).r, top = this.Y(R[1]), below = top < 56;
-      html += `<div class="efloat" style="left:${this.X((R[0] + R[2]) / 2)}px;top:${below ? this.Y(R[3]) + 14 : top - 14}px;transform:translate(-50%, ${below ? '0' : '-100%'})">
+      const q = this._rectS(normFurn(so).r), R = normFurn(so).r, below = q[1] < 56;
+      html += `<div class="efloat" style="left:${(q[0] + q[2]) / 2}px;top:${below ? q[3] + 14 : q[1] - 14}px;transform:translate(-50%, ${below ? '0' : '-100%'})">
         <span>${esc(t(`furn_${normFurn(so).kind}`))} · ${r0(R[2] - R[0])} × ${r0(R[3] - R[1])}</span>
-        <button data-act="rot" title="${esc(t('ed_rotate'))} (R)">${icon('rotate')}</button><button data-act="dup" title="${esc(t('ed_duplicate'))}">${icon('copy')}</button><button data-act="del" title="${esc(t('ed_delete'))}">${icon('trash')}</button></div>`;
+        <button data-act="rot" title="${esc(t('ed_rotate'))} (R)">${icon('rotate')}</button><button data-act="dup" title="${esc(t('ed_duplicate'))}">${icon('copy')}</button><button data-act="del" data-del="sel" title="${esc(t('ed_delete'))}">${icon('trash')}</button></div>`;
     }
-    if (this._drawRect) html += `<div class="edraw" style="${this._boxPx(this._drawRect)}"></div><div class="edim" style="left:${this.X((this._drawRect[0] + this._drawRect[2]) / 2)}px;top:${this.Y(this._drawRect[1])}px">${fmt((this._drawRect[2] - this._drawRect[0]) / 100, 2)} × ${fmt((this._drawRect[3] - this._drawRect[1]) / 100, 2)} m</div>`;
-    for (const gx of this._guides?.x || []) html += `<i class="eguide v" style="left:${this.X(gx)}px"></i>`;
-    for (const gy of this._guides?.y || []) html += `<i class="eguide h" style="top:${this.Y(gy)}px"></i>`;
+    if (this._drawRect) {
+      const q = this._rectS(this._drawRect);
+      html += `<div class="edraw" style="${this._boxPx(this._drawRect)}"></div><div class="edim" style="left:${(q[0] + q[2]) / 2}px;top:${q[1]}px">${fmt((this._drawRect[2] - this._drawRect[0]) / 100, 2)} × ${fmt((this._drawRect[3] - this._drawRect[1]) / 100, 2)} m</div>`;
+    }
+    // snapping guides (a plan x is a horizontal line on a turned phone plan)
+    const guide = (pa, pb) => { const a = this.P(...pa), b = this.P(...pb); return Math.abs(a[0] - b[0]) < 0.5 ? `<i class="eguide v" style="left:${a[0]}px"></i>` : `<i class="eguide h" style="top:${a[1]}px"></i>`; };
+    for (const gx of this._guides?.x || []) html += guide([gx, 0], [gx, 100]);
+    for (const gy of this._guides?.y || []) html += guide([0, gy], [100, gy]);
     if (this._measure?.a) {
-      const [a, b] = [this._measure.a, this._measure.b || this._measure.cur];
-      html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${this.X(a[0])}" y1="${this.Y(a[1])}" x2="${this.X(b[0])}" y2="${this.Y(b[1])}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${this.X(a[0])}px;top:${this.Y(a[1])}px"></i>${this._measure.b ? `<i style="left:${this.X(this._measure.b[0])}px;top:${this.Y(this._measure.b[1])}px"></i>` : ''}</div>`;
+      const a = this.P(...this._measure.a), bb = this._measure.b || this._measure.cur, b = bb && this.P(...bb);
+      html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${a[0]}px;top:${a[1]}px"></i>${this._measure.b ? `<i style="left:${b[0]}px;top:${b[1]}px"></i>` : ''}</div>`;
     }
     this._world.innerHTML = html;
     fitText(this._world.querySelectorAll('.eroom .en b'));
@@ -5201,7 +5460,8 @@ class GfcEditor extends HTMLElement {
     if (tool === 'openings') return t(`ed_hint_open_${this._openKind}`);
     if (tool === 'furniture') return t('ed_hint_furniture');
     if (tool === 'devices') return t('ed_hint_devices');
-    if (tool === 'tiles') return t('ed_hint_tiles');
+    if (tool === 'tiles') return this._mode === 'phone' ? t('ed_tiles_phone') : t('ed_hint_tiles');
+    if (tool === 'layers') return t('ed_hint_layers');
     if (tool === 'sketch') return this._ulSrc ? t('ed_hint_sketch') : '';
     return '';
   }
@@ -5224,14 +5484,14 @@ class GfcEditor extends HTMLElement {
   _snapV(v, axis, skip, tol) {
     const c = this._c, cand = [];
     c.rooms.forEach((r, i) => { if (i !== skip) cand.push(axis === 'x' ? r.rect[0] : r.rect[1], axis === 'x' ? r.rect[2] : r.rect[3]); });
-    let best = null, bd = tol ?? 9 / this._v.z;
+    let best = null, bd = tol ?? 9 / this._z();
     for (const q of cand) { const d = Math.abs(q - v); if (d < bd) { bd = d; best = q; } }
     return best != null ? { v: best, guide: true } : { v: Math.round(v / ED_GRID) * ED_GRID, guide: false };
   }
 
   /* walls under the pointer: nearest room edge (for windows, passages, the front door) */
   _wallAt(p) {
-    const tol = 16 / this._v.z;
+    const tol = 16 / this._z();
     let best = null;
     this._c.rooms.forEach((r) => {
       const [a, b, c, d] = r.rect;
@@ -5257,7 +5517,7 @@ class GfcEditor extends HTMLElement {
       e.preventDefault();
       const r = cv.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey) this._zoomBy(Math.exp(-e.deltaY * 0.0045), e.clientX - r.left, e.clientY - r.top);
-      else { this._viewTouched = true; this._v.x += e.deltaX / this._v.z; this._v.y += e.deltaY / this._v.z; this._draw(); }
+      else { this._viewTouched = true; this._f.ox -= e.deltaX; this._f.oy -= e.deltaY; this._draw(); }
     }, { passive: false });
     cv.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
     cv.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (!f) return; e.preventDefault(); this._readDropped(f); });
@@ -5279,12 +5539,12 @@ class GfcEditor extends HTMLElement {
     this._touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (this._touches.size === 2) {
       const [a, b] = [...this._touches.values()];
-      this._d = { mode: 'pinch', dist: Math.hypot(a[0] - b[0], a[1] - b[1]), z: this._v.z, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], v: { ...this._v } };
+      this._d = { mode: 'pinch', dist: Math.hypot(a[0] - b[0], a[1] - b[1]), mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], f: { ...this._f } };
       return;
     }
     const p = this._pt(e), el = e.target.closest('[data-k]'), k = el?.dataset.k;
     const base = { sx: e.clientX, sy: e.clientY, p, moved: false, id: e.pointerId };
-    if (e.button === 1 || this._space) { this._d = { ...base, mode: 'pan', v: { ...this._v } }; return; }
+    if (e.button === 1 || this._space) { this._d = { ...base, mode: 'pan', f: { ...this._f } }; return; }
     if (this._measure) { this._d = { ...base, mode: 'measure' }; return; }
     if (k === 'hd') { this._d = { ...base, mode: 'resize', h: el.dataset.h, end: el.dataset.end, orig: deep(this._selObj()) }; return; }
     // rooms tool: dragging always draws a new room (also across others – tracing a plan); a selected room moves,
@@ -5308,21 +5568,23 @@ class GfcEditor extends HTMLElement {
         ent: this._c.entrance && onWall(this._c.entrance) ? deep(this._c.entrance) : null };
       return;
     }
+    // furniture, windows, devices: dragging moves them (the list on the right stays), a tap opens their settings
+    const pick = (s, tool) => this._select({ ...s, quiet: this._sameSel(s) ? !!this._s.quiet : true }, tool);
     if (k === 'furn' && this._tool !== 'devices') {
-      this._select({ t: 'furn', r: +el.dataset.r, i: +el.dataset.i }, 'furniture');
-      this._d = { ...base, mode: 'move-furn', orig: deep(this._selObj()) };
+      pick({ t: 'furn', r: +el.dataset.r, i: +el.dataset.i }, 'furniture');
+      this._d = { ...base, mode: 'move-furn', orig: deep(this._selObj()), tap: true };
       return;
     }
     if (k === 'open') {
-      this._select({ t: 'open', k: el.dataset.o, i: +el.dataset.i }, 'openings');
-      this._d = { ...base, mode: 'move-open', orig: normSeg(this._selObj()) };
+      pick({ t: 'open', k: el.dataset.o, i: +el.dataset.i }, 'openings');
+      this._d = { ...base, mode: 'move-open', orig: normSeg(this._selObj()), tap: true };
       return;
     }
     if (k === 'mk') {
       const m = el.dataset.m;
-      this._select(m ? { t: m } : { t: 'ent', i: +el.dataset.i }, 'devices');
+      pick(m ? { t: m } : { t: 'ent', i: +el.dataset.i }, 'devices');
       const at = m === 'door' ? this._c.door.at : m === 'dock' ? this._c.vacuum.dock : this._c.entities[+el.dataset.i].at;
-      this._d = { ...base, mode: 'move-mk', orig: [...at] };
+      this._d = { ...base, mode: 'move-mk', orig: [...at], tap: true };
       return;
     }
     if (k === 'wid') {
@@ -5338,9 +5600,10 @@ class GfcEditor extends HTMLElement {
       this._d = { ...base, mode: 'move-ul', orig: deep(this._c.underlay.rect) };
       return;
     }
-    this._d = { ...base, mode: 'pan', v: { ...this._v }, deselect: true };
+    this._d = { ...base, mode: 'pan', f: { ...this._f }, deselect: true };
   }
 
+  _sameSel(s) { const o = this._s; return !!o && o.t === s.t && o.i === s.i && o.r === s.r && o.k === s.k; }
   _select(s, tool) {
     const changedTool = tool && this._tool !== tool;
     if (changedTool) this._tool = tool;
@@ -5372,22 +5635,26 @@ class GfcEditor extends HTMLElement {
     if (d.mode === 'pinch') {
       if (this._touches.size < 2) return;
       const [a, b] = [...this._touches.values()], dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
-      const r = this._cv.getBoundingClientRect(), mx = d.mid[0] - r.left, my = d.mid[1] - r.top;
-      const wx = d.v.x + mx / d.v.z, wy = d.v.y + my / d.v.z;
-      this._v.z = clamp(d.z * (dist / d.dist), 0.05, 6);
-      this._v.x = wx - mx / this._v.z; this._v.y = wy - my / this._v.z;
+      const r = this._cv.getBoundingClientRect(), mx = d.mid[0] - r.left, my = d.mid[1] - r.top, k = clamp(d.f.k * (dist / d.dist), 0.08, 6);
+      this._viewTouched = true;
+      this._f = { k, ox: mx - ((mx - d.f.ox) * k) / d.f.k, oy: my - ((my - d.f.oy) * k) / d.f.k };
       this._draw();
       return;
     }
     if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 3) return;
-    if (!d.moved) { d.moved = true; if (!['pan', 'draw', 'measure'].includes(d.mode)) this._snap(); }
+    if (!d.moved) {
+      d.moved = true;
+      if (!['pan', 'draw', 'measure'].includes(d.mode)) this._snap();
+      // the live card keeps its scale while something is dragged
+      if (!['pan', 'measure'].includes(d.mode) && this._card?._M) this._pin = { ...this._card._M.stage };
+    }
     const dx = p[0] - d.p[0], dy = p[1] - d.p[1], c = this._c;
     this._guides = null;
     if (d.mode === 'pan') {
       this._viewTouched = true;
       this._cv.classList.add('panning');
-      this._v.x = d.v.x - (e.clientX - d.sx) / d.v.z;
-      this._v.y = d.v.y - (e.clientY - d.sy) / d.v.z;
+      this._f.ox = d.f.ox + (e.clientX - d.sx);
+      this._f.oy = d.f.oy + (e.clientY - d.sy);
     } else if (d.mode === 'draw') {
       const sx = this._snapV(p[0], 'x'), sy = this._snapV(p[1], 'y');
       this._drawRect = normRect([d.a[0], d.a[1], sx.v, sy.v]) || [d.a[0], d.a[1], d.a[0] + 1, d.a[1] + 1];
@@ -5473,8 +5740,11 @@ class GfcEditor extends HTMLElement {
     this._d = null;
     this._cv.classList.remove('panning');
     this._guides = null;
+    if (this._pin) { this._pin = null; if (!d?.moved) this._draw(); }
     if (!d) return;
     if (d.mode === 'pinch') return;
+    // a tap on furniture / a window / a device: its settings
+    if (!d.moved && d.tap && this._s?.quiet) { this._s = { ...this._s, quiet: false }; this._draw(); this._panel(); return; }
     if (d.mode === 'measure' && !cancel) { this._measureClick(this._pt(e)); return; }
     if (d.mode === 'draw') {
       const R = this._drawRect;
@@ -5554,8 +5824,8 @@ class GfcEditor extends HTMLElement {
   _addOpening(seg) {
     const k = this._openKind;
     this._change(() => {
-      if (k === 'entrance') { this._c.entrance = seg; this._s = { t: 'open', k, i: 0 }; }
-      else { this._c[OPEN_KINDS[k].key].push(seg); this._s = { t: 'open', k, i: this._c[OPEN_KINDS[k].key].length - 1 }; }
+      if (k === 'entrance') { this._c.entrance = seg; this._s = { t: 'open', k, i: 0, quiet: true }; }
+      else { this._c[OPEN_KINDS[k].key].push(seg); this._s = { t: 'open', k, i: this._c[OPEN_KINDS[k].key].length - 1, quiet: true }; }
     });
   }
   _addFurniture(kind, at) {
@@ -5570,7 +5840,7 @@ class GfcEditor extends HTMLElement {
     const x = Math.round((p[0] - def.w / 2) / ED_GRID) * ED_GRID, y = Math.round((p[1] - def.h / 2) / ED_GRID) * ED_GRID;
     this._change(() => {
       (room.furniture = room.furniture || []).push([x, y, x + def.w, y + def.h, kind]);
-      this._s = { t: 'furn', r: ri, i: room.furniture.length - 1 };
+      this._s = { t: 'furn', r: ri, i: room.furniture.length - 1, quiet: true };
       this._tool = 'furniture';
     });
   }
@@ -5698,7 +5968,7 @@ class GfcEditor extends HTMLElement {
     const R = room?.rect;
     if (!R) {
       const r = this._cv.getBoundingClientRect();
-      return [r0(this._v.x + r.width / 2 / this._v.z), r0(this._v.y + r.height / 2 / this._v.z)];
+      return this._unP(r.width / 2, r.height / 2).map(r0);
     }
     return freeSpot(R, c.entities.filter((x) => x.at).map((x) => x.at));
   }
@@ -5707,16 +5977,16 @@ class GfcEditor extends HTMLElement {
     const c = this._c;
     const L = this._layerDef(this._layerSel);
     const st = this._hs()?.states?.[eid], kind = kindOf(eid, st);
-    if (domainOf(eid) === 'vacuum') { this._change(() => { c.vacuum = { ...(c.vacuum || {}), entity: eid, dock: at || c.vacuum?.dock || this._spotFor(eid) }; this._s = { t: 'dock' }; }); return; }
+    if (domainOf(eid) === 'vacuum') { this._change(() => { c.vacuum = { ...(c.vacuum || {}), entity: eid, dock: at || c.vacuum?.dock || this._spotFor(eid) }; this._s = { t: 'dock', quiet: true }; }); return; }
     const i = c.entities.findIndex((x) => x.entity === eid);
     this._change(() => {
       const pos = at || this._spotFor(eid);
-      if (i >= 0) { c.entities[i].at = pos; this._s = { t: 'ent', i }; }
+      if (i >= 0) { c.entities[i].at = pos; this._s = { t: 'ent', i, quiet: true }; }
       else {
         const e = { entity: eid, at: pos };
         if (kind === 'light') e.icon = guessLampIcon(eid, st);
         c.entities.push(e);
-        this._s = { t: 'ent', i: c.entities.length - 1 };
+        this._s = { t: 'ent', i: c.entities.length - 1, quiet: true };
       }
       // devices added in an own layer belong to it
       if (L?.type === 'custom' && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
@@ -5848,26 +6118,6 @@ class GfcEditor extends HTMLElement {
     this._panel();
     this._toast(t('ed_measured'));
   }
-
-  /* ---------------------------------------------------------------- live preview with the real card */
-  _preview(on) {
-    const P = this.$('.eprev');
-    P.classList.toggle('on', on);
-    this.$('.prev').classList.toggle('blue', on);
-    if (!on) { P.querySelector('.frame').innerHTML = ''; return; }
-    const mode = this._prevMode || 'laptop';
-    P.querySelector('.pbar').innerHTML = `<div class="eseg">${['laptop', 'phone'].map((m) => `<button data-m="${m}" class="${m === mode ? 'act' : ''}">${esc(t(`ed_prev_${m}`))}</button>`).join('')}</div>`;
-    P.querySelectorAll('.pbar button').forEach((b) => b.addEventListener('click', () => { this._prevMode = b.dataset.m; this._preview(true); }));
-    const fr = P.querySelector('.frame');
-    fr.className = `frame${mode === 'phone' ? ' phone' : ''}`;
-    fr.innerHTML = mode === 'phone' ? '<div class="phonebox"></div>' : '';
-    const card = document.createElement(CARD_TAG);
-    card.setConfig({ ...cleanConfig(this._c), layout: mode === 'phone' ? 'mobile' : 'desktop' });
-    (mode === 'phone' ? fr.querySelector('.phonebox') : fr).append(card);
-    card.hass = this._hs();
-    clearInterval(this._prevT);
-    this._prevT = setInterval(() => { if (!card.isConnected) { clearInterval(this._prevT); return; } const h = this._hs(); if (h !== card.hass) card.hass = h; }, 400);
-  }
 }
 
 /* ---------------------------------------------------------------- helpers shared by editor and auto setup */
@@ -5936,14 +6186,41 @@ const SHOW_LABEL = { light: 'layer_light', media: 'ed_kind_media', door: 'frontD
 const LAYER_ICONS = ['bulb', 'thermo', 'blinds', 'robot', 'moon', 'shield', 'sparkle', 'home', 'sofa', 'plug', 'fan', 'leaf', 'flame', 'drop', 'bolt', 'tv', 'lock', 'bell'];
 
 Object.assign(GfcEditor.prototype, {
+  /* The right side: the tool's list, or the settings of what was tapped – with a back arrow to the list
+   * (the list keeps its scroll position). Things just added from the list stay "quietly" selected there. */
   _panel() {
     if (!this._ins) return;
     const I = this._ins, s = this._s;
+    const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid' };
+    const detail = s && !s.quiet && this._selObj() ? map[s.t] : null;
+    const layer = !detail && this._tool === 'layers' && this._editLayer ? this._layerDef(this._editLayer) : null;
+    const view = detail ? `d:${s.t}` : layer ? `e:${layer.id}` : `t:${this._tool}`;
+    if (this._view?.startsWith('t:')) this._scrollMem[this._view] = I.scrollTop;
+    const keep = view === this._view ? I.scrollTop : null;
     I.innerHTML = '';
-    const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid', ul: '_p_sketch' };
-    const fn = s && this._selObj() ? map[s.t] : `_p_${this._tool}`;
-    this[fn]?.(I);
+    if (detail || layer) {
+      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(t(`ed_tool_${this._tool}`))}</span>`);
+      back.addEventListener('click', () => this._back());
+      I.append(back);
+    }
+    if (detail) this[detail](I);
+    else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
+    else this[`_p_${this._tool}`]?.(I);
+    I.scrollTop = keep ?? (view.startsWith('t:') ? this._scrollMem[view] || 0 : 0);
+    this._view = view;
     this._syncTop();
+  },
+  _back() {
+    this._s = null;
+    this._editLayer = null;
+    this._draw();
+    this._panel();
+  },
+  /* a red button that deletes (hovering it shows in red what goes) */
+  _delBtn(label, onClick, scope = 'sel', cls = '') {
+    const b = this._btn(`${icon('trash')}<span>${esc(label)}</span>`, `red ${cls}`, onClick);
+    b.dataset.del = scope;
+    return b;
   },
 
   /* ---------------------------------------------------------------- small UI builders */
@@ -6050,7 +6327,7 @@ Object.assign(GfcEditor.prototype, {
       const row = mk('div', 'ebtns');
       row.append(
         this._btn(`${icon('fit')}<span>${esc(t(m ? 'ed_measure_stop' : 'ed_measure'))}</span>`, m ? 'blue' : '', () => { this._measure = m ? null : {}; this._s = null; this._draw(); this._panel(); }),
-        this._btn(`${icon('trash')}<span>${esc(t('ed_ulRemove'))}</span>`, 'red', () => this._change(() => { delete this._c.underlay; this._setUnderlay(null); })),
+        this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._setUnderlay(null); }), 'none'),
       );
       I.append(row);
       I.append(this._el(`<p class="small">${esc(t('ed_ulNote'))}</p>`));
@@ -6071,7 +6348,7 @@ Object.assign(GfcEditor.prototype, {
       this._fit(); this._draw(); this._toast(t('ed_exampleLoaded'));
     }));
     if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide', () => this._exportPlan()));
-    if (c.rooms.length) q.append(this._btn(`${icon('trash')}<span>${esc(t('ed_clear'))}</span>`, 'wide red', () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; })));
+    if (c.rooms.length) q.append(this._delBtn(t('ed_clear'), () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; }), 'all', 'wide'));
     I.append(q);
     I.append(this._el(`<p class="small">${esc(t('ed_claudeTip'))}</p>`));
   },
@@ -6200,7 +6477,7 @@ Object.assign(GfcEditor.prototype, {
       }
     }
     const row = mk('div', 'ebtns');
-    row.append(this._btn(`${icon('copy')}<span>${esc(t('ed_duplicate'))}</span>`, '', () => this._duplicateSel()), this._btn(`${icon('trash')}<span>${esc(t('ed_delete'))}</span>`, 'red', () => this._deleteSel()));
+    row.append(this._btn(`${icon('copy')}<span>${esc(t('ed_duplicate'))}</span>`, '', () => this._duplicateSel()), this._delBtn(t('ed_delete'), () => this._deleteSel()));
     I.append(row);
   },
   /* lights, climate, covers, media … – not helpers, groups of sensors etc. */
@@ -6228,17 +6505,22 @@ Object.assign(GfcEditor.prototype, {
     if (!this._c.rooms.length) { I.append(this._el(esc(t('ed_needRoom')), 'eempty')); return; }
     this._palette(I);
   },
-  /* the palette stays where it is; rotate / duplicate / delete float next to the piece on the plan */
+  /* one piece: kind and size (rotate / duplicate / delete also float next to it on the plan) */
   _pFurn(I) {
-    this._p_furniture(I);
     const f = this._selObj(), F = normFurn(f);
-    I.append(this._el(`<h3>${esc(t('ed_selected'))}: ${esc(t(`furn_${F.kind}`))}</h3>`));
+    I.append(this._el(`<h2>${esc(t(`furn_${F.kind}`))}</h2>`));
     I.append(this._fieldEl(t('ed_kind'), this._drop(Object.keys(FURN_KINDS).map((k) => [k, t(`furn_${k}`)]), F.kind, (v) => {
       if (Array.isArray(f)) { f.length = 4; f.push(v); } else f.kind = v;
     })));
     const R = F.r;
     I.append(this._fieldEl(t('ed_widthCm'), this._inp(R[2] - R[0], (v) => { if (v >= 5) setFurnRect(f, [R[0], R[1], R[0] + v, normFurn(f).r[3]]); }, { num: true, type: 'number' }), true));
     I.append(this._fieldEl(t('ed_depthCm'), this._inp(R[3] - R[1], (v) => { if (v >= 5) setFurnRect(f, [R[0], R[1], normFurn(f).r[2], R[1] + v]); }, { num: true, type: 'number' }), true));
+    const row = mk('div', 'ebtns');
+    row.append(this._btn(`${icon('rotate')}<span>${esc(t('ed_rotate'))}</span>`, '', () => this._rotateFurn()), this._btn(`${icon('copy')}<span>${esc(t('ed_duplicate'))}</span>`, '', () => this._duplicateSel()));
+    I.append(row);
+    const del = mk('div', 'ebtns');
+    del.append(this._delBtn(t('ed_delete'), () => this._deleteSel()));
+    I.append(del);
   },
 
   /* ---------------------------------------------------------------- windows, passages, front door */
@@ -6250,9 +6532,8 @@ Object.assign(GfcEditor.prototype, {
     I.append(this._el(`<p class="small">${esc(t('ed_open_counts', c.windows.length, c.doors.length, c.entrance ? 1 : 0))}</p>`));
   },
   _pOpen(I) {
-    this._p_openings(I);
     const s = this._s, seg = normSeg(this._selObj()), h = segH(seg);
-    I.append(this._el(`<h3>${esc(t('ed_selected'))}: ${esc(t(`ed_open_${s.k}`))}</h3>`));
+    I.append(this._el(`<h2>${esc(t(`ed_open_${s.k}`))}</h2>`));
     const len = h ? seg[2] - seg[0] : seg[3] - seg[1];
     I.append(this._fieldEl(t('ed_lengthCm'), this._inp(len, (v) => {
       if (!(v >= 20)) return;
@@ -6260,7 +6541,7 @@ Object.assign(GfcEditor.prototype, {
       this._setOpening(s, h ? [r0(m - v / 2), seg[1], r0(m + v / 2), seg[3]] : [seg[0], r0(m - v / 2), seg[2], r0(m + v / 2)]);
     }, { num: true, type: 'number' }), true));
     const row = mk('div', 'ebtns');
-    row.append(this._btn(`${icon('trash')}<span>${esc(t('ed_delete'))}</span>`, 'red', () => this._deleteSel()));
+    row.append(this._delBtn(t('ed_delete'), () => this._deleteSel()));
     I.append(row);
     I.append(this._el(`<p class="small">${esc(t('ed_open_move'))}</p>`));
   },
@@ -6307,15 +6588,29 @@ Object.assign(GfcEditor.prototype, {
       b.style.marginTop = '10px';
       I.append(b);
     }
-    // grouped by area
-    const groups = new Map();
-    for (const id of ids) { const a = this._areaOf(id) || ''; if (!groups.has(a)) groups.set(a, []); groups.get(a).push(id); }
-    const order = [...groups.keys()].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || String(h.areas?.[a]?.name || a).localeCompare(String(h.areas?.[b]?.name || b), LOCALE));
+    // grouped by area or by label; groups fold away (while searching everything is open)
+    const by = this._groupBy, groups = new Map(), add = (g, id) => { if (!groups.has(g)) groups.set(g, []); groups.get(g).push(id); };
+    for (const id of ids) {
+      if (by === 'label') { const ls = this._labelsOf(id); if (ls.length) ls.forEach((l) => add(l, id)); else add('', id); }
+      else add(this._areaOf(id) || '', id);
+    }
+    const gname = (g) => (!g ? t(by === 'label' ? 'ed_noLabelGroup' : 'ed_noAreaGroup') : by === 'label' ? this._labels?.find((x) => x.label_id === g)?.name || g : h.areas?.[g]?.name || g);
+    const order = [...groups.keys()].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || String(gname(a)).localeCompare(String(gname(b)), LOCALE));
+    const keyOf = (g) => `${by}:${g}`, allClosed = order.length > 0 && order.every((g) => this._collapsed.has(keyOf(g)));
+    const bar = mk('div', 'egroupby');
+    bar.append(this._segEl([['area', t('ed_byArea')], ['label', t('ed_byLabel')]], by, (v) => { this._groupBy = v; this._panel(); }));
+    const fold = mk('button', 'efoldall', esc(t(allClosed ? 'ed_unfoldAll' : 'ed_foldAll')));
+    fold.addEventListener('click', () => { for (const g of order) { if (allClosed) this._collapsed.delete(keyOf(g)); else this._collapsed.add(keyOf(g)); } this._panel(); });
+    bar.append(fold);
+    I.append(bar);
     const list = mk('div', 'elist');
-    for (const a of order) {
-      const gids = groups.get(a).sort((x, y) => (placed.has(x) ? 1 : 0) - (placed.has(y) ? 1 : 0) || this._fname(x).localeCompare(this._fname(y), LOCALE));
-      list.append(this._el(`<span>${esc(a ? h.areas?.[a]?.name || a : t('ed_noAreaGroup'))}</span>`, 'egrp'));
-      for (const id of gids.slice(0, q ? 200 : 60)) list.append(this._entityRow(id, placed.has(id), L));
+    for (const g of order) {
+      const gids = groups.get(g).sort((x, y) => (placed.has(x) ? 1 : 0) - (placed.has(y) ? 1 : 0) || this._fname(x).localeCompare(this._fname(y), LOCALE));
+      const closed = !q && this._collapsed.has(keyOf(g)), np = gids.filter((id) => placed.has(id)).length;
+      const head = mk('button', `egrp fold${closed ? ' closed' : ''}`, `${icon('chevD')}<span>${esc(gname(g))}</span><small>${np ? `${np} / ` : ''}${gids.length}</small>`);
+      head.addEventListener('click', () => { if (this._collapsed.has(keyOf(g))) this._collapsed.delete(keyOf(g)); else this._collapsed.add(keyOf(g)); this._panel(); });
+      list.append(head);
+      if (!closed) for (const id of gids.slice(0, q ? 200 : 60)) list.append(this._entityRow(id, placed.has(id), L));
     }
     if (!ids.length) list.append(this._el(esc(t(q ? 'ed_noMatch' : 'ed_noEntities')), 'eempty'));
     I.append(list);
@@ -6323,6 +6618,11 @@ Object.assign(GfcEditor.prototype, {
     if (L.type === 'custom') {
       I.append(this._el(`<p class="small">${esc(t('ed_customDevHint', L.name))}</p>`));
     }
+  },
+
+  _labelsOf(id) {
+    const h = this._hs() || {}, e = h.entities?.[id];
+    return [...new Set([...(e?.labels || []), ...(h.devices?.[e?.device_id]?.labels || [])])];
   },
 
   _entityRow(id, isPlaced, L) {
@@ -6368,7 +6668,7 @@ Object.assign(GfcEditor.prototype, {
     I.append(this._el(`<h2>${esc(t('frontDoor'))}</h2>`));
     this._doorPanel(I);
     const row = mk('div', 'ebtns');
-    row.append(this._btn(`${icon('trash')}<span>${esc(t('ed_removeMarker'))}</span>`, 'red', () => this._deleteSel()));
+    row.append(this._delBtn(t('ed_removeMarker'), () => this._deleteSel()));
     I.append(row);
   },
 
@@ -6461,7 +6761,7 @@ Object.assign(GfcEditor.prototype, {
       I.append(chips);
     }
     const row = mk('div', 'ebtns');
-    row.append(this._btn(`${icon('trash')}<span>${esc(t('ed_removeFromPlan'))}</span>`, 'red', () => this._deleteSel()));
+    row.append(this._delBtn(t('ed_removeFromLayers'), () => this._deleteSel()));
     I.append(row);
     if (M && !room) I.append(this._el(`<p class="small" style="color:rgb(var(--orange))">${esc(t('ed_outside'))}</p>`));
   },
@@ -6477,6 +6777,7 @@ Object.assign(GfcEditor.prototype, {
       const id = `layer_${uid()}`;
       this._c.layers.push({ id, name: `${t('ed_layerName')} ${n}`, icon: 'sparkle', show: [], entities: [] });
       this._editLayer = id;
+      this._layerSel = id;
       this._tool = 'layers';
     });
   },
@@ -6488,7 +6789,8 @@ Object.assign(GfcEditor.prototype, {
     const list = mk('div', '');
     defs.forEach((L) => {
       const on = active.has(L.id);
-      const box = this._el(`<div class="elayer"><span class="ei">${this._iconHtml(L.icon)}</span><div><b>${esc(L.name)}</b><small>${esc(this._layerSummary(L))}</small></div><div class="mv"></div></div>`, 'ecard');
+      const box = this._el(`<div class="elayer"><span class="ei">${this._iconHtml(L.icon)}</span><div><b>${esc(L.name)}</b><small>${esc(this._layerSummary(L))}</small></div><div class="mv"></div></div>`, `ecard${on ? ' pick' : ''}${on && L.id === this._layerSel ? ' cur' : ''}`);
+      if (on) box.addEventListener('click', (e) => { if (e.target.closest('button')) return; this._layerSel = L.id; this._draw(); this._panel(); });
       const mv = box.querySelector('.mv');
       if (on) {
         const up = mk('button', '', icon('chevU')), dn = mk('button', '', icon('chevD'));
@@ -6500,7 +6802,7 @@ Object.assign(GfcEditor.prototype, {
       if (L.type === 'custom') {
         const ed = mk('button', '', icon('pencil'));
         ed.title = t('ed_edit');
-        ed.addEventListener('click', () => { this._editLayer = this._editLayer === L.id ? null : L.id; this._panel(); });
+        ed.addEventListener('click', () => { this._editLayer = L.id; this._layerSel = L.id; this._draw(); this._panel(); });
         mv.append(ed);
       } else if (L.type !== 'vacuum' || c.vacuum) {
         box.querySelector('.elayer').append(this._tglEl(on, (v) => this._change(() => {
@@ -6508,7 +6810,6 @@ Object.assign(GfcEditor.prototype, {
           if (v) c.layers.push(L.type); else c.layers = c.layers.filter((l) => (typeof l === 'string' ? l : l.type) !== L.type || (typeof l === 'object' && (l.show || l.entities)));
         })));
       }
-      if (L.type === 'custom' && this._editLayer === L.id) box.append(this._layerEditor(L));
       list.append(box);
     });
     I.append(list);
@@ -6558,23 +6859,25 @@ Object.assign(GfcEditor.prototype, {
     for (const id of ents) {
       const row = this._el(`<span class="ei">${icon(GlassFloorplanCard.prototype._autoIcon(id, this._hs()?.states?.[id]))}</span><div><b>${esc(this._fname(id))}</b><small>${esc(id)}</small></div><button class="eadd" title="${esc(t('ed_delete'))}">${icon('minus')}</button>`, 'erow');
       row.style.cursor = 'default';
+      row.querySelector('.eadd').classList.add('del');
       row.querySelector('.eadd').addEventListener('click', () => this._change(() => { raw.entities = raw.entities.filter((x) => x !== id); }));
       list.append(row);
     }
     w.append(this._fieldEl(t('ed_layerDevices', ents.length), list));
     const row = mk('div', 'ebtns');
     row.append(
-      this._btn(`${icon('plus')}<span>${esc(t('ed_addDevices'))}</span>`, 'blue', () => { this._layerSel = L.id; this._tool = 'devices'; this._s = null; this._draw(); this._panel(); }),
-      this._btn(icon('trash'), 'icon red', () => this._change(() => { this._c.layers = this._c.layers.filter((l) => l !== raw); this._editLayer = null; })),
+      this._btn(`${icon('plus')}<span>${esc(t('ed_addDevices'))}</span>`, 'blue', () => { this._layerSel = L.id; this._tool = 'devices'; this._s = null; this._editLayer = null; this._draw(); this._panel(); }),
     );
-    w.append(row);
+    const del = mk('div', 'ebtns');
+    del.append(this._delBtn(t('ed_deleteLayer'), () => this._change(() => { this._c.layers = this._c.layers.filter((l) => l !== raw); this._editLayer = null; this._layerSel = 'light'; }), 'none'));
+    w.append(row, del);
     return w;
   },
 
   /* ---------------------------------------------------------------- tiles */
   _p_tiles(I) {
     const c = this._c;
-    I.append(this._el(`<h2>${esc(t('ed_tool_tiles'))}</h2><p class="lead">${esc(t('ed_tiles_lead'))}</p>`));
+    I.append(this._el(`<h2>${esc(t('ed_tool_tiles'))}</h2><p class="lead">${esc(t(this._mode === 'phone' ? 'ed_tiles_phone' : 'ed_tiles_lead'))}</p>`));
     const tg = (label, on, fn) => I.append(this._fieldEl(label, this._tglEl(on, (v) => this._change(() => fn(v))), true));
     tg(t('ed_tile_weather'), c.weather !== false, (v) => { if (v) delete c.weather; else c.weather = false; });
     tg(t('ed_tile_indoor'), c.indoor !== false, (v) => { if (v) delete c.indoor; else c.indoor = false; });
@@ -6881,12 +7184,17 @@ Object.assign(STR.en, {
   ed_tiles_lead: 'Weather, inside climate, front door and the layer card arrange themselves in free corners of your plan. Drag them to put them elsewhere.',
   ed_autoArrange: 'Arrange automatically', ed_tileManual: 'Placed by you.', ed_tileAuto: 'Placed automatically – drag it to change.',
   ed_language: 'Language', ed_weather: 'Weather', ed_layout: 'Layout', ed_layout_help: 'Automatic: phone layout below 700 px card width.', ed_rotate_phone: 'Turn the plan on phones',
-  ed_height: 'Height', ed_fit_screen: 'Fill the screen', ed_fit_width: 'By width', ed_modesLabel: 'Label for modes', ed_modes_help: 'Scenes and scripts with this label appear under “Modes”.',
+  ed_height: 'Height', ed_fit_screen: 'Fill the screen', ed_fit_width: 'By width', ed_modesLabel: 'Label for Mode', ed_modes_help: 'Scenes and scripts with this label appear under “Mode”.',
   ed_ha_open: 'Open floor plan editor', ed_ha_lead: 'Draw rooms, furniture, windows and doors, then drag your devices onto the plan – everything is saved in this card.',
   ed_ha_empty: 'No floor plan yet. Open the editor and draw your home – a photo of your floor plan helps.',
   furn_sofa: 'Sofa', furn_armchair: 'Armchair', furn_bed: 'Bed', furn_bed_single: 'Single bed', furn_table: 'Table', furn_round_table: 'Round table', furn_chair: 'Chair', furn_desk: 'Desk',
   furn_wardrobe: 'Wardrobe', furn_shelf: 'Shelf', furn_sideboard: 'Sideboard', furn_tv: 'TV', furn_counter: 'Kitchen', furn_fridge: 'Fridge', furn_bath: 'Bathtub', furn_shower: 'Shower',
   furn_toilet: 'Toilet', furn_sink: 'Sink', furn_washer: 'Washer', furn_plant: 'Plant', furn_rug: 'Rug', furn_stairs: 'Stairs', furn_block: 'Block',
+  ed_reset: 'Start over', ed_resetTitle: 'Start over?', ed_resetText: 'Rooms, furniture, windows, devices, layers and the template are removed. You can still undo it.', ed_resetDone: 'Everything removed – start with a template or draw your rooms',
+  ed_lightPreview: 'Show the lights', ed_light_on: 'On', ed_light_off: 'Off', ed_light_real: 'Real',
+  ed_hint_layers: 'The layer bar of your card – tap a layer on the right to see it', ed_tiles_phone: 'On a phone the tiles arrange themselves – switch to Laptop to move them',
+  ed_byArea: 'By area', ed_byLabel: 'By label', ed_noLabelGroup: 'Without label', ed_foldAll: 'Fold all', ed_unfoldAll: 'Unfold all',
+  ed_removeFromLayers: 'Remove from all layers', ed_deleteLayer: 'Delete layer', ed_layerEditLead: 'What this layer shows: whole categories and single devices.',
 });
 Object.assign(STR.de, {
   ed_selected: 'Ausgewählt', ed_ulAligned: 'Vorlage liegt genau unter dem importierten Plan', ed_importBad: 'In dieser Datei / diesem Text wurde kein Grundriss gefunden', ed_imported: (n) => `${n} ${pl(n, 'Raum', 'Räume')} importiert`, ed_importReady: 'Grundriss bereit zum Import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${w} Fenster · ${f} Möbel`, ed_importReplaces: 'Ersetzt die bisher gezeichneten Räume – platzierte Geräte bleiben.', ed_importApply: 'Importieren', ed_scaleTitle: 'Größe prüfen', ed_scaleText: 'Die Größe wurde aus dem Bild geschätzt. Gib eine echte Länge ein, dann wird alles angepasst.', ed_scaleOk: 'Größe stimmt', ed_pastePlaceholder: 'Antwort oder Dateiinhalt von Claude hier einfügen …', ed_importRead: 'Einlesen', ed_importTitle: 'Grundriss-Datei importieren', ed_importSub: 'z. B. vom Claude-Skill – Datei oder eingefügter Text', ed_importFile: 'Datei wählen', ed_importPaste: 'Text einfügen', ed_export: 'Grundriss als Datei sichern', ed_roomList: 'Räume', ed_areasHead: 'Home-Assistant-Bereiche', ed_areasHelp: 'Ziehe einen Bereich auf seinen Raum – Name und Geräte kommen mit.', ed_withDevices: 'Geräte des Bereichs gleich platzieren', ed_assigned: (r) => `„${r}“ verknüpft`, ed_assignedPlaced: (r, n) => `„${r}“ verknüpft · ${n} ${pl(n, 'Gerät', 'Geräte')} platziert`, ed_areaDrag: 'Ziehe den Bereich auf einen Raum im Plan', ed_areaDropRoom: 'Den Bereich auf einen Raum ziehen', ed_areaIn: (r) => `Verknüpft mit ${r}`, ed_noAreaYet: 'noch kein Bereich', ed_matchByName: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpfen`, ed_matched: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpft`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt deine Bereiche auf die Räume ziehen`, ed_invert: 'Farben umkehren', ed_detect: 'Räume automatisch erkennen', ed_detectHelp: 'Vorher den Maßstab setzen (Ausmessen). Klappt am besten mit sauberen Plänen – Ergebnis prüfen und Räume anpassen.', ed_detectFail: 'Das Bild konnte nicht ausgewertet werden', ed_detectNone: 'Keine Räume gefunden – bitte von Hand zeichnen', ed_detectNothingNew: 'Keine neuen Räume gefunden', ed_detected: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt benennen`, ed_title: 'Grundriss', ed_undo: 'Rückgängig', ed_redo: 'Wiederholen', ed_preview: 'Vorschau', ed_cancel: 'Abbrechen', ed_done: 'Fertig', ed_fit: 'Einpassen',
@@ -6937,12 +7245,17 @@ Object.assign(STR.de, {
   ed_tiles_lead: 'Wetter, Innenklima, Haustür und die Ebenen-Karte ordnen sich in freien Ecken deines Plans an. Zum Umsetzen einfach ziehen.',
   ed_autoArrange: 'Automatisch anordnen', ed_tileManual: 'Von dir platziert.', ed_tileAuto: 'Automatisch platziert – zum Ändern ziehen.',
   ed_language: 'Sprache', ed_weather: 'Wetter', ed_layout: 'Darstellung', ed_layout_help: 'Automatisch: Handy-Ansicht unter 700 px Kartenbreite.', ed_rotate_phone: 'Plan am Handy drehen',
-  ed_height: 'Höhe', ed_fit_screen: 'Bildschirm füllen', ed_fit_width: 'Nach Breite', ed_modesLabel: 'Label für Modi', ed_modes_help: 'Szenen und Skripte mit diesem Label erscheinen unter „Modi“.',
+  ed_height: 'Höhe', ed_fit_screen: 'Bildschirm füllen', ed_fit_width: 'Nach Breite', ed_modesLabel: 'Label für Mode', ed_modes_help: 'Szenen und Skripte mit diesem Label erscheinen unter „Mode“.',
   ed_ha_open: 'Grundriss-Editor öffnen', ed_ha_lead: 'Räume, Möbel, Fenster und Türen zeichnen, dann deine Geräte auf den Plan ziehen – alles wird in dieser Karte gespeichert.',
   ed_ha_empty: 'Noch kein Grundriss. Öffne den Editor und zeichne deine Wohnung – ein Foto deines Grundrisses hilft.',
   furn_sofa: 'Sofa', furn_armchair: 'Sessel', furn_bed: 'Bett', furn_bed_single: 'Einzelbett', furn_table: 'Tisch', furn_round_table: 'Runder Tisch', furn_chair: 'Stuhl', furn_desk: 'Schreibtisch',
   furn_wardrobe: 'Schrank', furn_shelf: 'Regal', furn_sideboard: 'Kommode', furn_tv: 'Fernseher', furn_counter: 'Küche', furn_fridge: 'Kühlschrank', furn_bath: 'Badewanne', furn_shower: 'Dusche',
   furn_toilet: 'WC', furn_sink: 'Waschbecken', furn_washer: 'Waschmaschine', furn_plant: 'Pflanze', furn_rug: 'Teppich', furn_stairs: 'Treppe', furn_block: 'Block',
+  ed_reset: 'Neu beginnen', ed_resetTitle: 'Neu beginnen?', ed_resetText: 'Räume, Möbel, Fenster, Geräte, Ebenen und die Vorlage werden entfernt. Du kannst es noch rückgängig machen.', ed_resetDone: 'Alles entfernt – beginne mit einer Vorlage oder zeichne deine Räume',
+  ed_lightPreview: 'Licht anzeigen', ed_light_on: 'An', ed_light_off: 'Aus', ed_light_real: 'Echt',
+  ed_hint_layers: 'Die Ebenen-Leiste deiner Karte – rechts eine Ebene antippen, um sie zu sehen', ed_tiles_phone: 'Am Handy ordnen sich die Kacheln selbst an – zum Verschieben auf Laptop wechseln',
+  ed_byArea: 'Nach Bereich', ed_byLabel: 'Nach Label', ed_noLabelGroup: 'Ohne Label', ed_foldAll: 'Alle zuklappen', ed_unfoldAll: 'Alle aufklappen',
+  ed_removeFromLayers: 'Von allen Ebenen entfernen', ed_deleteLayer: 'Ebene löschen', ed_layerEditLead: 'Was diese Ebene zeigt: ganze Kategorien und einzelne Geräte.',
 });
 
 /* ================================================================== Floor plan editor: find rooms in the template picture

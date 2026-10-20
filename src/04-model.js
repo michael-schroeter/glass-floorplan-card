@@ -112,6 +112,9 @@ function rotateModel(M, dir) {
   const B = bboxOf(M.rooms.map((r) => r.r));
   if (!B) return;
   const P = dir > 0 ? ([x, y]) => [B[0] + (B[3] - y), B[1] + (x - B[0])] : ([x, y]) => [B[0] + (y - B[1]), B[1] + (B[2] - x)];
+  // and back (the editor maps pointer positions on a turned plan to the configuration)
+  M.rotP = P;
+  M.rotI = dir > 0 ? ([x, y]) => [B[0] + (y - B[1]), B[3] - (x - B[0])] : ([x, y]) => [B[2] - (y - B[1]), B[1] + (x - B[0])];
   const R = (r) => { const a = P([r[0], r[1]]), b = P([r[2], r[3]]); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]; };
   const S = (s) => { const a = P([s[0], s[1]]), b = P([s[2], s[3]]); return normSeg([a[0], a[1], b[0], b[1]]); };
   for (const r of M.rooms) { r.r = R(r.r); for (const f of r.furn) f.r = R(f.r); }

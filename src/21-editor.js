@@ -1,7 +1,8 @@
 /* ================================================================== Floor plan editor (full screen)
- * Draw the home on top of a photo/sketch of the floor plan: rooms as rectangles (snap to each other), furniture
- * from a palette, windows / passages / the front door by clicking a wall, devices dragged from a list of
- * Home Assistant entities (grouped by area) onto the plan. Everything is stored in the card configuration. */
+ * The canvas shows the real card, live, on a screen of the real size (laptop or phone) – what you see is what you get.
+ * Invisible handles lie on top: rooms as rectangles (snap to each other), furniture from a palette, windows / passages /
+ * the front door by clicking a wall, devices dragged from a list of Home Assistant entities onto the plan. Tapping a
+ * lamp opens its settings instead of switching it. Everything is stored in the card configuration. */
 const ED_GRID = 5;
 const ED_TOOLS = [
   ['sketch', 'image'], ['rooms', 'plan'], ['furniture', 'sofa'], ['openings', 'window'], ['devices', 'bulb'], null, ['layers', 'layers'], ['tiles', 'widget'], ['settings', 'sliders'],
@@ -15,6 +16,10 @@ const LAYER_FILTER = {
   vacuum: (d) => d === 'vacuum',
   custom: (d) => !NO_DEVICE_DOMAINS.includes(d),
 };
+/* the screen of a phone in the Home Assistant app (below the header) */
+const ED_PHONE = { w: 390, h: 788 };
+/* tools that show the template picture (and keep it inside the visible plan) */
+const ED_UL_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
 const r0 = (v) => Math.round(v);
 const deep = (o) => JSON.parse(JSON.stringify(o ?? null));
 
@@ -29,19 +34,27 @@ class GfcEditor extends HTMLElement {
     this._openKind = 'window';
     this._layerSel = 'light';
     this._q = '';
-    this._v = { x: 0, y: 0, z: 0.6 };
+    this._f = null;
+    this._light = 'on';
+    this._groupBy = 'area';
+    this._collapsed = new Set();
+    this._scrollMem = {};
   }
 
   /* ---------------------------------------------------------------- open / close */
-  open({ config, hass, onSave, onClose } = {}) {
+  open({ config, hass, onSave, onClose, viewport } = {}) {
     this._hs = typeof hass === 'function' ? hass : () => hass;
     this._onSave = onSave;
     this._onClose = onClose;
+    this._vp = viewport || null;
     this._c = normEditorConfig(deep(config) || {});
     this._orig = JSON.stringify(this._c);
     this._useLang();
+    // nothing drawn yet: start with the template, empty
     this._tool = this._c.rooms.length ? 'rooms' : 'sketch';
+    this._mode = window.innerWidth < 700 ? 'phone' : 'laptop';
     this._loadUnderlay();
+    this._loadLabels();
     this._shell();
     if (!this.isConnected) document.body.append(this);
     this._dlg.showModal();
@@ -56,10 +69,20 @@ class GfcEditor extends HTMLElement {
     LOCALE = h?.locale?.language || h?.language || (LANG === 'de' ? 'de-DE' : 'en');
   }
 
+  /* Home Assistant labels (to sort devices by label) */
+  _loadLabels() {
+    const h = this._hs?.();
+    if (this._labelsP || !h?.callWS) return;
+    this._labelsP = h.callWS({ type: 'config/label_registry/list' })
+      .then((l) => { this._labels = l || []; if (this._tool === 'devices' && this._groupBy === 'label') this._panel(); })
+      .catch(() => { this._labels = []; });
+  }
+
   _close(save) {
     if (save) this._onSave?.(cleanConfig(this._c));
     this._dlg?.close();
     window.removeEventListener('keydown', this._onKey, true);
+    clearInterval(this._liveT);
     this._onClose?.();
     this.remove();
   }
@@ -73,19 +96,22 @@ class GfcEditor extends HTMLElement {
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs><linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient></defs></svg>
   <div class="etop">
     <h1>${esc(t('ed_title'))}<small></small></h1>
+    <div class="eseg eview">${['laptop', 'phone'].map((m) => `<button data-m="${m}">${icon(m)}<span>${esc(t(`ed_prev_${m}`))}</span></button>`).join('')}</div>
+    <i class="esep"></i>
     <button class="ebtn icon undo" title="${esc(t('ed_undo'))}">${icon('undo')}</button>
     <button class="ebtn icon redo" title="${esc(t('ed_redo'))}">${icon('redo')}</button>
     <i class="esep"></i>
-    <button class="ebtn lbl prev">${icon('eye')}<span>${esc(t('ed_preview'))}</span></button>
     <button class="ebtn lbl cancel">${esc(t('ed_cancel'))}</button>
     <button class="ebtn white save">${icon('check')}<span>${esc(t('ed_done'))}</span></button>
   </div>
-  <nav class="erail">${ED_TOOLS.map((x) => (x ? `<button data-tool="${x[0]}">${icon(x[1])}<span>${esc(t(`ed_tool_${x[0]}`))}</span></button>` : '<i class="rsep"></i>')).join('')}</nav>
-  <div class="ecv" tabindex="-1" autofocus><div class="grid"></div><img class="ul" alt="" hidden><div class="world"></div>
+  <nav class="erail">${ED_TOOLS.map((x) => (x ? `<button data-tool="${x[0]}">${icon(x[1])}<span>${esc(t(`ed_tool_${x[0]}`))}</span></button>` : '<i class="rsep"></i>')).join('')}
+    <button class="ereset" data-del="all">${icon('restart')}<span>${esc(t('ed_reset'))}</span></button></nav>
+  <div class="ecv" tabindex="-1" autofocus><div class="eframe"><small></small></div><div class="elive"></div><img class="ul" alt="" hidden><div class="world"></div>
+    <div class="elight eseg" title="${esc(t('ed_lightPreview'))}"><span class="lbl">${icon('bulb')}</span>${['on', 'off', 'real'].map((m) => `<button data-l="${m}">${esc(t(`ed_light_${m}`))}</button>`).join('')}</div>
     <div class="ezoom"><button class="zo" title="−">${icon('minus')}</button><button class="zf" title="${esc(t('ed_fit'))}">${icon('fit')}</button><button class="zi" title="+">${icon('plus')}</button></div>
     <div class="ehint"></div></div>
   <aside class="eins"></aside>
-  <div class="eprev"><div class="pbar"></div><div class="frame"></div></div>
+  <div class="econfirm" hidden></div>
   <div class="etoast"></div>
 </div></dialog>`;
     const $ = (s) => this.shadowRoot.querySelector(s);
@@ -95,18 +121,33 @@ class GfcEditor extends HTMLElement {
     this._world = $('.world');
     this._ins = $('.eins');
     this._ulEl = $('.ul');
+    this._liveEl = $('.elive');
+    this._frameEl = $('.eframe');
+    // the real card, live (it never gets pointer events – the handles on top do the work)
+    this._card = document.createElement(CARD_TAG);
+    this._liveEl.append(this._card);
+    this._liveKey = null;
     // keys and clicks stay in the editor (Home Assistant's edit dialog must not react to them, e.g. close on Escape)
     for (const type of ['keydown', 'keyup', 'click', 'pointerdown', 'wheel']) this._dlg.addEventListener(type, (e) => e.stopPropagation());
-    this._dlg.addEventListener('cancel', (e) => { e.preventDefault(); if (this.$('.eprev.on')) this._preview(false); else if (this._s) { this._s = null; this._draw(); this._panel(); } else this._tryClose(); });
+    this._dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      if (!this.$('.econfirm').hidden) this._confirmClose();
+      else if (this._s || this._editLayer) this._back();
+      else this._tryClose();
+    });
     $('.undo').addEventListener('click', () => this._doUndo());
     $('.redo').addEventListener('click', () => this._doRedo());
     $('.save').addEventListener('click', () => this._close(true));
     $('.cancel').addEventListener('click', () => this._tryClose());
-    $('.prev').addEventListener('click', () => this._preview(!this.$('.eprev.on')));
+    $('.ereset').addEventListener('click', () => this._askReset());
+    this.shadowRoot.querySelectorAll('.eview button').forEach((b) => b.addEventListener('click', () => this._setMode(b.dataset.m)));
+    this.shadowRoot.querySelectorAll('.elight button').forEach((b) => b.addEventListener('click', () => { this._light = b.dataset.l; this._draw(); }));
     $('.zi').addEventListener('click', () => this._zoomBy(1.25));
     $('.zo').addEventListener('click', () => this._zoomBy(0.8));
-    $('.zf').addEventListener('click', () => { this._fit(); this._draw(); });
-    this.shadowRoot.querySelectorAll('.erail button').forEach((b) => b.addEventListener('click', () => this._setTool(b.dataset.tool)));
+    $('.zf').addEventListener('click', () => { this._viewTouched = false; this._fit(); this._draw(); });
+    this.shadowRoot.querySelectorAll('.erail button[data-tool]').forEach((b) => b.addEventListener('click', () => this._setTool(b.dataset.tool)));
+    // delete buttons: show in red what would be deleted
+    this.shadowRoot.addEventListener('pointerover', (e) => { const b = e.target.closest?.('[data-del]'); this._cv.classList.toggle('del-sel', b?.dataset.del === 'sel'); this._cv.classList.toggle('del-all', b?.dataset.del === 'all'); });
     this._wireCanvas();
     if (this._onKey) window.removeEventListener('keydown', this._onKey, true);
     this._ro?.disconnect();
@@ -114,6 +155,9 @@ class GfcEditor extends HTMLElement {
     window.addEventListener('keydown', this._onKey, true);
     this._ro = new ResizeObserver(() => { if (!this._viewTouched) this._fit(); this._draw(); });
     this._ro.observe(this._cv);
+    // new states from Home Assistant reach the live card
+    clearInterval(this._liveT);
+    this._liveT = setInterval(() => { if (!this.isConnected) { clearInterval(this._liveT); return; } const h = this._liveHass(this._hs()); if (this._card && h && this._card.hass !== h) this._card.hass = h; }, 500);
     this._syncTop();
   }
 
@@ -135,22 +179,68 @@ class GfcEditor extends HTMLElement {
     this._tT = setTimeout(() => el.classList.remove('show'), 2600);
   }
 
+  /* a small question in the editor's own glass (instead of the browser's confirm) */
+  _confirm({ title, text, ok, danger }, onOk) {
+    const box = this.$('.econfirm');
+    box.innerHTML = `<div class="ecbox"><h2>${esc(title)}</h2><p>${esc(text)}</p><div class="ebtns"><button class="ebtn no">${esc(t('ed_cancel'))}</button><button class="ebtn yes ${danger ? 'redfill' : 'blue'}">${esc(ok)}</button></div></div>`;
+    box.hidden = false;
+    box.querySelector('.no').addEventListener('click', () => this._confirmClose());
+    box.querySelector('.yes').addEventListener('click', () => { this._confirmClose(); onOk(); });
+    box.addEventListener('pointerdown', (e) => { if (e.target === box) this._confirmClose(); }, { once: true });
+    requestAnimationFrame(() => box.querySelector('.no').focus());
+  }
+  _confirmClose() { const box = this.$('.econfirm'); box.hidden = true; box.innerHTML = ''; this._cv.classList.remove('del-all'); }
+
+  /* start over: everything empty, back to the template */
+  _askReset() {
+    this._confirm({ title: t('ed_resetTitle'), text: t('ed_resetText'), ok: t('ed_reset'), danger: true }, () => {
+      this._change(() => {
+        const keep = { type: this._c.type, language: this._c.language };
+        for (const k of Object.keys(this._c)) delete this._c[k];
+        Object.assign(this._c, normEditorConfig(keep));
+        if (!this._c.language) delete this._c.language;
+      }, { panel: false });
+      this._ulSrc = null;
+      this._pending = null; this._scaleCheck = null; this._pasting = false; this._measure = null; this._editLayer = null;
+      this._tool = 'sketch'; this._layerSel = 'light'; this._s = null; this._scrollMem = {};
+      this._viewTouched = false;
+      this._fit(); this._draw(); this._panel();
+      this._toast(t('ed_resetDone'));
+    });
+  }
+
   _setTool(tool) {
-    if (this._tool === tool) return;
+    if (this._tool === tool && !this._s && !this._editLayer) return;
     this._tool = tool;
     this._s = null;
     this._measure = null;
+    this._editLayer = null;
+    this._draw();
+    this._panel();
+  }
+  _setMode(m) {
+    if (this._mode === m) return;
+    this._mode = m;
+    this._fix = null;
+    this._s = this._s?.t === 'ul' || this._s?.t === 'wid' ? null : this._s;
+    this._measure = null;
+    this._viewTouched = false;
+    this._liveKey = null;
+    this._draw();
+    this._fit();
     this._draw();
     this._panel();
   }
 
   _syncTop() {
-    this.shadowRoot.querySelectorAll('.erail button').forEach((b) => b.classList.toggle('act', b.dataset.tool === this._tool));
+    this.shadowRoot.querySelectorAll('.erail button[data-tool]').forEach((b) => b.classList.toggle('act', b.dataset.tool === this._tool));
+    this.shadowRoot.querySelectorAll('.eview button').forEach((b) => b.classList.toggle('act', b.dataset.m === this._mode));
+    this.shadowRoot.querySelectorAll('.elight button').forEach((b) => b.classList.toggle('act', b.dataset.l === this._light));
     this.$('.undo').disabled = !this._undo.length;
     this.$('.redo').disabled = !this._redo.length;
     const n = this._c.rooms.length, e = this._c.entities.filter((x) => x.at).length;
     this.$('.etop h1 small').textContent = n ? t('ed_summary', n, e) : '';
-    this._cv.className = `ecv tool-${this._tool}${this._ulSrc ? ' ul-on' : ''}${this._tool === 'rooms' || (this._tool === 'sketch' && this._measure) ? ' draw' : ''}`;
+    this._cv.className = `ecv tool-${this._tool}${this._showUl() ? ' ul-on' : ''}${this._tool === 'rooms' || (this._tool === 'sketch' && this._measure) ? ' draw' : ''}${this._cv.classList.contains('del-sel') ? ' del-sel' : ''}${this._cv.classList.contains('del-all') ? ' del-all' : ''}`;
   }
 
   /* ---------------------------------------------------------------- undo / redo */
@@ -165,6 +255,7 @@ class GfcEditor extends HTMLElement {
     this._redo.push(JSON.stringify(this._c));
     this._c = JSON.parse(this._undo.pop());
     this._s = null;
+    this._loadUnderlay();
     this._draw(); this._panel();
   }
   _doRedo() {
@@ -172,6 +263,7 @@ class GfcEditor extends HTMLElement {
     this._undo.push(JSON.stringify(this._c));
     this._c = JSON.parse(this._redo.pop());
     this._s = null;
+    this._loadUnderlay();
     this._draw(); this._panel();
   }
   _change(fn, opts = {}) {
@@ -182,156 +274,267 @@ class GfcEditor extends HTMLElement {
     if (opts.panel !== false) this._panel();
   }
 
-  /* ---------------------------------------------------------------- view */
-  _bounds() {
-    const rects = [...this._c.rooms.map((r) => r.rect), ...(this._pending?.rooms || []).map((r) => r.rect)];
-    if (this._c.underlay?.rect && this._ulSrc) rects.push(this._c.underlay.rect);
-    return bboxOf(rects) || [0, 0, 1200, 800];
+  /* ---------------------------------------------------------------- the live card on its screen */
+  /* size of the real screen: the dashboard next to Home Assistant's sidebar, or a phone */
+  _screen() {
+    if (this._mode === 'phone') return ED_PHONE;
+    if (this._vp) return this._vp;
+    let sb = 0;
+    try {
+      const main = document.querySelector('home-assistant')?.shadowRoot?.querySelector('home-assistant-main');
+      const r = main?.shadowRoot?.querySelector('ha-sidebar')?.getBoundingClientRect();
+      if (r && r.right > 0 && r.width < window.innerWidth / 2) sb = r.right;
+    } catch (e) { /* not in Home Assistant */ }
+    return { w: Math.max(760, Math.round(window.innerWidth - sb)), h: Math.max(460, window.innerHeight - 56) };
+  }
+  _showUl() { return !!(this._ulSrc && this._c.underlay?.rect && this._mode !== 'phone' && ED_UL_TOOLS.includes(this._tool)); }
+  _liveCfg() {
+    const c = cleanConfig(this._c);
+    c.layout = this._mode === 'phone' || c.layout === 'mobile' ? 'mobile' : 'desktop';
+    delete c.underlay;
+    return c;
+  }
+  /* The visible part of the plan is exactly the card's own – except: fixed while something is dragged, and the
+   * template picture stays inside while tracing */
+  _liveStage(cfg) {
+    if (this._pin) return this._pin;
+    if (!this._showUl() || cfg.layout === 'mobile') return null;
+    try {
+      const S = buildModel(cfg, this._hs()).stage, U = this._c.underlay.rect, m = 20;
+      const R = bboxOf([[S.x, S.y, S.x + S.w, S.y + S.h], [U[0] - m, U[1] - m, U[2] + m, U[3] + m]]);
+      return { x: R[0], y: R[1], w: R[2] - R[0], h: R[3] - R[1] };
+    } catch (e) { return null; }
+  }
+  /* while rooms are drawn the plan stays where it is on the screen (a new room must not make it jump);
+   * the fit button – or another tool – shows the exact view again */
+  _drawing(cfg) { return ['sketch', 'rooms'].includes(this._tool) && cfg.layout !== 'mobile'; }
+  /* lights shown switched on / off while editing (or as they really are) */
+  _liveHass(h) {
+    if (!h || this._light === 'real') return h;
+    const ids = this._c.entities.map((e) => e.entity).filter((id) => domainOf(id) === 'light' && h.states?.[id]);
+    const key = `${this._light}|${ids.join(',')}|${ids.map((id) => this._c.entities.find((e) => e.entity === id)?.kelvin || '').join(',')}`;
+    if (this._lh?.src === h && this._lh.key === key) return this._lh.out;
+    const states = { ...h.states };
+    for (const id of ids) {
+      const st = h.states[id], a = st.attributes || {}, modes = a.supported_color_modes || [];
+      if (this._light === 'off') { states[id] = { ...st, state: 'off', attributes: { ...a, brightness: null, color_mode: null } }; continue; }
+      if (st.state === 'on') { states[id] = { ...st, attributes: { ...a, brightness: Math.max(a.brightness || 0, 180) } }; continue; }
+      const ct = modes.includes('color_temp'), k = this._c.entities.find((e) => e.entity === id)?.kelvin || 2900;
+      states[id] = { ...st, state: 'on', attributes: { ...a, brightness: 220, color_mode: ct ? 'color_temp' : modes.find((m) => m !== 'onoff') || 'onoff', ...(ct ? { color_temp_kelvin: k } : {}) } };
+    }
+    const out = { ...h, states };
+    this._lh = { src: h, key, out };
+    return out;
+  }
+  _syncLive() {
+    const card = this._card, h = this._hs();
+    if (!card || !h) return;
+    const scr = this._screen(), cfg = this._liveCfg(), lh = this._liveHass(h), draw = this._drawing(cfg);
+    if (!draw) this._fix = null;
+    const fix = draw ? this._fix : null, stage = fix ? null : this._liveStage(cfg);
+    const key = JSON.stringify([cfg, scr, stage, fix]);
+    if (key !== this._liveKey) {
+      this._liveKey = key;
+      card.style.width = `${scr.w}px`;
+      card.setEditorView(cfg, { w: scr.w, h: scr.h, stage, fix, tab: this._layerSel });
+    }
+    if (card.hass !== lh) card.hass = lh;
+    if (card._M && card._tab !== this._layerSel && card._M.layers.some((l) => l.id === this._layerSel)) { card._tab = this._layerSel; card._applyTab(true); }
+    const lv = card._lv, M = card._M;
+    this._map = lv && M ? { S: lv.S, pu: lv.pu, sx: lv.sx, sy: lv.sy, H: lv.H, rot: M.rot ? M.rotP : null, inv: M.rot ? M.rotI : null } : null;
+    if (draw && !this._fix && lv) this._fix = { pu: lv.pu, ox: lv.sx - lv.S.x * lv.pu, oy: lv.sy - lv.S.y * lv.pu };
   }
   _fit() {
     const r = this._cv.getBoundingClientRect();
     if (!r.width) return;
-    const narrow = r.width < 600, B = this._bounds(), pad = narrow ? 18 : 70, hint = narrow ? 0 : 30;
-    const z = clamp(Math.min((r.width - 2 * pad) / (B[2] - B[0]), (r.height - 2 * pad - hint) / (B[3] - B[1])), 0.05, 4);
-    this._v = { z, x: (B[0] + B[2]) / 2 - r.width / 2 / z, y: (B[1] + B[3]) / 2 - (r.height - hint) / 2 / z };
+    if (this._fix) { this._fix = null; this._syncLive(); }
+    const scr = this._screen(), H = this._map?.H || scr.h, narrow = r.width < 600;
+    const pad = narrow ? 10 : 30, top = narrow ? 10 : 46, bottom = narrow ? 52 : 66;
+    const k = clamp(Math.min((r.width - 2 * pad) / scr.w, (r.height - top - bottom) / H), 0.08, 1.4);
+    this._f = { k, ox: (r.width - scr.w * k) / 2, oy: top + Math.max(0, (r.height - top - bottom - H * k) / 2) };
   }
-  _zoomBy(k, cx, cy) {
+  _zoomBy(f, cx, cy) {
     this._viewTouched = true;
-    const r = this._cv.getBoundingClientRect(), v = this._v;
-    const px = cx ?? r.width / 2, py = cy ?? r.height / 2;
-    const wx = v.x + px / v.z, wy = v.y + py / v.z;
-    v.z = clamp(v.z * k, 0.05, 6);
-    v.x = wx - px / v.z;
-    v.y = wy - py / v.z;
+    const r = this._cv.getBoundingClientRect(), F = this._f;
+    const px = cx ?? r.width / 2, py = cy ?? r.height / 2, k = clamp(F.k * f, 0.08, 6);
+    F.ox = px - ((px - F.ox) * k) / F.k;
+    F.oy = py - ((py - F.oy) * k) / F.k;
+    F.k = k;
     this._draw();
   }
-  X(x) { return (x - this._v.x) * this._v.z; }
-  Y(y) { return (y - this._v.y) * this._v.z; }
+  /* plan (centimetres) → canvas pixels, through the live card's own layout (also on a turned phone plan) */
+  P(x, y) {
+    const m = this._map || { S: { x: 0, y: 0 }, pu: 0.5, sx: 0, sy: 0 }, F = this._f || { k: 1, ox: 0, oy: 0 };
+    const [a, b] = m.rot ? m.rot([x, y]) : [x, y];
+    return [F.ox + F.k * (m.sx + (a - m.S.x) * m.pu), F.oy + F.k * (m.sy + (b - m.S.y) * m.pu)];
+  }
+  _unP(X, Y) {
+    const m = this._map || { S: { x: 0, y: 0 }, pu: 0.5, sx: 0, sy: 0 }, F = this._f || { k: 1, ox: 0, oy: 0 };
+    const cx = (X - F.ox) / F.k, cy = (Y - F.oy) / F.k;
+    const p = [m.S.x + (cx - m.sx) / m.pu, m.S.y + (cy - m.sy) / m.pu];
+    return m.inv ? m.inv(p) : p;
+  }
+  /* canvas pixels per centimetre */
+  _z() { return (this._f?.k || 1) * (this._map?.pu || 0.5); }
   _pt(e) {
     const r = this._cv.getBoundingClientRect();
-    return [this._v.x + (e.clientX - r.left) / this._v.z, this._v.y + (e.clientY - r.top) / this._v.z];
+    return this._unP(e.clientX - r.left, e.clientY - r.top);
   }
-  _boxPx([a, b, c, d]) { return `left:${this.X(a).toFixed(1)}px;top:${this.Y(b).toFixed(1)}px;width:${((c - a) * this._v.z).toFixed(1)}px;height:${((d - b) * this._v.z).toFixed(1)}px`; }
+  _rectS(R) {
+    const a = this.P(R[0], R[1]), b = this.P(R[2], R[3]);
+    return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+  }
+  _boxPx(R) { const q = this._rectS(R); return `left:${q[0].toFixed(1)}px;top:${q[1].toFixed(1)}px;width:${(q[2] - q[0]).toFixed(1)}px;height:${(q[3] - q[1]).toFixed(1)}px`; }
+  /* a line along a plan wall, drawn as a bar of thickness th */
+  _segPx(s, th) {
+    const a = this.P(s[0], s[1]), b = this.P(s[2], s[3]), l = Math.min(a[0], b[0]), tp = Math.min(a[1], b[1]);
+    return Math.abs(a[0] - b[0]) >= Math.abs(a[1] - b[1])
+      ? `left:${l}px;top:${a[1] - th / 2}px;width:${Math.abs(a[0] - b[0])}px;height:${th}px`
+      : `left:${a[0] - th / 2}px;top:${tp}px;width:${th}px;height:${Math.abs(a[1] - b[1])}px`;
+  }
+  /* where the live card draws an element (its bounding box on the canvas) */
+  _cardBox(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect(), c = this._cv.getBoundingClientRect();
+    return r.width ? [r.left - c.left, r.top - c.top, r.right - c.left, r.bottom - c.top] : null;
+  }
 
-  /* the model the card would build (for auto placed tiles, rooms of devices …) */
+  /* the model the card would build on a laptop (for auto placed tiles, rooms of devices …) */
   _model() {
     try { return buildModel(cleanConfig(this._c), this._hs()); } catch (e) { return null; }
   }
 
-  /* ---------------------------------------------------------------- draw */
+  /* ---------------------------------------------------------------- draw (handles on top of the live card) */
   _draw() {
     if (!this._world) return;
+    this._syncLive();
+    if (!this._f) this._fit();
     this._syncTop();
-    const v = this._v, c = this._c, z = v.z;
-    const g = this.$('.grid'), step = 50 * z;
-    g.style.backgroundSize = `${step}px ${step}px`;
-    g.style.backgroundPosition = `${(-v.x * z) % step}px ${(-v.y * z) % step}px`;
-    // underlay
+    const c = this._c, F = this._f, z = this._z(), scr = this._screen(), H = this._map?.H || scr.h;
+    // the screen with the live card
+    Object.assign(this._liveEl.style, { width: `${scr.w}px`, height: `${H}px`, transform: `translate(${F.ox}px, ${F.oy}px) scale(${F.k})` });
+    Object.assign(this._frameEl.style, { left: `${F.ox}px`, top: `${F.oy}px`, width: `${scr.w * F.k}px`, height: `${H * F.k}px` });
+    this._frameEl.classList.toggle('phone', this._mode === 'phone');
+    this._frameEl.querySelector('small').textContent = `${t(`ed_prev_${this._mode}`)} · ${scr.w} × ${scr.h}`;
+    // template picture (on top of the card, so the plan can be traced)
     const ul = this._ulEl;
-    if (this._ulSrc && c.underlay?.rect) {
+    if (this._showUl()) {
       if (ul.getAttribute('src') !== this._ulSrc) ul.src = this._ulSrc;
       ul.hidden = false;
-      const [a, b, cc, d] = c.underlay.rect;
-      Object.assign(ul.style, { left: `${this.X(a)}px`, top: `${this.Y(b)}px`, width: `${(cc - a) * z}px`, height: `${(d - b) * z}px`, opacity: String(c.underlay.opacity ?? 0.6),
-        filter: c.underlay.invert ? 'invert(1) hue-rotate(180deg) contrast(1.1)' : '' });
+      const q = this._rectS(c.underlay.rect);
+      Object.assign(ul.style, { left: `${q[0]}px`, top: `${q[1]}px`, width: `${q[2] - q[0]}px`, height: `${q[3] - q[1]}px`, opacity: String(c.underlay.opacity ?? 0.6),
+        filter: c.underlay.invert ? 'invert(1) hue-rotate(180deg) contrast(1.1)' : '', mixBlendMode: c.underlay.invert ? 'screen' : 'normal' });
     } else ul.hidden = true;
 
-    const tool = this._tool, sel = this._s, M = this._model();
+    const tool = this._tool, sel = this._s, card = this._card;
     const hs = this._hs() || {};
     let html = '';
-    // rooms
+    // rooms: invisible, outlined on hover / when selected; rooms without an area are marked while linking
     const hasAreas = Object.keys(hs.areas || {}).length > 0;
     c.rooms.forEach((r, i) => {
-      const [a, b, cc, d] = r.rect, w = (cc - a) / 100, h = (d - b) / 100;
-      const on = (sel?.t === 'room' && sel.i === i) || this._dropRoom === i;
-      const an = r.area ? hs.areas?.[r.area]?.name || r.area : null;
-      const area = an && an !== r.name ? ` · ${esc(an)}` : '';
-      html += `<div class="eroom${r.label === 'bottom' ? ' lb' : ''}${on ? ' hot' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([a + 1.5 / z, b + 1.5 / z, cc - 1.5 / z, d - 1.5 / z])}">
-        <div class="en"><b>${esc(r.name || t('ed_room'))}</b><small>${fmt(w, 1)} × ${fmt(h, 1)} m${area}</small>${!r.area && hasAreas && tool === 'rooms' ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div></div>`;
+      const on = this._dropRoom === i;
+      const noArea = !r.area && hasAreas && tool === 'rooms';
+      html += `<div class="eroom${on ? ' hot' : ''}${noArea ? ' na' : ''}" data-k="room" data-i="${i}" style="${this._boxPx([r.rect[0] + 6.5, r.rect[1] + 6.5, r.rect[2] - 6.5, r.rect[3] - 6.5])}">${noArea ? `<em>${esc(t('ed_noAreaYet'))}</em>` : ''}</div>`;
     });
     // a floor plan waiting to be imported: dashed outlines
     for (const r of this._pending?.rooms || []) html += `<div class="eroom ghost" style="${this._boxPx(r.rect)}"><div class="en"><b>${esc(r.name)}</b></div></div>`;
     // furniture
     c.rooms.forEach((r, ri) => (r.furniture || []).forEach((f, fi) => {
-      const F = normFurn(f);
-      if (!F) return;
+      const Fu = normFurn(f);
+      if (!Fu) return;
       const on = sel?.t === 'furn' && sel.r === ri && sel.i === fi;
-      const def = FURN_KINDS[F.kind] || FURN_KINDS.block, small = Math.min(F.r[2] - F.r[0], F.r[3] - F.r[1]) * z;
-      html += `<div class="efu ${esc(F.kind)}${F.circle ? ' c' : ''}${on ? ' sel' : ''}" data-k="furn" data-r="${ri}" data-i="${fi}" style="${this._boxPx(F.r)};--fr:${(F.rad * z * 1.3).toFixed(1)}">${small > 26 && tool === 'furniture' ? `<span class="fic">${icon(def.icon)}</span>` : ''}</div>`;
+      html += `<div class="efu${Fu.circle ? ' c' : ''}${on ? ' sel' : ''}" data-k="furn" data-r="${ri}" data-i="${fi}" style="${this._boxPx(Fu.r)};--fr:${(Fu.rad * z * 1.3).toFixed(1)}"></div>`;
     }));
-    // openings
-    const th = Math.max(5, 9 * z);
-    const segBox = (s) => (s[1] === s[3]
-      ? `left:${this.X(s[0])}px;top:${this.Y(s[1]) - th / 2}px;width:${(s[2] - s[0]) * z}px;height:${th}px`
-      : `left:${this.X(s[0]) - th / 2}px;top:${this.Y(s[1])}px;width:${th}px;height:${(s[3] - s[1]) * z}px`);
+    // windows, passages, front door
+    const th = Math.max(8, 11 * z);
     for (const [kind, { key }] of Object.entries(OPEN_KINDS)) {
       const list = key === 'entrance' ? (c.entrance ? [c.entrance] : []) : c[key];
       list.forEach((s0, i) => {
         const s = normSeg(s0);
         if (!s) return;
         const on = sel?.t === 'open' && sel.k === kind && sel.i === i;
-        html += `<div class="eopen ${kind === 'window' ? 'win' : kind === 'door' ? 'pas' : 'ent'}${on ? ' sel' : ''}" data-k="open" data-o="${kind}" data-i="${i}" style="${segBox(s)}" title="${esc(t(`ed_open_${kind}`))}"></div>`;
+        html += `<div class="eopen ${kind === 'window' ? 'win' : kind === 'door' ? 'pas' : 'ent'}${on ? ' sel' : ''}" data-k="open" data-o="${kind}" data-i="${i}" style="${this._segPx(s, th)}" title="${esc(t(`ed_open_${kind}`))}"></div>`;
       });
     }
-    if (this._hover && tool === 'openings') html += `<div class="eopen ghost ${this._openKind === 'window' ? 'win' : this._openKind === 'door' ? 'pas' : 'ent'}" style="${segBox(this._hover.seg)}"></div>`;
-    // tiles (auto or manual)
-    if (tool === 'tiles' && M) {
+    if (this._hover && tool === 'openings') html += `<div class="eopen ghost ${this._openKind === 'window' ? 'win' : this._openKind === 'door' ? 'pas' : 'ent'}" style="${this._segPx(this._hover.seg, th)}"></div>`;
+    // tiles (auto or manual) – on a laptop
+    const M = this._model();
+    if (tool === 'tiles' && M && this._mode !== 'phone') {
       for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) {
         const R = M.widgets[k];
         if (!R) continue;
         const manual = Array.isArray(c.widgets?.[k]), on = sel?.t === 'wid' && sel.k === k;
-        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${k}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><div>${icon({ card: 'widget', weather: 'partly', indoor: 'thermo', door: 'door', bar: 'layers' }[k])}${esc(t(`ed_tile_${k}`))}</div></div>`;
+        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${k}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(t(`ed_tile_${k}`))}</span></div>`;
       }
     }
-    // device markers
-    const L = this._layerSel, layer = this._layerDef(L);
+    // device markers: exactly over the buttons the live card shows in its current layer (tap → settings)
+    const onCard = (el) => { const b = !el || el.classList.contains('hid') ? null : this._cardBox(el); return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]]; };
     c.entities.forEach((e, i) => {
-      if (!e.at) return;
-      const st = hs.states?.[e.entity], kind = kindOf(e.entity, st);
-      const vis = tool === 'devices' && layer && this._inLayerDef(layer, e.entity, kind);
-      const on = sel?.t === 'ent' && sel.i === i;
-      const ic = e.icon && ICONS[e.icon] ? e.icon : e.icon && MDI_MAP[e.icon] ? MDI_MAP[e.icon] : kind === 'light' ? 'bulb' : GlassFloorplanCard.prototype._autoIcon(e.entity, st);
+      const on = sel?.t === 'ent' && sel.i === i, m = e.at && onCard(card?._mk?.[e.entity]);
+      // a selected device without a button there (plan: false, another layer) is shown where it is
+      const [x, y, w] = m || (on && e.at ? [...this.P(e.at[0], e.at[1]), 34 * F.k] : []);
+      if (x == null) return;
       const out = !c.rooms.some((r) => inRect(r.rect, e.at));
-      html += `<div class="emk ${kind}${vis ? '' : ' off'}${on ? ' sel' : ''}${out && vis ? ' warn' : ''}" data-k="mk" data-i="${i}" style="left:${this.X(e.at[0])}px;top:${this.Y(e.at[1])}px;${vis ? '' : 'pointer-events:none;'}" title="${esc(e.name || st?.attributes?.friendly_name || e.entity)}">${icon(ic)}</div>`;
+      html += `<div class="emk${on ? ' sel' : ''}${m ? '' : ' ghost'}${out ? ' warn' : ''}" data-k="mk" data-i="${i}" style="left:${x}px;top:${y}px;--s:${w.toFixed(1)}px" title="${esc(e.name || hs.states?.[e.entity]?.attributes?.friendly_name || e.entity)}"></div>`;
     });
-    if (c.door?.at) {
-      const vis = tool === 'devices' && L === 'light';
-      html += `<div class="emk door${vis ? '' : ' off'}${sel?.t === 'door' ? ' sel' : ''}" data-k="mk" data-m="door" style="left:${this.X(c.door.at[0])}px;top:${this.Y(c.door.at[1])}px;${vis ? '' : 'pointer-events:none;'}">${icon('door')}</div>`;
+    const dm = c.door?.at && onCard(card?._mk?.__door);
+    if (c.door?.at && (dm || sel?.t === 'door')) {
+      const [x, y, w] = dm || [...this.P(c.door.at[0], c.door.at[1]), 36 * F.k];
+      html += `<div class="emk${sel?.t === 'door' ? ' sel' : ''}" data-k="mk" data-m="door" style="left:${x}px;top:${y}px;--s:${w.toFixed(1)}px"></div>`;
     }
-    if (c.vacuum?.entity && c.vacuum.dock) {
-      const vis = tool === 'devices' && L === 'vacuum';
-      html += `<div class="emk dock${vis ? '' : ' off'}${sel?.t === 'dock' ? ' sel' : ''}" data-k="mk" data-m="dock" style="left:${this.X(c.vacuum.dock[0])}px;top:${this.Y(c.vacuum.dock[1])}px;${vis ? '' : 'pointer-events:none;'}">${icon('dock')}</div>`;
+    const mkSize = (el, dflt) => (el?.offsetWidth || dflt) * F.k;
+    if (c.vacuum?.entity && c.vacuum.dock && (sel?.t === 'dock' || card?._layer?.()?.type === 'vacuum')) {
+      const [x, y] = this.P(c.vacuum.dock[0], c.vacuum.dock[1]);
+      html += `<div class="emk dock${sel?.t === 'dock' ? ' sel' : ''}" data-k="mk" data-m="dock" style="left:${x}px;top:${y}px;--s:${mkSize(card?.$?.('.bot'), 30).toFixed(1)}px"></div>`;
     }
-    // selection handles
-    const hd = (x, y, cls, extra = '') => `<i class="ehd ${cls}" data-k="hd" data-h="${cls}"${extra} style="left:${x}px;top:${y}px"></i>`;
-    const rectHandles = (R, list = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se']) => {
-      const [a, b, cc, d] = [this.X(R[0]), this.Y(R[1]), this.X(R[2]), this.Y(R[3])], mx = (a + cc) / 2, my = (b + d) / 2;
-      const P = { n: [mx, b], s: [mx, d], e: [cc, my], w: [a, my], nw: [a, b], ne: [cc, b], sw: [a, d], se: [cc, d] };
-      return `<i class="esel" style="left:${a}px;top:${b}px;width:${cc - a}px;height:${d - b}px"></i>${list.map((k) => hd(P[k][0], P[k][1], k)).join('')}`;
-    };
+    // layers: the layer bar of the card, highlighted
+    if (tool === 'layers') {
+      const b = this._cardBox(card?.shadowRoot?.querySelector('.tabs'));
+      if (b) html += `<i class="ehl" style="left:${b[0]}px;top:${b[1]}px;width:${b[2] - b[0]}px;height:${b[3] - b[1]}px"></i>`;
+    }
+    // selection handles (named after the plan's sides – on a turned phone plan they sit where that side is)
     const so = this._selObj();
-    if (so) {
+    const hd = (pt, name, cx, cy, extra = '') => {
+      const [x, y] = this.P(pt[0], pt[1]), dx = x - cx, dy = y - cy;
+      const cur = Math.abs(dx) < 2 ? 'ns' : Math.abs(dy) < 2 ? 'ew' : dx * dy > 0 ? 'nwse' : 'nesw';
+      return `<i class="ehd ${cur}" data-k="hd" data-h="${name}"${extra} style="left:${x}px;top:${y}px"></i>`;
+    };
+    const rectHandles = (R, list = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se']) => {
+      const q = this._rectS(R), cx = (q[0] + q[2]) / 2, cy = (q[1] + q[3]) / 2, mx = (R[0] + R[2]) / 2, my = (R[1] + R[3]) / 2;
+      const Pp = { n: [mx, R[1]], s: [mx, R[3]], e: [R[2], my], w: [R[0], my], nw: [R[0], R[1]], ne: [R[2], R[1]], sw: [R[0], R[3]], se: [R[2], R[3]] };
+      return `<i class="esel" style="${this._boxPx(R)}"></i>${list.map((k) => hd(Pp[k], k, cx, cy)).join('')}`;
+    };
+    if (so && !sel.quiet) {
       if (sel.t === 'room') html += sel.fresh ? `<i class="esel" style="${this._boxPx(so.rect)};opacity:.55"></i>` : rectHandles(so.rect);
       else if (sel.t === 'furn') html += rectHandles(normFurn(so).r);
       else if (sel.t === 'wid') html += rectHandles(so);
       else if (sel.t === 'ul') html += rectHandles(so.rect, ['nw', 'ne', 'sw', 'se']);
       else if (sel.t === 'open') {
-        const s = normSeg(so);
-        html += hd(this.X(s[0]), this.Y(s[1]), segH(s) ? 'w' : 'n', ' data-end="0"') + hd(this.X(s[2]), this.Y(s[3]), segH(s) ? 'e' : 's', ' data-end="1"');
+        const s = normSeg(so), q = this._rectS(s), cx = (q[0] + q[2]) / 2, cy = (q[1] + q[3]) / 2;
+        html += hd([s[0], s[1]], segH(s) ? 'w' : 'n', cx, cy, ' data-end="0"') + hd([s[2], s[3]], segH(s) ? 'e' : 's', cx, cy, ' data-end="1"');
       }
+    } else if (so && sel.quiet && sel.t === 'furn') html += `<i class="esel" style="${this._boxPx(normFurn(so).r)}"></i>`;
+    if (sel?.t === 'room' && so && !sel.fresh) {
+      const q = this._rectS(so.rect);
+      html += `<div class="edim" style="left:${(q[0] + q[2]) / 2}px;top:${q[1]}px">${fmt((so.rect[2] - so.rect[0]) / 100, 2)} × ${fmt((so.rect[3] - so.rect[1]) / 100, 2)} m</div>`;
     }
     if (sel?.t === 'furn' && so) {
-      const R = normFurn(so).r, top = this.Y(R[1]), below = top < 56;
-      html += `<div class="efloat" style="left:${this.X((R[0] + R[2]) / 2)}px;top:${below ? this.Y(R[3]) + 14 : top - 14}px;transform:translate(-50%, ${below ? '0' : '-100%'})">
+      const q = this._rectS(normFurn(so).r), R = normFurn(so).r, below = q[1] < 56;
+      html += `<div class="efloat" style="left:${(q[0] + q[2]) / 2}px;top:${below ? q[3] + 14 : q[1] - 14}px;transform:translate(-50%, ${below ? '0' : '-100%'})">
         <span>${esc(t(`furn_${normFurn(so).kind}`))} · ${r0(R[2] - R[0])} × ${r0(R[3] - R[1])}</span>
-        <button data-act="rot" title="${esc(t('ed_rotate'))} (R)">${icon('rotate')}</button><button data-act="dup" title="${esc(t('ed_duplicate'))}">${icon('copy')}</button><button data-act="del" title="${esc(t('ed_delete'))}">${icon('trash')}</button></div>`;
+        <button data-act="rot" title="${esc(t('ed_rotate'))} (R)">${icon('rotate')}</button><button data-act="dup" title="${esc(t('ed_duplicate'))}">${icon('copy')}</button><button data-act="del" data-del="sel" title="${esc(t('ed_delete'))}">${icon('trash')}</button></div>`;
     }
-    if (this._drawRect) html += `<div class="edraw" style="${this._boxPx(this._drawRect)}"></div><div class="edim" style="left:${this.X((this._drawRect[0] + this._drawRect[2]) / 2)}px;top:${this.Y(this._drawRect[1])}px">${fmt((this._drawRect[2] - this._drawRect[0]) / 100, 2)} × ${fmt((this._drawRect[3] - this._drawRect[1]) / 100, 2)} m</div>`;
-    for (const gx of this._guides?.x || []) html += `<i class="eguide v" style="left:${this.X(gx)}px"></i>`;
-    for (const gy of this._guides?.y || []) html += `<i class="eguide h" style="top:${this.Y(gy)}px"></i>`;
+    if (this._drawRect) {
+      const q = this._rectS(this._drawRect);
+      html += `<div class="edraw" style="${this._boxPx(this._drawRect)}"></div><div class="edim" style="left:${(q[0] + q[2]) / 2}px;top:${q[1]}px">${fmt((this._drawRect[2] - this._drawRect[0]) / 100, 2)} × ${fmt((this._drawRect[3] - this._drawRect[1]) / 100, 2)} m</div>`;
+    }
+    // snapping guides (a plan x is a horizontal line on a turned phone plan)
+    const guide = (pa, pb) => { const a = this.P(...pa), b = this.P(...pb); return Math.abs(a[0] - b[0]) < 0.5 ? `<i class="eguide v" style="left:${a[0]}px"></i>` : `<i class="eguide h" style="top:${a[1]}px"></i>`; };
+    for (const gx of this._guides?.x || []) html += guide([gx, 0], [gx, 100]);
+    for (const gy of this._guides?.y || []) html += guide([0, gy], [100, gy]);
     if (this._measure?.a) {
-      const [a, b] = [this._measure.a, this._measure.b || this._measure.cur];
-      html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${this.X(a[0])}" y1="${this.Y(a[1])}" x2="${this.X(b[0])}" y2="${this.Y(b[1])}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${this.X(a[0])}px;top:${this.Y(a[1])}px"></i>${this._measure.b ? `<i style="left:${this.X(this._measure.b[0])}px;top:${this.Y(this._measure.b[1])}px"></i>` : ''}</div>`;
+      const a = this.P(...this._measure.a), bb = this._measure.b || this._measure.cur, b = bb && this.P(...bb);
+      html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${a[0]}px;top:${a[1]}px"></i>${this._measure.b ? `<i style="left:${b[0]}px;top:${b[1]}px"></i>` : ''}</div>`;
     }
     this._world.innerHTML = html;
     fitText(this._world.querySelectorAll('.eroom .en b'));
@@ -348,7 +551,8 @@ class GfcEditor extends HTMLElement {
     if (tool === 'openings') return t(`ed_hint_open_${this._openKind}`);
     if (tool === 'furniture') return t('ed_hint_furniture');
     if (tool === 'devices') return t('ed_hint_devices');
-    if (tool === 'tiles') return t('ed_hint_tiles');
+    if (tool === 'tiles') return this._mode === 'phone' ? t('ed_tiles_phone') : t('ed_hint_tiles');
+    if (tool === 'layers') return t('ed_hint_layers');
     if (tool === 'sketch') return this._ulSrc ? t('ed_hint_sketch') : '';
     return '';
   }
@@ -371,14 +575,14 @@ class GfcEditor extends HTMLElement {
   _snapV(v, axis, skip, tol) {
     const c = this._c, cand = [];
     c.rooms.forEach((r, i) => { if (i !== skip) cand.push(axis === 'x' ? r.rect[0] : r.rect[1], axis === 'x' ? r.rect[2] : r.rect[3]); });
-    let best = null, bd = tol ?? 9 / this._v.z;
+    let best = null, bd = tol ?? 9 / this._z();
     for (const q of cand) { const d = Math.abs(q - v); if (d < bd) { bd = d; best = q; } }
     return best != null ? { v: best, guide: true } : { v: Math.round(v / ED_GRID) * ED_GRID, guide: false };
   }
 
   /* walls under the pointer: nearest room edge (for windows, passages, the front door) */
   _wallAt(p) {
-    const tol = 16 / this._v.z;
+    const tol = 16 / this._z();
     let best = null;
     this._c.rooms.forEach((r) => {
       const [a, b, c, d] = r.rect;
@@ -404,7 +608,7 @@ class GfcEditor extends HTMLElement {
       e.preventDefault();
       const r = cv.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey) this._zoomBy(Math.exp(-e.deltaY * 0.0045), e.clientX - r.left, e.clientY - r.top);
-      else { this._viewTouched = true; this._v.x += e.deltaX / this._v.z; this._v.y += e.deltaY / this._v.z; this._draw(); }
+      else { this._viewTouched = true; this._f.ox -= e.deltaX; this._f.oy -= e.deltaY; this._draw(); }
     }, { passive: false });
     cv.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
     cv.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (!f) return; e.preventDefault(); this._readDropped(f); });
@@ -426,12 +630,12 @@ class GfcEditor extends HTMLElement {
     this._touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (this._touches.size === 2) {
       const [a, b] = [...this._touches.values()];
-      this._d = { mode: 'pinch', dist: Math.hypot(a[0] - b[0], a[1] - b[1]), z: this._v.z, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], v: { ...this._v } };
+      this._d = { mode: 'pinch', dist: Math.hypot(a[0] - b[0], a[1] - b[1]), mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], f: { ...this._f } };
       return;
     }
     const p = this._pt(e), el = e.target.closest('[data-k]'), k = el?.dataset.k;
     const base = { sx: e.clientX, sy: e.clientY, p, moved: false, id: e.pointerId };
-    if (e.button === 1 || this._space) { this._d = { ...base, mode: 'pan', v: { ...this._v } }; return; }
+    if (e.button === 1 || this._space) { this._d = { ...base, mode: 'pan', f: { ...this._f } }; return; }
     if (this._measure) { this._d = { ...base, mode: 'measure' }; return; }
     if (k === 'hd') { this._d = { ...base, mode: 'resize', h: el.dataset.h, end: el.dataset.end, orig: deep(this._selObj()) }; return; }
     // rooms tool: dragging always draws a new room (also across others – tracing a plan); a selected room moves,
@@ -455,21 +659,23 @@ class GfcEditor extends HTMLElement {
         ent: this._c.entrance && onWall(this._c.entrance) ? deep(this._c.entrance) : null };
       return;
     }
+    // furniture, windows, devices: dragging moves them (the list on the right stays), a tap opens their settings
+    const pick = (s, tool) => this._select({ ...s, quiet: this._sameSel(s) ? !!this._s.quiet : true }, tool);
     if (k === 'furn' && this._tool !== 'devices') {
-      this._select({ t: 'furn', r: +el.dataset.r, i: +el.dataset.i }, 'furniture');
-      this._d = { ...base, mode: 'move-furn', orig: deep(this._selObj()) };
+      pick({ t: 'furn', r: +el.dataset.r, i: +el.dataset.i }, 'furniture');
+      this._d = { ...base, mode: 'move-furn', orig: deep(this._selObj()), tap: true };
       return;
     }
     if (k === 'open') {
-      this._select({ t: 'open', k: el.dataset.o, i: +el.dataset.i }, 'openings');
-      this._d = { ...base, mode: 'move-open', orig: normSeg(this._selObj()) };
+      pick({ t: 'open', k: el.dataset.o, i: +el.dataset.i }, 'openings');
+      this._d = { ...base, mode: 'move-open', orig: normSeg(this._selObj()), tap: true };
       return;
     }
     if (k === 'mk') {
       const m = el.dataset.m;
-      this._select(m ? { t: m } : { t: 'ent', i: +el.dataset.i }, 'devices');
+      pick(m ? { t: m } : { t: 'ent', i: +el.dataset.i }, 'devices');
       const at = m === 'door' ? this._c.door.at : m === 'dock' ? this._c.vacuum.dock : this._c.entities[+el.dataset.i].at;
-      this._d = { ...base, mode: 'move-mk', orig: [...at] };
+      this._d = { ...base, mode: 'move-mk', orig: [...at], tap: true };
       return;
     }
     if (k === 'wid') {
@@ -485,9 +691,10 @@ class GfcEditor extends HTMLElement {
       this._d = { ...base, mode: 'move-ul', orig: deep(this._c.underlay.rect) };
       return;
     }
-    this._d = { ...base, mode: 'pan', v: { ...this._v }, deselect: true };
+    this._d = { ...base, mode: 'pan', f: { ...this._f }, deselect: true };
   }
 
+  _sameSel(s) { const o = this._s; return !!o && o.t === s.t && o.i === s.i && o.r === s.r && o.k === s.k; }
   _select(s, tool) {
     const changedTool = tool && this._tool !== tool;
     if (changedTool) this._tool = tool;
@@ -519,22 +726,26 @@ class GfcEditor extends HTMLElement {
     if (d.mode === 'pinch') {
       if (this._touches.size < 2) return;
       const [a, b] = [...this._touches.values()], dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
-      const r = this._cv.getBoundingClientRect(), mx = d.mid[0] - r.left, my = d.mid[1] - r.top;
-      const wx = d.v.x + mx / d.v.z, wy = d.v.y + my / d.v.z;
-      this._v.z = clamp(d.z * (dist / d.dist), 0.05, 6);
-      this._v.x = wx - mx / this._v.z; this._v.y = wy - my / this._v.z;
+      const r = this._cv.getBoundingClientRect(), mx = d.mid[0] - r.left, my = d.mid[1] - r.top, k = clamp(d.f.k * (dist / d.dist), 0.08, 6);
+      this._viewTouched = true;
+      this._f = { k, ox: mx - ((mx - d.f.ox) * k) / d.f.k, oy: my - ((my - d.f.oy) * k) / d.f.k };
       this._draw();
       return;
     }
     if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 3) return;
-    if (!d.moved) { d.moved = true; if (!['pan', 'draw', 'measure'].includes(d.mode)) this._snap(); }
+    if (!d.moved) {
+      d.moved = true;
+      if (!['pan', 'draw', 'measure'].includes(d.mode)) this._snap();
+      // the live card keeps its scale while something is dragged
+      if (!['pan', 'measure'].includes(d.mode) && this._card?._M) this._pin = { ...this._card._M.stage };
+    }
     const dx = p[0] - d.p[0], dy = p[1] - d.p[1], c = this._c;
     this._guides = null;
     if (d.mode === 'pan') {
       this._viewTouched = true;
       this._cv.classList.add('panning');
-      this._v.x = d.v.x - (e.clientX - d.sx) / d.v.z;
-      this._v.y = d.v.y - (e.clientY - d.sy) / d.v.z;
+      this._f.ox = d.f.ox + (e.clientX - d.sx);
+      this._f.oy = d.f.oy + (e.clientY - d.sy);
     } else if (d.mode === 'draw') {
       const sx = this._snapV(p[0], 'x'), sy = this._snapV(p[1], 'y');
       this._drawRect = normRect([d.a[0], d.a[1], sx.v, sy.v]) || [d.a[0], d.a[1], d.a[0] + 1, d.a[1] + 1];
@@ -620,8 +831,11 @@ class GfcEditor extends HTMLElement {
     this._d = null;
     this._cv.classList.remove('panning');
     this._guides = null;
+    if (this._pin) { this._pin = null; if (!d?.moved) this._draw(); }
     if (!d) return;
     if (d.mode === 'pinch') return;
+    // a tap on furniture / a window / a device: its settings
+    if (!d.moved && d.tap && this._s?.quiet) { this._s = { ...this._s, quiet: false }; this._draw(); this._panel(); return; }
     if (d.mode === 'measure' && !cancel) { this._measureClick(this._pt(e)); return; }
     if (d.mode === 'draw') {
       const R = this._drawRect;
@@ -701,8 +915,8 @@ class GfcEditor extends HTMLElement {
   _addOpening(seg) {
     const k = this._openKind;
     this._change(() => {
-      if (k === 'entrance') { this._c.entrance = seg; this._s = { t: 'open', k, i: 0 }; }
-      else { this._c[OPEN_KINDS[k].key].push(seg); this._s = { t: 'open', k, i: this._c[OPEN_KINDS[k].key].length - 1 }; }
+      if (k === 'entrance') { this._c.entrance = seg; this._s = { t: 'open', k, i: 0, quiet: true }; }
+      else { this._c[OPEN_KINDS[k].key].push(seg); this._s = { t: 'open', k, i: this._c[OPEN_KINDS[k].key].length - 1, quiet: true }; }
     });
   }
   _addFurniture(kind, at) {
@@ -717,7 +931,7 @@ class GfcEditor extends HTMLElement {
     const x = Math.round((p[0] - def.w / 2) / ED_GRID) * ED_GRID, y = Math.round((p[1] - def.h / 2) / ED_GRID) * ED_GRID;
     this._change(() => {
       (room.furniture = room.furniture || []).push([x, y, x + def.w, y + def.h, kind]);
-      this._s = { t: 'furn', r: ri, i: room.furniture.length - 1 };
+      this._s = { t: 'furn', r: ri, i: room.furniture.length - 1, quiet: true };
       this._tool = 'furniture';
     });
   }
@@ -845,7 +1059,7 @@ class GfcEditor extends HTMLElement {
     const R = room?.rect;
     if (!R) {
       const r = this._cv.getBoundingClientRect();
-      return [r0(this._v.x + r.width / 2 / this._v.z), r0(this._v.y + r.height / 2 / this._v.z)];
+      return this._unP(r.width / 2, r.height / 2).map(r0);
     }
     return freeSpot(R, c.entities.filter((x) => x.at).map((x) => x.at));
   }
@@ -854,16 +1068,16 @@ class GfcEditor extends HTMLElement {
     const c = this._c;
     const L = this._layerDef(this._layerSel);
     const st = this._hs()?.states?.[eid], kind = kindOf(eid, st);
-    if (domainOf(eid) === 'vacuum') { this._change(() => { c.vacuum = { ...(c.vacuum || {}), entity: eid, dock: at || c.vacuum?.dock || this._spotFor(eid) }; this._s = { t: 'dock' }; }); return; }
+    if (domainOf(eid) === 'vacuum') { this._change(() => { c.vacuum = { ...(c.vacuum || {}), entity: eid, dock: at || c.vacuum?.dock || this._spotFor(eid) }; this._s = { t: 'dock', quiet: true }; }); return; }
     const i = c.entities.findIndex((x) => x.entity === eid);
     this._change(() => {
       const pos = at || this._spotFor(eid);
-      if (i >= 0) { c.entities[i].at = pos; this._s = { t: 'ent', i }; }
+      if (i >= 0) { c.entities[i].at = pos; this._s = { t: 'ent', i, quiet: true }; }
       else {
         const e = { entity: eid, at: pos };
         if (kind === 'light') e.icon = guessLampIcon(eid, st);
         c.entities.push(e);
-        this._s = { t: 'ent', i: c.entities.length - 1 };
+        this._s = { t: 'ent', i: c.entities.length - 1, quiet: true };
       }
       // devices added in an own layer belong to it
       if (L?.type === 'custom' && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
@@ -994,26 +1208,6 @@ class GfcEditor extends HTMLElement {
     this._draw();
     this._panel();
     this._toast(t('ed_measured'));
-  }
-
-  /* ---------------------------------------------------------------- live preview with the real card */
-  _preview(on) {
-    const P = this.$('.eprev');
-    P.classList.toggle('on', on);
-    this.$('.prev').classList.toggle('blue', on);
-    if (!on) { P.querySelector('.frame').innerHTML = ''; return; }
-    const mode = this._prevMode || 'laptop';
-    P.querySelector('.pbar').innerHTML = `<div class="eseg">${['laptop', 'phone'].map((m) => `<button data-m="${m}" class="${m === mode ? 'act' : ''}">${esc(t(`ed_prev_${m}`))}</button>`).join('')}</div>`;
-    P.querySelectorAll('.pbar button').forEach((b) => b.addEventListener('click', () => { this._prevMode = b.dataset.m; this._preview(true); }));
-    const fr = P.querySelector('.frame');
-    fr.className = `frame${mode === 'phone' ? ' phone' : ''}`;
-    fr.innerHTML = mode === 'phone' ? '<div class="phonebox"></div>' : '';
-    const card = document.createElement(CARD_TAG);
-    card.setConfig({ ...cleanConfig(this._c), layout: mode === 'phone' ? 'mobile' : 'desktop' });
-    (mode === 'phone' ? fr.querySelector('.phonebox') : fr).append(card);
-    card.hass = this._hs();
-    clearInterval(this._prevT);
-    this._prevT = setInterval(() => { if (!card.isConnected) { clearInterval(this._prevT); return; } const h = this._hs(); if (h !== card.hass) card.hass = h; }, 400);
   }
 }
 
