@@ -37,6 +37,9 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
   light('light.hallway_spot_3', 'Spot 3', ['brightness'], ev, { brightness: 120 }, 'hallway');
   light('light.bathroom_mirror', N('Mirror light', 'Spiegellicht'), ['color_temp'], false, {}, 'bathroom');
   light('light.guest_room_lamp', N('Reading lamp', 'Leselampe'), ['brightness'], false, {}, 'guest_room');
+  // a few labels (the editor can sort devices by label)
+  for (const id of ['light.living_room_tv_strip', 'light.kitchen_counter', 'light.living_room_floor_lamp']) reg(id, { labels: ['ambient'] });
+  for (const id of ['light.bedroom_bedside', 'light.hallway_spot_1', 'light.bathroom_mirror']) reg(id, { labels: ['night_light'] });
   set('input_number.hallway_night_brightness', 20, { friendly_name: N('Night brightness', 'Nachthelligkeit'), min: 5, max: 100, step: 5, unit_of_measurement: '%', mode: 'slider' });
   reg('input_number.hallway_night_brightness', { area_id: 'hallway' });
 
@@ -242,7 +245,7 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
     locale: { language: LANG === 'de' ? 'de' : 'en', number_format: 'language', time_format: 'language' },
     callService,
     callWS: (msg) => {
-      if (msg.type === 'config/label_registry/list') return Promise.resolve([{ label_id: 'dashboard_mode', name: 'Dashboard mode' }]);
+      if (msg.type === 'config/label_registry/list') return Promise.resolve([{ label_id: 'dashboard_mode', name: 'Dashboard mode' }, { label_id: 'ambient', name: N('Ambient light', 'Stimmungslicht') }, { label_id: 'night_light', name: N('Night light', 'Nachtlicht') }]);
       if (msg.type === 'call_service' && msg.domain === 'roborock') {
         const rooms = Object.fromEntries(Object.values(AREAS).map((a, i) => [String(16 + i), a.name]));
         return Promise.resolve({ response: { [`vacuum.${V}`]: { maps: [{ flag: 0, name: 'Home', rooms }] } } });

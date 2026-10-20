@@ -270,6 +270,6 @@ dialog.ed[open] { display: block; }
   .ehint { display: none; }
   .eview button span, .elight .lbl { display: none; }
   .eview button { padding: 0 9px; }
-  .erail .ereset { margin-top: 0; margin-left: auto; }
+  .erail .ereset { margin-top: 0; margin-left: auto; position: sticky; right: -8px; z-index: 1; background: linear-gradient(90deg, rgba(20, 20, 26, 0), rgb(20, 20, 26) 24%); border-radius: 0; padding: 7px 8px 6px 14px; width: 86px; margin-right: -8px; }
 }
 `;

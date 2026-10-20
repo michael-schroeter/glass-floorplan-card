@@ -349,7 +349,7 @@ class GfcEditor extends HTMLElement {
     if (!r.width) return;
     if (this._fix) { this._fix = null; this._syncLive(); }
     const scr = this._screen(), H = this._map?.H || scr.h, narrow = r.width < 600;
-    const pad = narrow ? 10 : 30, top = narrow ? 10 : 46, bottom = narrow ? 52 : 66;
+    const pad = narrow ? 10 : 30, top = narrow ? 14 : 46, bottom = narrow ? 64 : 66;
     const k = clamp(Math.min((r.width - 2 * pad) / scr.w, (r.height - top - bottom) / H), 0.08, 1.4);
     this._f = { k, ox: (r.width - scr.w * k) / 2, oy: top + Math.max(0, (r.height - top - bottom - H * k) / 2) };
   }

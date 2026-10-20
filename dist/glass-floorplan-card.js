@@ -4903,7 +4903,7 @@ dialog.ed[open] { display: block; }
   .ehint { display: none; }
   .eview button span, .elight .lbl { display: none; }
   .eview button { padding: 0 9px; }
-  .erail .ereset { margin-top: 0; margin-left: auto; }
+  .erail .ereset { margin-top: 0; margin-left: auto; position: sticky; right: -8px; z-index: 1; background: linear-gradient(90deg, rgba(20, 20, 26, 0), rgb(20, 20, 26) 24%); border-radius: 0; padding: 7px 8px 6px 14px; width: 86px; margin-right: -8px; }
 }
 `;
 
@@ -5258,7 +5258,7 @@ class GfcEditor extends HTMLElement {
     if (!r.width) return;
     if (this._fix) { this._fix = null; this._syncLive(); }
     const scr = this._screen(), H = this._map?.H || scr.h, narrow = r.width < 600;
-    const pad = narrow ? 10 : 30, top = narrow ? 10 : 46, bottom = narrow ? 52 : 66;
+    const pad = narrow ? 10 : 30, top = narrow ? 14 : 46, bottom = narrow ? 64 : 66;
     const k = clamp(Math.min((r.width - 2 * pad) / scr.w, (r.height - top - bottom) / H), 0.08, 1.4);
     this._f = { k, ox: (r.width - scr.w * k) / 2, oy: top + Math.max(0, (r.height - top - bottom - H * k) / 2) };
   }
