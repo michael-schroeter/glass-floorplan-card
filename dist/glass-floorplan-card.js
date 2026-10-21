@@ -1856,7 +1856,7 @@ class GlassFloorplanCard extends HTMLElement {
     const padX = clamp(Math.round(W * 0.02), 12, 34);
     const sideW = side ? clamp(Math.round(W * 0.2), 220, 320) : 0, sgap = side ? clamp(Math.round(W * 0.014), 12, 22) : 0;
     let pu = (W - 2 * padX - sideW - sgap) / S.w, avail = 0, padY;
-    const screen = this._config.fit !== 'width' && (!!ev || !this._inPreview());
+    const screen = (this._config.fit !== 'width' || !!ev?.fix) && (!!ev || !this._inPreview());
     if (screen) {
       const top = ev ? 0 : this.getBoundingClientRect().top + (window.scrollY || 0);
       avail = ev ? ev.h : Math.max(420, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
@@ -4975,7 +4975,7 @@ class GfcEditor extends HTMLElement {
     if (!this.isConnected) document.body.append(this);
     this._dlg.showModal();
     this._cv.focus({ preventScroll: true });
-    requestAnimationFrame(() => { this._fit(); this._draw(); this._panel(); requestAnimationFrame(() => { if (!this._viewTouched) { this._fit(); this._draw(); } }); });
+    requestAnimationFrame(() => { this._fit(true); this._draw(); this._panel(); requestAnimationFrame(() => { if (!this._viewTouched) { this._fit(true); this._draw(); } }); });
   }
 
   _useLang() {
@@ -5069,7 +5069,8 @@ class GfcEditor extends HTMLElement {
     this._ro?.disconnect();
     this._onKey = (e) => this._key(e);
     window.addEventListener('keydown', this._onKey, true);
-    this._ro = new ResizeObserver(() => { if (!this._viewTouched) this._fit(); this._draw(); });
+    // a new canvas size only centres the screen again – the scale of a plan being drawn stays
+    this._ro = new ResizeObserver(() => { if (!this._viewTouched) this._fit(true); this._draw(); });
     this._ro.observe(this._cv);
     // new states from Home Assistant reach the live card
     clearInterval(this._liveT);
@@ -5241,9 +5242,14 @@ class GfcEditor extends HTMLElement {
   _syncLive() {
     const card = this._card, h = this._hs();
     if (!card || !h) return;
-    const scr = this._screen(), cfg = this._liveCfg(), lh = this._liveHass(h), draw = this._drawing(cfg);
+    const cfg = this._liveCfg(), lh = this._liveHass(h), draw = this._drawing(cfg);
     if (!draw) this._fix = null;
-    const fix = draw ? this._fix : null, stage = fix ? null : this._liveStage(cfg);
+    // while drawing, the card covers all you can see and every room (no edge); otherwise it is exactly the screen
+    const area = draw && this._fix ? this._drawArea(cfg, this._screen(), this._fix) : null;
+    const scr = area ? { w: area.w, h: area.h } : this._screen();
+    const fix = area ? { pu: this._fix.pu, ox: this._fix.ox - area.x, oy: this._fix.oy - area.y } : null;
+    const stage = fix ? null : this._liveStage(cfg);
+    this._area = area;
     const key = JSON.stringify([cfg, scr, stage, fix]);
     if (key !== this._liveKey) {
       this._liveKey = key;
@@ -5253,14 +5259,30 @@ class GfcEditor extends HTMLElement {
     if (card.hass !== lh) card.hass = lh;
     if (card._M && card._tab !== this._layerSel && card._M.layers.some((l) => l.id === this._layerSel)) { card._tab = this._layerSel; card._applyTab(true); }
     const lv = card._lv, M = card._M;
-    this._map = lv && M ? { S: lv.S, pu: lv.pu, sx: lv.sx, sy: lv.sy, H: lv.H, rot: M.rot ? M.rotP : null, inv: M.rot ? M.rotI : null } : null;
+    this._map = lv && M ? { S: lv.S, pu: lv.pu, sx: lv.sx, sy: lv.sy, H: lv.H, offX: area?.x || 0, offY: area?.y || 0, rot: M.rot ? M.rotP : null, inv: M.rot ? M.rotI : null } : null;
     if (draw && !this._fix && lv) this._fix = { pu: lv.pu, ox: lv.sx - lv.S.x * lv.pu, oy: lv.sy - lv.S.y * lv.pu };
   }
-  _fit() {
+  /* The drawing area (in pixels of the screen frame): the screen, everything visible on the canvas, every room and the
+   * template – on a coarse grid with some room around, so the card is only rebuilt when the area really grows */
+  _drawArea(cfg, scr, fix) {
+    const F = this._f, r = this._cv.getBoundingClientRect(), rects = [[0, 0, scr.w, scr.h]];
+    if (F && r.width) rects.push([-F.ox / F.k, -F.oy / F.k, (r.width - F.ox) / F.k, (r.height - F.oy) / F.k]);
+    const B = bboxOf([...(cfg.rooms || []).map((x) => normRect(x.rect)).filter(Boolean), ...(this._drawRect ? [this._drawRect] : []), ...(this._showUl() ? [this._c.underlay.rect] : [])]);
+    if (B) rects.push([fix.ox + B[0] * fix.pu, fix.oy + B[1] * fix.pu, fix.ox + B[2] * fix.pu, fix.oy + B[3] * fix.pu]);
+    const U = bboxOf(rects), g = 400, m = 200;
+    let [x1, y1, x2, y2] = [Math.floor((U[0] - m) / g) * g, Math.floor((U[1] - m) / g) * g, Math.ceil((U[2] + m) / g) * g, Math.ceil((U[3] + m) / g) * g];
+    // not endless when zoomed far out: at most this much around the middle of the view
+    const max = 9600, cx = F && r.width ? (r.width / 2 - F.ox) / F.k : scr.w / 2, cy = F && r.width ? (r.height / 2 - F.oy) / F.k : scr.h / 2;
+    if (x2 - x1 > max) { x1 = Math.max(x1, Math.floor((cx - max / 2) / g) * g); x2 = x1 + max; }
+    if (y2 - y1 > max) { y1 = Math.max(y1, Math.floor((cy - max / 2) / g) * g); y2 = y1 + max; }
+    return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+  }
+  /* the screen fits into the canvas; without keepScale the plan being drawn is laid out exactly again too */
+  _fit(keepScale) {
     const r = this._cv.getBoundingClientRect();
     if (!r.width) return;
-    if (this._fix) { this._fix = null; this._syncLive(); }
-    const scr = this._screen(), H = this._map?.H || scr.h, narrow = r.width < 600;
+    if (this._fix && !keepScale) { this._fix = null; this._syncLive(); }
+    const scr = this._screen(), H = (!this._area && this._map?.H) || scr.h, narrow = r.width < 600;
     const pad = narrow ? 10 : 30, top = narrow ? 14 : 46, bottom = narrow ? 64 : 66;
     const k = clamp(Math.min((r.width - 2 * pad) / scr.w, (r.height - top - bottom) / H), 0.08, 1.4);
     this._f = { k, ox: (r.width - scr.w * k) / 2, oy: top + Math.max(0, (r.height - top - bottom - H * k) / 2) };
@@ -5278,11 +5300,11 @@ class GfcEditor extends HTMLElement {
   P(x, y) {
     const m = this._map || { S: { x: 0, y: 0 }, pu: 0.5, sx: 0, sy: 0 }, F = this._f || { k: 1, ox: 0, oy: 0 };
     const [a, b] = m.rot ? m.rot([x, y]) : [x, y];
-    return [F.ox + F.k * (m.sx + (a - m.S.x) * m.pu), F.oy + F.k * (m.sy + (b - m.S.y) * m.pu)];
+    return [F.ox + F.k * ((m.offX || 0) + m.sx + (a - m.S.x) * m.pu), F.oy + F.k * ((m.offY || 0) + m.sy + (b - m.S.y) * m.pu)];
   }
   _unP(X, Y) {
     const m = this._map || { S: { x: 0, y: 0 }, pu: 0.5, sx: 0, sy: 0 }, F = this._f || { k: 1, ox: 0, oy: 0 };
-    const cx = (X - F.ox) / F.k, cy = (Y - F.oy) / F.k;
+    const cx = (X - F.ox) / F.k - (m.offX || 0), cy = (Y - F.oy) / F.k - (m.offY || 0);
     const p = [m.S.x + (cx - m.sx) / m.pu, m.S.y + (cy - m.sy) / m.pu];
     return m.inv ? m.inv(p) : p;
   }
@@ -5320,11 +5342,14 @@ class GfcEditor extends HTMLElement {
   _draw() {
     if (!this._world) return;
     this._syncLive();
-    if (!this._f) this._fit();
+    if (!this._f) this._fit(true);
     this._syncTop();
-    const c = this._c, F = this._f, z = this._z(), scr = this._screen(), H = this._map?.H || scr.h;
-    // the screen with the live card
-    Object.assign(this._liveEl.style, { width: `${scr.w}px`, height: `${H}px`, transform: `translate(${F.ox}px, ${F.oy}px) scale(${F.k})` });
+    const c = this._c, F = this._f, z = this._z(), scr = this._screen(), A = this._area, H = (!A && this._map?.H) || scr.h;
+    // the live card: on its screen, or – while drawing – on an area without edge
+    Object.assign(this._liveEl.style, A
+      ? { width: `${A.w}px`, height: `${A.h}px`, transform: `translate(${F.ox + F.k * A.x}px, ${F.oy + F.k * A.y}px) scale(${F.k})` }
+      : { width: `${scr.w}px`, height: `${H}px`, transform: `translate(${F.ox}px, ${F.oy}px) scale(${F.k})` });
+    this._frameEl.hidden = !!A;
     Object.assign(this._frameEl.style, { left: `${F.ox}px`, top: `${F.oy}px`, width: `${scr.w * F.k}px`, height: `${H * F.k}px` });
     this._frameEl.classList.toggle('phone', this._mode === 'phone');
     this._frameEl.querySelector('small').textContent = `${t(`ed_prev_${this._mode}`)} · ${scr.w} × ${scr.h}`;

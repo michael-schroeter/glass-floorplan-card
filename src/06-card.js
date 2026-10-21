@@ -383,7 +383,7 @@ class GlassFloorplanCard extends HTMLElement {
     const padX = clamp(Math.round(W * 0.02), 12, 34);
     const sideW = side ? clamp(Math.round(W * 0.2), 220, 320) : 0, sgap = side ? clamp(Math.round(W * 0.014), 12, 22) : 0;
     let pu = (W - 2 * padX - sideW - sgap) / S.w, avail = 0, padY;
-    const screen = this._config.fit !== 'width' && (!!ev || !this._inPreview());
+    const screen = (this._config.fit !== 'width' || !!ev?.fix) && (!!ev || !this._inPreview());
     if (screen) {
       const top = ev ? 0 : this.getBoundingClientRect().top + (window.scrollY || 0);
       avail = ev ? ev.h : Math.max(420, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
