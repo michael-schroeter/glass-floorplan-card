@@ -162,13 +162,8 @@ class GfcEditor extends HTMLElement {
   }
 
   _tryClose() {
-    if (this._dirty() && !this._confirmClose) {
-      this._confirmClose = true;
-      this._toast(t('ed_unsaved'));
-      setTimeout(() => { this._confirmClose = false; }, 3500);
-      return;
-    }
-    this._close(false);
+    if (!this._dirty()) { this._close(false); return; }
+    this._confirm({ title: t('ed_discardTitle'), text: t('ed_discardText'), ok: t('ed_discard'), no: t('ed_keepEditing'), danger: true }, () => this._close(false));
   }
 
   _toast(text) {
@@ -180,9 +175,9 @@ class GfcEditor extends HTMLElement {
   }
 
   /* a small question in the editor's own glass (instead of the browser's confirm) */
-  _confirm({ title, text, ok, danger }, onOk) {
+  _confirm({ title, text, ok, no, danger }, onOk) {
     const box = this.$('.econfirm');
-    box.innerHTML = `<div class="ecbox"><h2>${esc(title)}</h2><p>${esc(text)}</p><div class="ebtns"><button class="ebtn no">${esc(t('ed_cancel'))}</button><button class="ebtn yes ${danger ? 'redfill' : 'blue'}">${esc(ok)}</button></div></div>`;
+    box.innerHTML = `<div class="ecbox"><h2>${esc(title)}</h2><p>${esc(text)}</p><div class="ebtns"><button class="ebtn no">${esc(no || t('ed_cancel'))}</button><button class="ebtn yes ${danger ? 'redfill' : 'blue'}">${esc(ok)}</button></div></div>`;
     box.hidden = false;
     box.querySelector('.no').addEventListener('click', () => this._confirmClose());
     box.querySelector('.yes').addEventListener('click', () => { this._confirmClose(); onOk(); });
@@ -625,7 +620,8 @@ class GfcEditor extends HTMLElement {
   }
 
   _down(e) {
-    if (e.button === 2 || e.target.closest('.efloat')) return;
+    // the floating controls on the canvas (zoom, light preview, furniture toolbar) are buttons, not the plan
+    if (e.button === 2 || e.target.closest('.efloat, .ezoom, .elight')) return;
     this._cv.setPointerCapture(e.pointerId);
     this._touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (this._touches.size === 2) {

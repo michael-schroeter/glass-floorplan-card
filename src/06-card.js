@@ -268,7 +268,7 @@ class GlassFloorplanCard extends HTMLElement {
       <div class="tip"></div>
     </div>
     ${M.widgets.side ? `<div class="${this._m ? 'mside' : 'side'}">${M.widgets.side.card ? '<div class="gcard"></div>' : ''}</div>` : ''}
-    ${this._m ? '<div class="gcard"></div>' : ''}
+    ${this._m && M.rooms.length ? '<div class="gcard"></div>' : ''}
     ${empty}
   </div>
   ${this._m ? bar : ''}
