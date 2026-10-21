@@ -32,12 +32,19 @@ const FURN_KINDS = {
 
 /* Built-in layers: which kinds of placed devices they show */
 const LAYER_TYPES = {
-  light: { icon: 'bulb', kinds: ['light', 'media', 'door'] },
+  light: { icon: 'bulb', kinds: ['light', 'door'] },
   climate: { icon: 'thermo', kinds: ['climate'] },
   cover: { icon: 'blinds', kinds: ['cover'] },
   vacuum: { icon: 'robot', kinds: ['vacuum'] },
 };
 const SHOW_KINDS = ['light', 'media', 'door', 'climate', 'cover'];
+/* A built-in layer in the configuration: 'light', or { type: 'light', entities: [...] } with extra devices of any kind */
+const builtinType = (l) => (typeof l === 'string' ? (LAYER_TYPES[l] ? l : null) : l && LAYER_TYPES[l.type] && !l.show ? l.type : null);
+/* the extra devices of a built-in layer (ents: [{ entity, kind }]) – before there were extras, TVs belonged to the light layer */
+function layerExtras(l, ents) {
+  if (l && typeof l === 'object' && Array.isArray(l.entities)) return l.entities.slice();
+  return builtinType(l) === 'light' ? ents.filter((e) => e.kind === 'media').map((e) => e.entity) : [];
+}
 
 function kindOf(eid, st) {
   const d = domainOf(eid), dc = st?.attributes?.device_class;
@@ -224,10 +231,9 @@ function buildLayers(M) {
   const out = [], used = new Set();
   list.forEach((l, i) => {
     let L;
-    if (typeof l === 'string' || (l && LAYER_TYPES[l.type] && !l.show && !l.entities)) {
-      const type = typeof l === 'string' ? l : l.type;
-      if (!LAYER_TYPES[type]) return;
-      L = { id: type, type, name: l.name || null, icon: l.icon || LAYER_TYPES[type].icon, kinds: new Set(LAYER_TYPES[type].kinds), ents: new Set() };
+    const type = builtinType(l);
+    if (type) {
+      L = { id: type, type, name: l.name || null, icon: l.icon || LAYER_TYPES[type].icon, kinds: new Set(LAYER_TYPES[type].kinds), ents: new Set(layerExtras(l, M.ents)) };
     } else if (l && typeof l === 'object') {
       L = {
         id: String(l.id || `layer_${slug(l.name) || i + 1}`), type: 'custom', name: l.name || null, icon: l.icon || 'layers',

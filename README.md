@@ -21,6 +21,7 @@ Your home as a glass floor plan for Home Assistant. Lamps glow in their real col
   - **Climate**: rooms are tinted by temperature, thermostats show their reading, and a dial sets the target and HVAC mode
   - **Covers**: shutters with position rings and slat tiles. Closed covers darken their window.
   - **Vacuum** (Roborock): pick rooms on the plan, choose a mode, start. The robot drives through the rooms.
+  - **Built-in layers** take extra entities too: e.g. a TV or a switch in *Light*.
   - **Own layers** combine whole categories (e.g. *Light + Covers*) with any single entities: locks, window contacts, motion sensors, switches, fans, sensors …
 - **Room pop-ups** grow out of the room with spring animations. They contain dimming tiles, colour and white tone, media controls, a thermostat dial, cover tiles, device rows and helper sliders.
 - **Phone layout** in the same card, switched automatically by width. A landscape plan is turned upright, the layers sit in a bar at the bottom, and pop-ups become sheets you can swipe away.
@@ -63,7 +64,7 @@ Copy `dist/glass-floorplan-card.js` to `/config/www/` and add it as a resource (
 3. **Template**: load a picture of your floor plan → **Measure** (click both ends of a wall, enter its length) → **Find rooms automatically**. You can also draw rooms by dragging rectangles, import a file from the Claude skill (see below), or start with one room per Home Assistant area. **Start over** (bottom left) empties everything.
 4. **Rooms**: drag your Home Assistant areas onto the rooms, or use *Link by name*. Each room gets the area's name and its devices. The area is also used by the vacuum.
 5. **Windows & doors**, **Furniture**: optional, purely for the looks.
-6. **Devices**: choose a layer and drag devices onto the plan, or use *Place automatically*.
+6. **Devices**: choose a layer and drag devices onto the plan, or use *Place automatically*. Under *More entities* any other entity can join a built-in layer (search, by area or label). The front door opener and doorbell are set under **Tiles**.
 7. **Layers**: switch built-in layers on or off, or create your own, e.g. *Night = Light + Covers + front door lock + window contacts*.
 8. Click **Done**, then **Save**.
 
@@ -111,7 +112,8 @@ entities:
   - { entity: cover.living_room_left, at: [50, 500] }
   - { entity: lock.front_door, at: [1140, 490] }
 layers:
-  - light
+  - type: light                          # a built-in layer …
+    entities: [media_player.living_room_tv]   # … plus any extra entities (TV, switch, sensor …)
   - climate
   - cover
   - vacuum

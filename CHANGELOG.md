@@ -11,4 +11,6 @@
 - Link Home Assistant areas to rooms by dragging, tapping or automatically by name
 - Import a `.floorplan.json` file or pasted text (with a size check), export the floor plan
 - Claude skill `floorplan-setup`: a picture of a floor plan in, a ready-to-import file out
+- The editor shows the real card live at the real screen size (laptop / phone); tap a lamp to edit it, lights on / off / real
+- Built-in layers take extra entities (picker with search, by area or label); the light layer lists lamps only
 - English and German

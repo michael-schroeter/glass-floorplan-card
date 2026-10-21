@@ -452,12 +452,19 @@ const FURN_KINDS = {
 
 /* Built-in layers: which kinds of placed devices they show */
 const LAYER_TYPES = {
-  light: { icon: 'bulb', kinds: ['light', 'media', 'door'] },
+  light: { icon: 'bulb', kinds: ['light', 'door'] },
   climate: { icon: 'thermo', kinds: ['climate'] },
   cover: { icon: 'blinds', kinds: ['cover'] },
   vacuum: { icon: 'robot', kinds: ['vacuum'] },
 };
 const SHOW_KINDS = ['light', 'media', 'door', 'climate', 'cover'];
+/* A built-in layer in the configuration: 'light', or { type: 'light', entities: [...] } with extra devices of any kind */
+const builtinType = (l) => (typeof l === 'string' ? (LAYER_TYPES[l] ? l : null) : l && LAYER_TYPES[l.type] && !l.show ? l.type : null);
+/* the extra devices of a built-in layer (ents: [{ entity, kind }]) – before there were extras, TVs belonged to the light layer */
+function layerExtras(l, ents) {
+  if (l && typeof l === 'object' && Array.isArray(l.entities)) return l.entities.slice();
+  return builtinType(l) === 'light' ? ents.filter((e) => e.kind === 'media').map((e) => e.entity) : [];
+}
 
 function kindOf(eid, st) {
   const d = domainOf(eid), dc = st?.attributes?.device_class;
@@ -644,10 +651,9 @@ function buildLayers(M) {
   const out = [], used = new Set();
   list.forEach((l, i) => {
     let L;
-    if (typeof l === 'string' || (l && LAYER_TYPES[l.type] && !l.show && !l.entities)) {
-      const type = typeof l === 'string' ? l : l.type;
-      if (!LAYER_TYPES[type]) return;
-      L = { id: type, type, name: l.name || null, icon: l.icon || LAYER_TYPES[type].icon, kinds: new Set(LAYER_TYPES[type].kinds), ents: new Set() };
+    const type = builtinType(l);
+    if (type) {
+      L = { id: type, type, name: l.name || null, icon: l.icon || LAYER_TYPES[type].icon, kinds: new Set(LAYER_TYPES[type].kinds), ents: new Set(layerExtras(l, M.ents)) };
     } else if (l && typeof l === 'object') {
       L = {
         id: String(l.id || `layer_${slug(l.name) || i + 1}`), type: 'custom', name: l.name || null, icon: l.icon || 'layers',
@@ -4919,7 +4925,7 @@ const ED_TOOLS = [
 const OPEN_KINDS = { window: { key: 'windows', len: 100 }, door: { key: 'doors', len: 80 }, entrance: { key: 'entrance', len: 90 } };
 const NO_DEVICE_DOMAINS = ['sun', 'zone', 'person', 'update', 'tts', 'stt', 'conversation', 'todo', 'weather', 'tag', 'device_tracker', 'image', 'notify', 'ai_task', 'wake_word', 'assist_satellite', 'calendar', 'event', 'persistent_notification', 'group', 'counter', 'timer', 'schedule', 'input_text', 'input_datetime', 'date', 'time', 'datetime', 'text'];
 const LAYER_FILTER = {
-  light: (d) => d === 'light' || d === 'media_player',
+  light: (d) => d === 'light',
   climate: (d, dc) => ['climate', 'water_heater', 'humidifier'].includes(d) || (d === 'sensor' && ['temperature', 'humidity'].includes(dc)),
   cover: (d) => d === 'cover',
   vacuum: (d) => d === 'vacuum',
@@ -4947,6 +4953,7 @@ class GfcEditor extends HTMLElement {
     this._light = 'on';
     this._groupBy = 'area';
     this._collapsed = new Set();
+    this._opened = new Set();
     this._scrollMem = {};
   }
 
@@ -5041,7 +5048,7 @@ class GfcEditor extends HTMLElement {
     this._dlg.addEventListener('cancel', (e) => {
       e.preventDefault();
       if (!this.$('.econfirm').hidden) this._confirmClose();
-      else if (this._s || this._editLayer) this._back();
+      else if (this._s || this._editLayer || this._picker) this._back();
       else this._tryClose();
     });
     $('.undo').addEventListener('click', () => this._doUndo());
@@ -5114,11 +5121,12 @@ class GfcEditor extends HTMLElement {
   }
 
   _setTool(tool) {
-    if (this._tool === tool && !this._s && !this._editLayer) return;
+    if (this._tool === tool && !this._s && !this._editLayer && !this._picker) return;
     this._tool = tool;
     this._s = null;
     this._measure = null;
     this._editLayer = null;
+    this._picker = null;
     this._draw();
     this._panel();
   }
@@ -5936,12 +5944,15 @@ class GfcEditor extends HTMLElement {
   }
 
   /* ---------------------------------------------------------------- devices */
+  /* placed devices with their kind (for the extra devices of built-in layers) */
+  _entKinds() { const h = this._hs() || {}; return this._c.entities.map((e) => ({ entity: e.entity, kind: kindOf(e.entity, h.states?.[e.entity]) })); }
+  _layerIdOf(l, i) { return builtinType(l) || String(l.id || `layer_${slug(l.name) || i + 1}`); }
   _layerDefs() {
-    const list = this._c.layers?.length ? this._c.layers : (this._model()?.layers || []).map((L) => L.id);
+    const list = this._c.layers?.length ? this._c.layers : (this._model()?.layers || []).map((L) => L.id), ek = this._entKinds();
     const out = list.map((l, i) => {
-      if (typeof l === 'string') return LAYER_TYPES[l] ? { id: l, type: l, name: t(`layer_${l}`), icon: LAYER_TYPES[l].icon, kinds: LAYER_TYPES[l].kinds, ents: [] } : null;
-      if (l && LAYER_TYPES[l.type] && !l.show && !l.entities) return { id: l.type, type: l.type, name: l.name || t(`layer_${l.type}`), icon: l.icon || LAYER_TYPES[l.type].icon, kinds: LAYER_TYPES[l.type].kinds, ents: [] };
-      return l ? { id: String(l.id || `layer_${slug(l.name) || i + 1}`), type: 'custom', name: l.name || t('layer'), icon: l.icon || 'layers', kinds: [].concat(l.show || []), ents: [].concat(l.entities || []), raw: l } : null;
+      const type = builtinType(l);
+      if (type) return { id: type, type, name: l.name || t(`layer_${type}`), icon: l.icon || LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: layerExtras(l, ek) };
+      return l && typeof l === 'object' ? { id: this._layerIdOf(l, i), type: 'custom', name: l.name || t('layer'), icon: l.icon || 'layers', kinds: [].concat(l.show || []), ents: [].concat(l.entities || []), raw: l } : null;
     }).filter(Boolean);
     // built-in layers are always offered for placing devices
     for (const type of ['light', 'climate', 'cover', 'vacuum']) if (!out.some((L) => L.id === type)) out.push({ id: type, type, name: t(`layer_${type}`), icon: LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: [], hidden: true });
@@ -5984,19 +5995,34 @@ class GfcEditor extends HTMLElement {
         c.entities.push(e);
         this._s = { t: 'ent', i: c.entities.length - 1, quiet: true };
       }
-      // devices added in an own layer belong to it
-      if (L?.type === 'custom' && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
       this._ensureLayer(L);
+      // a device of another kind belongs to the layer it was added in
+      if (L && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
     });
   }
   /* built-in layers appear as soon as something is placed for them */
   _ensureLayer(L) {
     if (!L || L.type === 'custom' || !this._c.layers?.length) return;
-    if (!this._c.layers.some((l) => (typeof l === 'string' ? l : l.type) === L.type && !l.show)) this._c.layers.push(L.type);
+    if (!this._c.layers.some((l) => builtinType(l) === L.type)) this._c.layers.push(L.type);
+  }
+  /* the layer's entry in the configuration – a built-in layer written as text becomes an object that holds its extras */
+  _layerEntry(id) {
+    const L = this._layerDef(id);
+    if (!L) return null;
+    if (!this._c.layers?.length) this._c.layers = (this._model()?.layers || []).map((x) => x.id);
+    this._ensureLayer(L);
+    const list = this._c.layers, i = list.findIndex((l, j) => this._layerIdOf(l, j) === id);
+    if (i < 0) return null;
+    if (builtinType(list[i]) && !Array.isArray(list[i].entities)) list[i] = { ...(typeof list[i] === 'object' ? list[i] : {}), type: builtinType(list[i]), entities: layerExtras(list[i], this._entKinds()) };
+    return list[i];
   }
   _addToLayer(id, eid) {
-    const l = (this._c.layers || []).find((x) => typeof x === 'object' && String(x.id || `layer_${slug(x.name)}`) === id);
+    const l = this._layerEntry(id);
     if (l && !(l.entities || []).includes(eid)) l.entities = [...(l.entities || []), eid];
+  }
+  _removeFromLayer(id, eid) {
+    const l = this._layerEntry(id);
+    if (l) l.entities = (l.entities || []).filter((x) => x !== eid);
   }
   _autoPlace(eids) {
     if (!eids.length) return;
@@ -6009,7 +6035,7 @@ class GfcEditor extends HTMLElement {
         const i = this._c.entities.findIndex((x) => x.entity === eid);
         if (i >= 0) this._c.entities[i].at = e.at; else this._c.entities.push(e);
         const L = this._layerDef(this._layerSel);
-        if (L?.type === 'custom' && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
+        if (L && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
       }
     });
     this._toast(t('ed_placed', eids.length));
@@ -6190,24 +6216,28 @@ Object.assign(GfcEditor.prototype, {
     const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid' };
     const detail = s && !s.quiet && this._selObj() ? map[s.t] : null;
     const layer = !detail && this._tool === 'layers' && this._editLayer ? this._layerDef(this._editLayer) : null;
-    const view = detail ? `d:${s.t}` : layer ? `e:${layer.id}` : `t:${this._tool}`;
+    const picker = !detail && this._tool === 'devices' && this._picker ? this._layerDef(this._picker) : null;
+    const view = detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
     if (this._view?.startsWith('t:')) this._scrollMem[this._view] = I.scrollTop;
     const keep = view === this._view ? I.scrollTop : null;
     I.innerHTML = '';
-    if (detail || layer) {
+    if (detail || layer || picker) {
       const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(t(`ed_tool_${this._tool}`))}</span>`);
       back.addEventListener('click', () => this._back());
       I.append(back);
     }
     if (detail) this[detail](I);
     else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
+    else if (picker) this._pickerView(I, picker);
     else this[`_p_${this._tool}`]?.(I);
     I.scrollTop = keep ?? (view.startsWith('t:') ? this._scrollMem[view] || 0 : 0);
     this._view = view;
     this._syncTop();
   },
   _back() {
-    this._s = null;
+    // from a device's settings back to the list it came from (the picker stays), else out of the picker
+    if (this._s && !this._s.quiet) this._s = null;
+    else { this._s = null; this._picker = null; }
     this._editLayer = null;
     this._draw();
     this._panel();
@@ -6562,19 +6592,13 @@ Object.assign(GfcEditor.prototype, {
     this._layerChips(I);
     const L = this._layerDef(this._layerSel);
     if (!L) return;
-    if (L.type === 'vacuum') { this._vacuumPanel(I); return; }
+    if (L.type === 'vacuum') { this._vacuumPanel(I); this._extrasSection(I, L); return; }
     const h = this._hs() || {};
     const filt = L.type === 'custom' ? LAYER_FILTER.custom : LAYER_FILTER[L.type];
     const placed = new Set(this._c.entities.filter((e) => e.at).map((e) => e.entity));
-    let ids = Object.keys(h.states || {}).filter((id) => filt(domainOf(id), h.states[id]?.attributes?.device_class) && !h.entities?.[id]?.hidden);
     const q = this._q.trim().toLowerCase();
-    if (q) ids = ids.filter((id) => `${id} ${this._fname(id)} ${h.areas?.[this._areaOf(id)]?.name || ''}`.toLowerCase().includes(q));
-    const search = this._el(`${icon('search')}`, 'esearch');
-    const si = mk('input', 'einp');
-    si.placeholder = t('ed_search');
-    si.value = this._q;
-    si.addEventListener('input', () => { this._q = si.value; const pos = si.selectionStart; this._panel(); const n = this._ins.querySelector('.esearch input'); n?.focus(); n?.setSelectionRange(pos, pos); });
-    search.append(si);
+    const ids = this._matchQ(Object.keys(h.states || {}).filter((id) => filt(domainOf(id), h.states[id]?.attributes?.device_class) && !h.entities?.[id]?.hidden), q);
+    const search = this._searchEl('_q', t('ed_search'));
     search.style.marginTop = '14px';
     I.append(search);
     // the part of the layer you can switch on/off: lights in "Light", custom picks …
@@ -6584,7 +6608,31 @@ Object.assign(GfcEditor.prototype, {
       b.style.marginTop = '10px';
       I.append(b);
     }
-    // grouped by area or by label; groups fold away (while searching everything is open)
+    this._groupedList(I, ids, (id) => this._entityRow(id, placed.has(id), L), { q, placed, scope: 'dev' });
+    if (!ids.length) I.append(this._el(esc(t(q ? 'ed_noMatch' : 'ed_noEntities')), 'eempty'));
+    // built-in layers: any further devices by hand (own layers list every device anyway)
+    if (L.type === 'custom') I.append(this._el(`<p class="small">${esc(t('ed_customDevHint', L.name))}</p>`));
+    else this._extrasSection(I, L);
+  },
+
+  /* a search field bound to a property; re-rendering keeps the cursor in it */
+  _searchEl(prop, placeholder) {
+    const search = this._el(`${icon('search')}`, 'esearch');
+    const si = mk('input', 'einp');
+    si.placeholder = placeholder;
+    si.value = this[prop] || '';
+    si.addEventListener('input', () => { this[prop] = si.value; const pos = si.selectionStart; this._panel(); const n = this._ins.querySelector('.esearch input'); n?.focus(); n?.setSelectionRange(pos, pos); });
+    search.append(si);
+    return search;
+  },
+  _matchQ(ids, q) {
+    if (!q) return ids;
+    const h = this._hs() || {};
+    return ids.filter((id) => `${id} ${this._fname(id)} ${h.areas?.[this._areaOf(id)]?.name || ''} ${this._labelsOf(id).map((l) => this._labels?.find((x) => x.label_id === l)?.name || l).join(' ')}`.toLowerCase().includes(q));
+  },
+  /* devices grouped by area or by label; groups fold away (while searching everything is open) */
+  _groupedList(I, ids, rowFn, { q = '', placed = new Set(), scope = 'dev', closed: startClosed = false } = {}) {
+    const h = this._hs() || {};
     const by = this._groupBy, groups = new Map(), add = (g, id) => { if (!groups.has(g)) groups.set(g, []); groups.get(g).push(id); };
     for (const id of ids) {
       if (by === 'label') { const ls = this._labelsOf(id); if (ls.length) ls.forEach((l) => add(l, id)); else add('', id); }
@@ -6592,28 +6640,96 @@ Object.assign(GfcEditor.prototype, {
     }
     const gname = (g) => (!g ? t(by === 'label' ? 'ed_noLabelGroup' : 'ed_noAreaGroup') : by === 'label' ? this._labels?.find((x) => x.label_id === g)?.name || g : h.areas?.[g]?.name || g);
     const order = [...groups.keys()].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || String(gname(a)).localeCompare(String(gname(b)), LOCALE));
-    const keyOf = (g) => `${by}:${g}`, allClosed = order.length > 0 && order.every((g) => this._collapsed.has(keyOf(g)));
+    // groups that start open remember being closed, groups that start closed remember being opened
+    const set = startClosed ? this._opened : this._collapsed, keyOf = (g) => `${scope}:${by}:${g}`;
+    const isClosed = (g) => !q && (startClosed ? !set.has(keyOf(g)) : set.has(keyOf(g)));
+    const setClosed = (g, v) => { if (v === startClosed) set.delete(keyOf(g)); else set.add(keyOf(g)); };
+    const allClosed = order.length > 0 && order.every(isClosed);
     const bar = mk('div', 'egroupby');
     bar.append(this._segEl([['area', t('ed_byArea')], ['label', t('ed_byLabel')]], by, (v) => { this._groupBy = v; this._panel(); }));
     const fold = mk('button', 'efoldall', esc(t(allClosed ? 'ed_unfoldAll' : 'ed_foldAll')));
-    fold.addEventListener('click', () => { for (const g of order) { if (allClosed) this._collapsed.delete(keyOf(g)); else this._collapsed.add(keyOf(g)); } this._panel(); });
-    bar.append(fold);
+    fold.addEventListener('click', () => { for (const g of order) setClosed(g, !allClosed); this._panel(); });
+    if (!q) bar.append(fold);
     I.append(bar);
     const list = mk('div', 'elist');
     for (const g of order) {
       const gids = groups.get(g).sort((x, y) => (placed.has(x) ? 1 : 0) - (placed.has(y) ? 1 : 0) || this._fname(x).localeCompare(this._fname(y), LOCALE));
-      const closed = !q && this._collapsed.has(keyOf(g)), np = gids.filter((id) => placed.has(id)).length;
+      const closed = isClosed(g), np = gids.filter((id) => placed.has(id)).length;
       const head = mk('button', `egrp fold${closed ? ' closed' : ''}`, `${icon('chevD')}<span>${esc(gname(g))}</span><small>${np ? `${np} / ` : ''}${gids.length}</small>`);
-      head.addEventListener('click', () => { if (this._collapsed.has(keyOf(g))) this._collapsed.delete(keyOf(g)); else this._collapsed.add(keyOf(g)); this._panel(); });
+      head.addEventListener('click', () => { setClosed(g, !closed); this._panel(); });
       list.append(head);
-      if (!closed) for (const id of gids.slice(0, q ? 200 : 60)) list.append(this._entityRow(id, placed.has(id), L));
+      if (!closed) for (const id of gids.slice(0, q ? 200 : 80)) list.append(rowFn(id));
     }
-    if (!ids.length) list.append(this._el(esc(t(q ? 'ed_noMatch' : 'ed_noEntities')), 'eempty'));
     I.append(list);
-    if (L.type === 'light') this._doorPanel(I);
-    if (L.type === 'custom') {
-      I.append(this._el(`<p class="small">${esc(t('ed_customDevHint', L.name))}</p>`));
+  },
+
+  /* "More entities" of a built-in layer: anything added by hand, with a way to add more */
+  _extrasSection(I, L) {
+    const h = this._hs() || {};
+    I.append(this._el(`<h3>${esc(t('ed_extras'))}</h3>`));
+    const list = mk('div', 'elist');
+    list.style.marginTop = '0';
+    for (const id of L.ents) {
+      const st = h.states?.[id], kind = kindOf(id, st), i = this._c.entities.findIndex((e) => e.entity === id && e.at);
+      const ic = kind === 'light' ? guessLampIcon(id, st) : GlassFloorplanCard.prototype._autoIcon(id, st);
+      const area = h.areas?.[this._areaOf(id)]?.name;
+      const row = this._el(`<span class="ei">${icon(ic)}</span><div><b>${esc(this._fname(id))}</b><small>${esc(area ? `${area} · ${id}` : id)}</small></div><button class="eadd del" title="${esc(t('ed_removeFromLayer'))}">${icon('minus')}</button>`, `erow${i >= 0 ? ' placed' : ''}`);
+      row.classList.toggle('on', this._s?.t === 'ent' && this._c.entities[this._s.i]?.entity === id);
+      row.style.cursor = 'pointer';
+      row.querySelector('.eadd').addEventListener('click', (e) => { e.stopPropagation(); this._removeExtra(L, id); });
+      row.addEventListener('click', () => { if (i >= 0) this._select({ t: 'ent', i }); else this._addExtra(L, id); });
+      list.append(row);
     }
+    if (!L.ents.length) list.append(this._el(`<p class="small" style="margin:0 4px">${esc(t('ed_extrasNone'))}</p>`));
+    I.append(list);
+    const b = this._btn(`${icon('plus')}<span>${esc(t('ed_addEntity'))}</span>`, 'wide', () => { this._picker = L.id; this._pq = ''; this._s = null; this._panel(); });
+    b.style.marginTop = '10px';
+    I.append(b);
+    I.append(this._el(`<p class="small">${esc(t('ed_extrasHelp', L.name))}</p>`));
+  },
+  /* every entity of Home Assistant to choose from: search, by area or label */
+  _pickerView(I, L) {
+    const h = this._hs() || {};
+    I.append(this._el(`<h2>${esc(t('ed_addEntityTo', L.name))}</h2><p class="lead">${esc(t('ed_pickLead'))}</p>`));
+    I.append(this._searchEl('_pq', t('ed_searchAll')));
+    const q = (this._pq || '').trim().toLowerCase();
+    const ids = this._matchQ(Object.keys(h.states || {}).filter((id) => LAYER_FILTER.custom(domainOf(id)) && domainOf(id) !== 'vacuum' && !h.entities?.[id]?.hidden), q);
+    const inL = new Set(ids.filter((id) => this._inLayerDef(L, id, kindOf(id, h.states[id]))));
+    this._groupedList(I, ids, (id) => this._pickRow(id, L, inL.has(id)), { q, placed: inL, scope: 'pick', closed: true });
+    if (!ids.length) I.append(this._el(esc(t(q ? 'ed_noMatch' : 'ed_noEntities')), 'eempty'));
+  },
+  _pickRow(id, L, isIn) {
+    const h = this._hs() || {}, st = h.states?.[id], kind = kindOf(id, st), byKind = L.kinds.includes(kind);
+    const ic = kind === 'light' ? guessLampIcon(id, st) : GlassFloorplanCard.prototype._autoIcon(id, st);
+    const row = this._el(`<span class="ei">${icon(ic)}</span><div><b>${esc(this._fname(id))}</b><small>${esc(byKind ? t('ed_inLayerByKind') : id)}</small></div><button class="eadd" title="${esc(t(isIn ? 'ed_removeFromLayer' : 'ed_add'))}">${icon(isIn ? 'check' : 'plus')}</button>`, `erow${isIn ? ' placed' : ''}`);
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => {
+      // a lamp in "Light" is part of it anyway: show or place it
+      if (byKind) { const i = this._c.entities.findIndex((e) => e.entity === id && e.at); if (i >= 0) { this._picker = null; this._select({ t: 'ent', i }); } else this._placeEntity(id); return; }
+      if (isIn) this._removeExtra(L, id); else this._addExtra(L, id);
+    });
+    return row;
+  },
+  _addExtra(L, eid) {
+    const c = this._c, st = this._hs()?.states?.[eid];
+    this._change(() => {
+      let i = c.entities.findIndex((x) => x.entity === eid);
+      if (i < 0) { c.entities.push({ entity: eid }); i = c.entities.length - 1; }
+      if (!c.entities[i].at) c.entities[i].at = this._spotFor(eid);
+      if (kindOf(eid, st) === 'light' && !c.entities[i].icon) c.entities[i].icon = guessLampIcon(eid, st);
+      this._addToLayer(L.id, eid);
+      this._layerSel = L.id;
+      this._s = { t: 'ent', i, quiet: true };
+    });
+    this._toast(t('ed_addedTo', this._fname(eid), L.name));
+  },
+  _removeExtra(L, eid) {
+    this._change(() => {
+      this._removeFromLayer(L.id, eid);
+      // a device that is in no layer any more leaves the plan
+      if (!this._layersFor(eid, kindOf(eid, this._hs()?.states?.[eid])).length) this._c.entities = this._c.entities.filter((e) => e.entity !== eid);
+      this._s = null;
+    });
   },
 
   _labelsOf(id) {
@@ -6781,7 +6897,7 @@ Object.assign(GfcEditor.prototype, {
     const c = this._c;
     I.append(this._el(`<h2>${esc(t('ed_tool_layers'))}</h2><p class="lead">${esc(t('ed_layers_lead'))}</p>`));
     const defs = this._layerDefs();
-    const active = new Set((c.layers?.length ? c.layers : this._model()?.layers.map((L) => L.id) || []).map((l, i) => (typeof l === 'string' ? l : LAYER_TYPES[l.type] && !l.show && !l.entities ? l.type : String(l.id || `layer_${slug(l.name) || i + 1}`))));
+    const active = new Set((c.layers?.length ? c.layers : this._model()?.layers.map((L) => L.id) || []).map((l, i) => this._layerIdOf(l, i)));
     const list = mk('div', '');
     defs.forEach((L) => {
       const on = active.has(L.id);
@@ -6803,7 +6919,7 @@ Object.assign(GfcEditor.prototype, {
       } else if (L.type !== 'vacuum' || c.vacuum) {
         box.querySelector('.elayer').append(this._tglEl(on, (v) => this._change(() => {
           this._materializeLayers();
-          if (v) c.layers.push(L.type); else c.layers = c.layers.filter((l) => (typeof l === 'string' ? l : l.type) !== L.type || (typeof l === 'object' && (l.show || l.entities)));
+          if (v) c.layers.push(L.type); else c.layers = c.layers.filter((l) => builtinType(l) !== L.type);
         })));
       }
       list.append(box);
@@ -6815,7 +6931,7 @@ Object.assign(GfcEditor.prototype, {
     I.append(this._el(`<p class="small">${esc(t('ed_layers_help'))}</p>`));
   },
   _layerSummary(L) {
-    if (L.type !== 'custom') return t(`ed_layerDesc_${L.type}`);
+    if (L.type !== 'custom') return `${t(`ed_layerDesc_${L.type}`)}${L.ents.length ? ` · + ${t('nDevices', L.ents.length)}` : ''}`;
     const parts = L.kinds.map((k) => t(SHOW_LABEL[k]));
     if (L.ents.length) parts.push(t('nDevices', L.ents.length));
     return parts.join(' · ') || t('ed_layerEmpty');
@@ -6823,8 +6939,8 @@ Object.assign(GfcEditor.prototype, {
   _moveLayer(id, dir) {
     this._change(() => {
       this._materializeLayers();
-      const L = this._c.layers, idOf = (l, i) => (typeof l === 'string' ? l : LAYER_TYPES[l.type] && !l.show && !l.entities ? l.type : String(l.id || `layer_${slug(l.name) || i + 1}`));
-      const i = L.findIndex((l, j) => idOf(l, j) === id), j = i + dir;
+      const L = this._c.layers;
+      const i = L.findIndex((l, j) => this._layerIdOf(l, j) === id), j = i + dir;
       if (i < 0 || j < 0 || j >= L.length) return;
       [L[i], L[j]] = [L[j], L[i]];
     });
@@ -6877,6 +6993,7 @@ Object.assign(GfcEditor.prototype, {
     const tg = (label, on, fn) => I.append(this._fieldEl(label, this._tglEl(on, (v) => this._change(() => fn(v))), true));
     tg(t('ed_tile_weather'), c.weather !== false, (v) => { if (v) delete c.weather; else c.weather = false; });
     tg(t('ed_tile_indoor'), c.indoor !== false, (v) => { if (v) delete c.indoor; else c.indoor = false; });
+    this._doorPanel(I);
     const b = this._btn(`${icon('wand')}<span>${esc(t('ed_autoArrange'))}</span>`, 'wide', () => this._change(() => { delete c.widgets; }));
     b.style.marginTop = '16px';
     I.append(b);
@@ -7174,7 +7291,7 @@ Object.assign(STR.en, {
   ed_inLayers: 'In own layers', ed_viaKind: 'Shown through the layer’s categories', ed_removeFromPlan: 'Remove from plan', ed_outside: 'This marker is outside of all rooms.',
   ed_layerName: 'Layer', ed_layers_lead: 'The symbols next to the plan. Built-in layers show one category – own layers combine categories and any devices.',
   ed_up: 'Up', ed_down: 'Down', ed_edit: 'Edit', ed_layers_help: 'Order = order of the symbols. A layer only appears when it has something to show.',
-  ed_layerDesc_light: 'Lights, media, front door', ed_layerDesc_climate: 'Thermostats, temperatures', ed_layerDesc_cover: 'Shutters, blinds', ed_layerDesc_vacuum: 'Roborock vacuum',
+  ed_layerDesc_light: 'Lights, front door', ed_layerDesc_climate: 'Thermostats, temperatures', ed_layerDesc_cover: 'Shutters, blinds', ed_layerDesc_vacuum: 'Roborock vacuum',
   ed_layerEmpty: 'Nothing chosen yet', ed_layerShows: 'Shows all', ed_layerShowsHelp: 'Pick whole categories – plus any single devices below.',
   ed_layerDevices: (n) => `More devices (${n})`, ed_addDevices: 'Add devices', ed_kind_media: 'Media',
   ed_tiles_lead: 'Weather, inside climate, front door and the layer card arrange themselves in free corners of your plan. Drag them to put them elsewhere.',
@@ -7187,6 +7304,9 @@ Object.assign(STR.en, {
   furn_wardrobe: 'Wardrobe', furn_shelf: 'Shelf', furn_sideboard: 'Sideboard', furn_tv: 'TV', furn_counter: 'Kitchen', furn_fridge: 'Fridge', furn_bath: 'Bathtub', furn_shower: 'Shower',
   furn_toilet: 'Toilet', furn_sink: 'Sink', furn_washer: 'Washer', furn_plant: 'Plant', furn_rug: 'Rug', furn_stairs: 'Stairs', furn_block: 'Block',
   ed_discardTitle: 'Discard changes?', ed_discardText: 'What you changed in the floor plan editor is not kept.', ed_discard: 'Discard', ed_keepEditing: 'Keep editing',
+  ed_extras: 'More entities', ed_extrasNone: 'None yet – add any device that should also appear here.', ed_addEntity: 'Add an entity', ed_extrasHelp: (n) => `Any entity can join “${n}”, e.g. a TV, a switch or a sensor. It is placed in its room.`,
+  ed_addEntityTo: (n) => `Add to “${n}”`, ed_pickLead: 'Tap an entity to add it to the layer – it lands in its room on the plan. Tap again to remove it.', ed_searchAll: 'Search entities, areas, labels …',
+  ed_inLayerByKind: 'part of this layer anyway', ed_removeFromLayer: 'Remove from this layer', ed_addedTo: (e, l) => `“${e}” added to ${l}`,
   ed_reset: 'Start over', ed_resetTitle: 'Start over?', ed_resetText: 'Rooms, furniture, windows, devices, layers and the template are removed. You can still undo it.', ed_resetDone: 'Everything removed – start with a template or draw your rooms',
   ed_lightPreview: 'Show the lights', ed_light_on: 'On', ed_light_off: 'Off', ed_light_real: 'Real',
   ed_hint_layers: 'The layer bar of your card – tap a layer on the right to see it', ed_tiles_phone: 'On a phone the tiles arrange themselves – switch to Laptop to move them',
@@ -7236,7 +7356,7 @@ Object.assign(STR.de, {
   ed_inLayers: 'In eigenen Ebenen', ed_viaKind: 'Über die Kategorien der Ebene enthalten', ed_removeFromPlan: 'Vom Plan entfernen', ed_outside: 'Dieser Knopf liegt außerhalb aller Räume.',
   ed_layerName: 'Ebene', ed_layers_lead: 'Die Symbole neben dem Plan. Eingebaute Ebenen zeigen eine Kategorie – eigene Ebenen kombinieren Kategorien und beliebige Geräte.',
   ed_up: 'Nach oben', ed_down: 'Nach unten', ed_edit: 'Bearbeiten', ed_layers_help: 'Reihenfolge = Reihenfolge der Symbole. Eine Ebene erscheint nur, wenn sie etwas zu zeigen hat.',
-  ed_layerDesc_light: 'Lichter, Medien, Haustür', ed_layerDesc_climate: 'Thermostate, Temperaturen', ed_layerDesc_cover: 'Rollläden, Jalousien', ed_layerDesc_vacuum: 'Roborock-Saugroboter',
+  ed_layerDesc_light: 'Lichter, Haustür', ed_layerDesc_climate: 'Thermostate, Temperaturen', ed_layerDesc_cover: 'Rollläden, Jalousien', ed_layerDesc_vacuum: 'Roborock-Saugroboter',
   ed_layerEmpty: 'Noch nichts gewählt', ed_layerShows: 'Zeigt alle', ed_layerShowsHelp: 'Ganze Kategorien wählen – plus einzelne Geräte darunter.',
   ed_layerDevices: (n) => `Weitere Geräte (${n})`, ed_addDevices: 'Geräte hinzufügen', ed_kind_media: 'Medien',
   ed_tiles_lead: 'Wetter, Innenklima, Haustür und die Ebenen-Karte ordnen sich in freien Ecken deines Plans an. Zum Umsetzen einfach ziehen.',
@@ -7249,6 +7369,9 @@ Object.assign(STR.de, {
   furn_wardrobe: 'Schrank', furn_shelf: 'Regal', furn_sideboard: 'Kommode', furn_tv: 'Fernseher', furn_counter: 'Küche', furn_fridge: 'Kühlschrank', furn_bath: 'Badewanne', furn_shower: 'Dusche',
   furn_toilet: 'WC', furn_sink: 'Waschbecken', furn_washer: 'Waschmaschine', furn_plant: 'Pflanze', furn_rug: 'Teppich', furn_stairs: 'Treppe', furn_block: 'Block',
   ed_discardTitle: 'Änderungen verwerfen?', ed_discardText: 'Was du im Grundriss-Editor geändert hast, wird nicht übernommen.', ed_discard: 'Verwerfen', ed_keepEditing: 'Weiter bearbeiten',
+  ed_extras: 'Weitere Entitäten', ed_extrasNone: 'Noch keine – füge Geräte hinzu, die hier zusätzlich erscheinen sollen.', ed_addEntity: 'Entität hinzufügen', ed_extrasHelp: (n) => `Jede Entität kann zu „${n}“ dazukommen, z. B. ein Fernseher, ein Schalter oder ein Sensor. Sie landet in ihrem Raum.`,
+  ed_addEntityTo: (n) => `Zu „${n}“ hinzufügen`, ed_pickLead: 'Entität antippen, um sie der Ebene hinzuzufügen – sie landet in ihrem Raum im Plan. Nochmal antippen entfernt sie.', ed_searchAll: 'Entitäten, Bereiche, Labels suchen …',
+  ed_inLayerByKind: 'gehört ohnehin zur Ebene', ed_removeFromLayer: 'Aus dieser Ebene entfernen', ed_addedTo: (e, l) => `„${e}“ zu ${l} hinzugefügt`,
   ed_reset: 'Neu beginnen', ed_resetTitle: 'Neu beginnen?', ed_resetText: 'Räume, Möbel, Fenster, Geräte, Ebenen und die Vorlage werden entfernt. Du kannst es noch rückgängig machen.', ed_resetDone: 'Alles entfernt – beginne mit einer Vorlage oder zeichne deine Räume',
   ed_lightPreview: 'Licht anzeigen', ed_light_on: 'An', ed_light_off: 'Aus', ed_light_real: 'Echt',
   ed_hint_layers: 'Die Ebenen-Leiste deiner Karte – rechts eine Ebene antippen, um sie zu sehen', ed_tiles_phone: 'Am Handy ordnen sich die Kacheln selbst an – zum Verschieben auf Laptop wechseln',

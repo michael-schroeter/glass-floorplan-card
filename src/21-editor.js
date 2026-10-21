@@ -10,7 +10,7 @@ const ED_TOOLS = [
 const OPEN_KINDS = { window: { key: 'windows', len: 100 }, door: { key: 'doors', len: 80 }, entrance: { key: 'entrance', len: 90 } };
 const NO_DEVICE_DOMAINS = ['sun', 'zone', 'person', 'update', 'tts', 'stt', 'conversation', 'todo', 'weather', 'tag', 'device_tracker', 'image', 'notify', 'ai_task', 'wake_word', 'assist_satellite', 'calendar', 'event', 'persistent_notification', 'group', 'counter', 'timer', 'schedule', 'input_text', 'input_datetime', 'date', 'time', 'datetime', 'text'];
 const LAYER_FILTER = {
-  light: (d) => d === 'light' || d === 'media_player',
+  light: (d) => d === 'light',
   climate: (d, dc) => ['climate', 'water_heater', 'humidifier'].includes(d) || (d === 'sensor' && ['temperature', 'humidity'].includes(dc)),
   cover: (d) => d === 'cover',
   vacuum: (d) => d === 'vacuum',
@@ -38,6 +38,7 @@ class GfcEditor extends HTMLElement {
     this._light = 'on';
     this._groupBy = 'area';
     this._collapsed = new Set();
+    this._opened = new Set();
     this._scrollMem = {};
   }
 
@@ -132,7 +133,7 @@ class GfcEditor extends HTMLElement {
     this._dlg.addEventListener('cancel', (e) => {
       e.preventDefault();
       if (!this.$('.econfirm').hidden) this._confirmClose();
-      else if (this._s || this._editLayer) this._back();
+      else if (this._s || this._editLayer || this._picker) this._back();
       else this._tryClose();
     });
     $('.undo').addEventListener('click', () => this._doUndo());
@@ -205,11 +206,12 @@ class GfcEditor extends HTMLElement {
   }
 
   _setTool(tool) {
-    if (this._tool === tool && !this._s && !this._editLayer) return;
+    if (this._tool === tool && !this._s && !this._editLayer && !this._picker) return;
     this._tool = tool;
     this._s = null;
     this._measure = null;
     this._editLayer = null;
+    this._picker = null;
     this._draw();
     this._panel();
   }
@@ -1027,12 +1029,15 @@ class GfcEditor extends HTMLElement {
   }
 
   /* ---------------------------------------------------------------- devices */
+  /* placed devices with their kind (for the extra devices of built-in layers) */
+  _entKinds() { const h = this._hs() || {}; return this._c.entities.map((e) => ({ entity: e.entity, kind: kindOf(e.entity, h.states?.[e.entity]) })); }
+  _layerIdOf(l, i) { return builtinType(l) || String(l.id || `layer_${slug(l.name) || i + 1}`); }
   _layerDefs() {
-    const list = this._c.layers?.length ? this._c.layers : (this._model()?.layers || []).map((L) => L.id);
+    const list = this._c.layers?.length ? this._c.layers : (this._model()?.layers || []).map((L) => L.id), ek = this._entKinds();
     const out = list.map((l, i) => {
-      if (typeof l === 'string') return LAYER_TYPES[l] ? { id: l, type: l, name: t(`layer_${l}`), icon: LAYER_TYPES[l].icon, kinds: LAYER_TYPES[l].kinds, ents: [] } : null;
-      if (l && LAYER_TYPES[l.type] && !l.show && !l.entities) return { id: l.type, type: l.type, name: l.name || t(`layer_${l.type}`), icon: l.icon || LAYER_TYPES[l.type].icon, kinds: LAYER_TYPES[l.type].kinds, ents: [] };
-      return l ? { id: String(l.id || `layer_${slug(l.name) || i + 1}`), type: 'custom', name: l.name || t('layer'), icon: l.icon || 'layers', kinds: [].concat(l.show || []), ents: [].concat(l.entities || []), raw: l } : null;
+      const type = builtinType(l);
+      if (type) return { id: type, type, name: l.name || t(`layer_${type}`), icon: l.icon || LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: layerExtras(l, ek) };
+      return l && typeof l === 'object' ? { id: this._layerIdOf(l, i), type: 'custom', name: l.name || t('layer'), icon: l.icon || 'layers', kinds: [].concat(l.show || []), ents: [].concat(l.entities || []), raw: l } : null;
     }).filter(Boolean);
     // built-in layers are always offered for placing devices
     for (const type of ['light', 'climate', 'cover', 'vacuum']) if (!out.some((L) => L.id === type)) out.push({ id: type, type, name: t(`layer_${type}`), icon: LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: [], hidden: true });
@@ -1075,19 +1080,34 @@ class GfcEditor extends HTMLElement {
         c.entities.push(e);
         this._s = { t: 'ent', i: c.entities.length - 1, quiet: true };
       }
-      // devices added in an own layer belong to it
-      if (L?.type === 'custom' && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
       this._ensureLayer(L);
+      // a device of another kind belongs to the layer it was added in
+      if (L && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
     });
   }
   /* built-in layers appear as soon as something is placed for them */
   _ensureLayer(L) {
     if (!L || L.type === 'custom' || !this._c.layers?.length) return;
-    if (!this._c.layers.some((l) => (typeof l === 'string' ? l : l.type) === L.type && !l.show)) this._c.layers.push(L.type);
+    if (!this._c.layers.some((l) => builtinType(l) === L.type)) this._c.layers.push(L.type);
+  }
+  /* the layer's entry in the configuration – a built-in layer written as text becomes an object that holds its extras */
+  _layerEntry(id) {
+    const L = this._layerDef(id);
+    if (!L) return null;
+    if (!this._c.layers?.length) this._c.layers = (this._model()?.layers || []).map((x) => x.id);
+    this._ensureLayer(L);
+    const list = this._c.layers, i = list.findIndex((l, j) => this._layerIdOf(l, j) === id);
+    if (i < 0) return null;
+    if (builtinType(list[i]) && !Array.isArray(list[i].entities)) list[i] = { ...(typeof list[i] === 'object' ? list[i] : {}), type: builtinType(list[i]), entities: layerExtras(list[i], this._entKinds()) };
+    return list[i];
   }
   _addToLayer(id, eid) {
-    const l = (this._c.layers || []).find((x) => typeof x === 'object' && String(x.id || `layer_${slug(x.name)}`) === id);
+    const l = this._layerEntry(id);
     if (l && !(l.entities || []).includes(eid)) l.entities = [...(l.entities || []), eid];
+  }
+  _removeFromLayer(id, eid) {
+    const l = this._layerEntry(id);
+    if (l) l.entities = (l.entities || []).filter((x) => x !== eid);
   }
   _autoPlace(eids) {
     if (!eids.length) return;
@@ -1100,7 +1120,7 @@ class GfcEditor extends HTMLElement {
         const i = this._c.entities.findIndex((x) => x.entity === eid);
         if (i >= 0) this._c.entities[i].at = e.at; else this._c.entities.push(e);
         const L = this._layerDef(this._layerSel);
-        if (L?.type === 'custom' && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
+        if (L && !L.kinds.includes(kind)) this._addToLayer(L.id, eid);
       }
     });
     this._toast(t('ed_placed', eids.length));
