@@ -4935,8 +4935,15 @@ const LAYER_FILTER = {
 const ED_PHONE = { w: 390, h: 788 };
 /* tools that show the template picture (and keep it inside the visible plan) */
 const ED_UL_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
+/* a template picture stays in this browser only – one entry per uploaded picture, the configuration names it */
+const UL_STORE = `${CARD_TAG}:template:`;
+/* how the editor was left (tool, size check, an import waiting …) – per floor plan, found again by its contents */
+const ED_STATE = `${CARD_TAG}:editor`;
 const r0 = (v) => Math.round(v);
 const deep = (o) => JSON.parse(JSON.stringify(o ?? null));
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
+const lsDel = (k) => { try { localStorage.removeItem(k); } catch (e) { /* private mode */ } };
 
 class GfcEditor extends HTMLElement {
   constructor() {
@@ -4965,10 +4972,17 @@ class GfcEditor extends HTMLElement {
     this._vp = viewport || null;
     this._c = normEditorConfig(deep(config) || {});
     this._orig = JSON.stringify(this._c);
+    this._origId = planId(cleanConfig(this._c));
+    this._ulOrig = this._c.underlay?.browser_image || null;
+    this._ulMem = new Map();
+    this._ulNew = new Set();
+    // pictures of version 0.1.0 were shared by all cards (and showed up under plans nobody had traced from them)
+    try { for (const k of Object.keys(localStorage)) if (k.startsWith(`${CARD_TAG}:underlay:`)) localStorage.removeItem(k); } catch (e) { /* private mode */ }
     this._useLang();
-    // nothing drawn yet: start with the template, empty
+    // nothing drawn yet: start with the template, empty – otherwise the editor is as it was left
     this._tool = this._c.rooms.length ? 'rooms' : 'sketch';
     this._mode = window.innerWidth < 700 ? 'phone' : 'laptop';
+    this._recall();
     this._loadUnderlay();
     this._loadLabels();
     this._shell();
@@ -4995,7 +5009,11 @@ class GfcEditor extends HTMLElement {
   }
 
   _close(save) {
-    if (save) this._onSave?.(cleanConfig(this._c));
+    const out = save ? cleanConfig(this._c) : null;
+    if (save) this._onSave?.(out);
+    // next time the editor opens as it was left – unless the changes were thrown away
+    if (save || !this._dirty()) this._remember(save ? planId(out) : this._origId);
+    this._tidyUnderlays(save ? out : JSON.parse(this._orig), save);
     this._dlg?.close();
     window.removeEventListener('keydown', this._onKey, true);
     clearInterval(this._liveT);
@@ -5004,6 +5022,46 @@ class GfcEditor extends HTMLElement {
   }
 
   _dirty() { return JSON.stringify(this._c) !== this._orig; }
+
+  /* what the editor looked like when it was closed, stored under the plan it closed with (a plan changed somewhere
+   * else, e.g. in YAML, simply starts fresh); the last few plans are kept */
+  _remember(id) {
+    if (this._view?.startsWith('t:') && this._ins) this._scrollMem[this._view] = this._ins.scrollTop;
+    const d = this._pending;
+    const st = { at: Date.now(), tool: this._tool, mode: this._mode, layer: this._layerSel, light: this._light, by: this._groupBy, scroll: this._scrollMem,
+      collapsed: [...this._collapsed], opened: [...this._opened] };
+    // the selection only if the panel shows it (the size check just highlights a room)
+    if (this._s && this._selObj() && (this._s.quiet || this._view?.startsWith('d:'))) { st.s = { ...this._s }; delete st.s.fresh; }
+    if (this._editLayer) st.editLayer = this._editLayer;
+    if (this._picker) st.picker = this._picker;
+    if (this._scaleCheck) st.scaleCheck = true;
+    if (d) st.pending = d.isCard ? d : { ...d, full: null };
+    let all = {};
+    try { all = JSON.parse(lsGet(ED_STATE) || '{}') || {}; } catch (e) { /* broken entry: start again */ }
+    all[id] = st;
+    const keep = Object.fromEntries(Object.entries(all).sort((a, b) => (b[1]?.at || 0) - (a[1]?.at || 0)).slice(0, 12));
+    if (!lsSet(ED_STATE, JSON.stringify(keep)) && st.pending) { delete st.pending; lsSet(ED_STATE, JSON.stringify(keep)); }
+  }
+  _recall() {
+    let st = null;
+    try { st = (JSON.parse(lsGet(ED_STATE) || '{}') || {})[this._origId] || null; } catch (e) { /* nothing stored */ }
+    if (!st) return;
+    if (ED_TOOLS.some((x) => x?.[0] === st.tool)) this._tool = st.tool;
+    if (st.mode === 'phone' || (st.mode === 'laptop' && this._mode === 'laptop')) this._mode = st.mode;
+    if (['on', 'off', 'real'].includes(st.light)) this._light = st.light;
+    if (['area', 'label'].includes(st.by)) this._groupBy = st.by;
+    if (st.scroll && typeof st.scroll === 'object') this._scrollMem = st.scroll;
+    if (Array.isArray(st.collapsed)) this._collapsed = new Set(st.collapsed);
+    if (Array.isArray(st.opened)) this._opened = new Set(st.opened);
+    const layer = (id) => (id && this._layerDef(id) ? id : null);
+    this._layerSel = layer(st.layer) || this._layerSel;
+    this._editLayer = this._tool === 'layers' ? layer(st.editLayer) : null;
+    this._picker = this._tool === 'devices' ? layer(st.picker) : null;
+    this._s = st.s && typeof st.s === 'object' ? st.s : null;
+    if (this._s && !this._selObj()) this._s = null;
+    this._scaleCheck = !!st.scaleCheck && this._c.rooms.length > 0;
+    this._pending = Array.isArray(st.pending?.rooms) && st.pending.rooms.length ? st.pending : null;
+  }
 
   /* ---------------------------------------------------------------- shell */
   _shell() {
@@ -5343,6 +5401,8 @@ class GfcEditor extends HTMLElement {
     if (!this._world) return;
     this._syncLive();
     if (!this._f) this._fit(true);
+    // no canvas size yet (or the editor is closed already)
+    if (!this._f) return;
     this._syncTop();
     const c = this._c, F = this._f, z = this._z(), scr = this._screen(), A = this._area, H = (!A && this._map?.H) || scr.h;
     // the live card: on its screen, or – while drawing – on an area without edge
@@ -5451,6 +5511,7 @@ class GfcEditor extends HTMLElement {
         html += hd([s[0], s[1]], segH(s) ? 'w' : 'n', cx, cy, ' data-end="0"') + hd([s[2], s[3]], segH(s) ? 'e' : 's', cx, cy, ' data-end="1"');
       }
     } else if (so && sel.quiet && sel.t === 'furn') html += `<i class="esel" style="${this._boxPx(normFurn(so).r)}"></i>`;
+    else if (so && sel.quiet && sel.t === 'room') html += `<i class="esel" style="${this._boxPx(so.rect)};opacity:.55"></i>`;
     if (sel?.t === 'room' && so && !sel.fresh) {
       const q = this._rectS(so.rect);
       html += `<div class="edim" style="left:${(q[0] + q[2]) / 2}px;top:${q[1]}px">${fmt((so.rect[2] - so.rect[0]) / 100, 2)} × ${fmt((so.rect[3] - so.rect[1]) / 100, 2)} m</div>`;
@@ -5893,7 +5954,7 @@ class GfcEditor extends HTMLElement {
       } else if (s.t === 'door') delete c.door.at;
       else if (s.t === 'dock') delete c.vacuum.dock;
       else if (s.t === 'wid' && c.widgets) delete c.widgets[s.k];
-      else if (s.t === 'ul') { delete c.underlay; this._setUnderlay(null); }
+      else if (s.t === 'ul') { delete c.underlay; this._ulSrc = null; }
       this._s = null;
     });
   }
@@ -6099,17 +6160,28 @@ class GfcEditor extends HTMLElement {
     el.addEventListener('pointercancel', (e) => end(e, true));
   }
 
-  /* ---------------------------------------------------------------- underlay (photo / sketch of the floor plan) */
-  _ulKey() { return `${CARD_TAG}:underlay:${this._c.id || 'default'}`; }
+  /* ---------------------------------------------------------------- underlay (photo / sketch of the floor plan)
+   * Only a picture chosen here is shown. It stays in this browser; the configuration names it (underlay.browser_image)
+   * or links one (underlay.image). An imported plan only brings where its picture lies (rect), so the same picture
+   * lines up when it is chosen later. */
   _loadUnderlay() {
-    if (!this._c.underlay?.rect) { this._ulSrc = null; return; }
-    let src = this._c.underlay?.image || null;
-    if (!src) try { src = localStorage.getItem(this._ulKey()); } catch (e) { /* private mode */ }
-    this._ulSrc = src || null;
+    const u = this._c.underlay, key = u?.browser_image;
+    this._ulSrc = (u?.rect && (u.image || (key && (this._ulMem.get(key) || lsGet(UL_STORE + key))))) || null;
   }
-  _setUnderlay(src) {
-    this._ulSrc = src;
-    try { if (src && src.startsWith('data:')) localStorage.setItem(this._ulKey(), src); else localStorage.removeItem(this._ulKey()); } catch (e) { this._toast(t('ed_ulNotStored')); }
+  /* a new picture under its own key; only the newest one of this visit takes space (undo keeps the others in memory) */
+  _storeUnderlay(src) {
+    const key = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    for (const k of this._ulNew) lsDel(UL_STORE + k);
+    this._ulMem.set(key, src);
+    this._ulNew.add(key);
+    return { key, kept: lsSet(UL_STORE + key, src) };
+  }
+  /* on closing: the picture of the plan that stays is kept, pictures no plan names any more are removed */
+  _tidyUnderlays(cfg, saved) {
+    const key = cfg?.underlay?.browser_image || null;
+    if (key && this._ulMem.has(key) && !lsGet(UL_STORE + key)) lsSet(UL_STORE + key, this._ulMem.get(key));
+    for (const k of this._ulNew) if (k !== key) lsDel(UL_STORE + k);
+    if (saved && this._ulOrig && this._ulOrig !== key) lsDel(UL_STORE + this._ulOrig);
   }
   _readImage(file) {
     if (!file || !file.type.startsWith('image/')) return;
@@ -6134,12 +6206,12 @@ class GfcEditor extends HTMLElement {
         // an imported plan already knows where its picture lies (image_rect): keep that if the proportions fit
         const old = !this._ulSrc && this._c.underlay?.rect, ar = img.height / img.width;
         const keep = old && Math.abs((old[3] - old[1]) / (old[2] - old[0]) - ar) < ar * 0.03;
-        this._change(() => { this._c.underlay = { rect: keep ? old : [B ? B[0] : 0, B ? B[1] : 0, (B ? B[0] : 0) + w, (B ? B[1] : 0) + h].map(r0), opacity: bright ? 0.5 : 0.6, ...(bright ? { invert: true } : {}) }; });
-        this._setUnderlay(url);
+        const st = this._storeUnderlay(url);
+        this._change(() => { this._c.underlay = { rect: keep ? old : [B ? B[0] : 0, B ? B[1] : 0, (B ? B[0] : 0) + w, (B ? B[1] : 0) + h].map(r0), opacity: bright ? 0.5 : 0.6, ...(bright ? { invert: true } : {}), browser_image: st.key }; this._loadUnderlay(); });
         this._fit();
         this._draw();
         this._panel();
-        this._toast(t(keep ? 'ed_ulAligned' : 'ed_ulLoaded'));
+        this._toast(t(!st.kept ? 'ed_ulNotStored' : keep ? 'ed_ulAligned' : 'ed_ulLoaded'));
       };
       img.src = fr.result;
     };
@@ -6193,6 +6265,19 @@ function cleanConfig(c0) {
   for (const k of order) if (c[k] !== undefined) out[k] = c[k];
   for (const k of Object.keys(c)) if (!(k in out)) out[k] = c[k];
   return out;
+}
+
+/* a short fingerprint of a configuration: the same plan gives the same id, whatever the key order
+ * (keys Home Assistant adds for the dashboard grid do not count) */
+function planId(c) {
+  const skip = ['grid_options', 'layout_options', 'view_layout', 'visibility'];
+  const canon = (v, top) => (Array.isArray(v) ? `[${v.map((x) => canon(x)).join(',')}]`
+    : v && typeof v === 'object' ? `{${Object.keys(v).filter((k) => v[k] !== undefined && !(top && skip.includes(k))).sort().map((k) => `${JSON.stringify(k)}:${canon(v[k])}`).join(',')}}`
+      : JSON.stringify(v ?? null));
+  const s = canon(c, true);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return `${(h >>> 0).toString(36)}${s.length.toString(36)}`;
 }
 
 function shiftFurn(f, dx, dy) {
@@ -6378,7 +6463,7 @@ Object.assign(GfcEditor.prototype, {
       const row = mk('div', 'ebtns');
       row.append(
         this._btn(`${icon('fit')}<span>${esc(t(m ? 'ed_measure_stop' : 'ed_measure'))}</span>`, m ? 'blue' : '', () => { this._measure = m ? null : {}; this._s = null; this._draw(); this._panel(); }),
-        this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._setUnderlay(null); }), 'none'),
+        this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._ulSrc = null; }), 'none'),
       );
       I.append(row);
       I.append(this._el(`<p class="small">${esc(t('ed_ulNote'))}</p>`));
@@ -7675,9 +7760,15 @@ Object.assign(GfcEditor.prototype, {
           const i = c.entities.findIndex((x) => x.entity === e.entity);
           if (i >= 0) Object.assign(c.entities[i], e); else c.entities.push(e);
         }
-        if (d.imageRect) c.underlay = { ...(c.underlay || { opacity: 0.6 }), rect: d.imageRect };
+        // where the plan's picture lies – a picture is only shown once it is chosen here (a template already shown
+        // moves there if it has the same proportions, so it was most likely the same picture)
+        const U = c.underlay?.rect, ar = (R) => (R[3] - R[1]) / (R[2] - R[0]);
+        if (d.imageRect && (!this._ulSrc || Math.abs(ar(U) - ar(d.imageRect)) < ar(d.imageRect) * 0.03)) {
+          c.underlay = this._ulSrc ? { ...c.underlay, rect: d.imageRect } : { opacity: 0.6, rect: d.imageRect };
+        }
         delete c.widgets;
       }
+      this._loadUnderlay();
       this._tool = d.estimated ? 'sketch' : 'rooms';
     });
     this._scaleCheck = d.estimated && !d.isCard;
@@ -7748,7 +7839,7 @@ Object.assign(GfcEditor.prototype, {
         const inp = mk('input', 'einp num');
         inp.type = 'number'; inp.step = '0.01';
         const cur = () => { const r = rooms[pick].rect; return ((axis === 'w' ? r[2] - r[0] : r[3] - r[1]) / 100); };
-        const upd = () => { inp.placeholder = fmt(cur(), 2); this._s = { t: 'room', i: pick, fresh: true }; this._draw(); };
+        const upd = () => { inp.placeholder = fmt(cur(), 2); this._s = { t: 'room', i: pick, fresh: true, quiet: true }; this._draw(); };
         sel.addEventListener('change', () => { pick = +sel.value; upd(); });
         const apply = () => { const v = parseFloat(String(inp.value).replace(',', '.')); if (v > 0.3) { this._scaleCheck = false; this._s = null; this._rescale(v / cur()); this._toast(t('ed_measured')); this._panel(); } };
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });

@@ -148,7 +148,7 @@ Object.assign(GfcEditor.prototype, {
       const row = mk('div', 'ebtns');
       row.append(
         this._btn(`${icon('fit')}<span>${esc(t(m ? 'ed_measure_stop' : 'ed_measure'))}</span>`, m ? 'blue' : '', () => { this._measure = m ? null : {}; this._s = null; this._draw(); this._panel(); }),
-        this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._setUnderlay(null); }), 'none'),
+        this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._ulSrc = null; }), 'none'),
       );
       I.append(row);
       I.append(this._el(`<p class="small">${esc(t('ed_ulNote'))}</p>`));

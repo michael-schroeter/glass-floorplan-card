@@ -88,9 +88,15 @@ Object.assign(GfcEditor.prototype, {
           const i = c.entities.findIndex((x) => x.entity === e.entity);
           if (i >= 0) Object.assign(c.entities[i], e); else c.entities.push(e);
         }
-        if (d.imageRect) c.underlay = { ...(c.underlay || { opacity: 0.6 }), rect: d.imageRect };
+        // where the plan's picture lies – a picture is only shown once it is chosen here (a template already shown
+        // moves there if it has the same proportions, so it was most likely the same picture)
+        const U = c.underlay?.rect, ar = (R) => (R[3] - R[1]) / (R[2] - R[0]);
+        if (d.imageRect && (!this._ulSrc || Math.abs(ar(U) - ar(d.imageRect)) < ar(d.imageRect) * 0.03)) {
+          c.underlay = this._ulSrc ? { ...c.underlay, rect: d.imageRect } : { opacity: 0.6, rect: d.imageRect };
+        }
         delete c.widgets;
       }
+      this._loadUnderlay();
       this._tool = d.estimated ? 'sketch' : 'rooms';
     });
     this._scaleCheck = d.estimated && !d.isCard;
@@ -161,7 +167,7 @@ Object.assign(GfcEditor.prototype, {
         const inp = mk('input', 'einp num');
         inp.type = 'number'; inp.step = '0.01';
         const cur = () => { const r = rooms[pick].rect; return ((axis === 'w' ? r[2] - r[0] : r[3] - r[1]) / 100); };
-        const upd = () => { inp.placeholder = fmt(cur(), 2); this._s = { t: 'room', i: pick, fresh: true }; this._draw(); };
+        const upd = () => { inp.placeholder = fmt(cur(), 2); this._s = { t: 'room', i: pick, fresh: true, quiet: true }; this._draw(); };
         sel.addEventListener('change', () => { pick = +sel.value; upd(); });
         const apply = () => { const v = parseFloat(String(inp.value).replace(',', '.')); if (v > 0.3) { this._scaleCheck = false; this._s = null; this._rescale(v / cur()); this._toast(t('ed_measured')); this._panel(); } };
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });

@@ -8,7 +8,7 @@ Everything can be set in the floor plan editor. This page walks through it and i
 
 1. Create a dashboard view of type **Panel** (best) or **Sections**, then add the card *Glass Floorplan Card*. It starts empty.
 2. In the card editor, click **Open floor plan editor**. It shows your card live, at the size of your screen (switch between *Laptop* and *Phone* at the top). Tapping a lamp there opens its settings instead of switching it.
-3. **Template**: load a picture of your floor plan → **Measure** (click both ends of a wall, enter its length) → **Find rooms automatically**. You can also draw rooms by dragging rectangles, import a file from the [Claude skill](claude-skill.md), or start with one room per Home Assistant area. **Start over** (bottom left) empties everything.
+3. **Template**: load a picture of your floor plan → **Measure** (click both ends of a wall, enter its length) → **Find rooms automatically**. You can also draw rooms by dragging rectangles, import a file from the [Claude skill](claude-skill.md), or start with one room per Home Assistant area. **Start over** (bottom left) empties everything. The editor opens again the way you left it. A template picture only shows once you choose it, and it stays in this browser.
 4. **Rooms**: drag your Home Assistant areas onto the rooms, or use *Link by name*. Each room gets the area's name and its devices. The area is also used by the vacuum.
 5. **Windows & doors**, **Furniture**: optional, purely for the looks.
 6. **Devices**: choose a layer and drag devices onto the plan, or use *Place automatically*. Under *More entities* any other entity can join a built-in layer (search, by area or label). The front door opener and doorbell are set under **Tiles**.
