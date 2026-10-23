@@ -4,7 +4,7 @@
  "scale": "measured",
  "rooms": [
   {
-   "name": "Wohnen",
+   "name": "Living",
    "rect": [0, 0, 555, 425],
    "furniture": [
     [35, 255, 255, 345, "sofa"],
@@ -12,22 +12,22 @@
    ]
   },
   {
-   "name": "Schlafen",
+   "name": "Bedroom",
    "rect": [555, 0, 990, 425],
    "furniture": [
     [675, 35, 855, 235, "bed"]
    ]
   },
   {
-   "name": "Küche",
+   "name": "Kitchen",
    "rect": [0, 425, 375, 690]
   },
   {
-   "name": "Bad",
+   "name": "Bath",
    "rect": [375, 425, 695, 690]
   },
   {
-   "name": "Flur",
+   "name": "Hall",
    "rect": [695, 425, 990, 690]
   }
  ],

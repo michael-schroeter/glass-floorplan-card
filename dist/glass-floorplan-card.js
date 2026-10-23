@@ -1594,7 +1594,7 @@ class GlassFloorplanCard extends HTMLElement {
 
   _useLang() {
     const h = this._hass, c = this._config.language;
-    const l = c && c !== 'auto' ? c : h?.locale?.language || h?.language || navigator.language || 'en';
+    const l = c && c !== 'auto' ? c : h?.locale?.language || h?.language || 'en';
     LANG = String(l).toLowerCase().startsWith('de') ? 'de' : 'en';
     LOCALE = h?.locale?.language || h?.language || (LANG === 'de' ? 'de-DE' : 'en');
   }
@@ -4980,7 +4980,7 @@ class GfcEditor extends HTMLElement {
 
   _useLang() {
     const h = this._hs?.(), c = this._c?.language;
-    const l = c && c !== 'auto' ? c : h?.locale?.language || h?.language || navigator.language || 'en';
+    const l = c && c !== 'auto' ? c : h?.locale?.language || h?.language || 'en';
     LANG = String(l).toLowerCase().startsWith('de') ? 'de' : 'en';
     LOCALE = h?.locale?.language || h?.language || (LANG === 'de' ? 'de-DE' : 'en');
   }
@@ -7712,7 +7712,7 @@ Object.assign(GfcEditor.prototype, {
     const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'grundriss.floorplan.json';
+    a.download = 'home.floorplan.json';
     this.shadowRoot.append(a);
     a.click();
     a.remove();

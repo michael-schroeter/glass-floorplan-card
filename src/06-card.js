@@ -121,7 +121,7 @@ class GlassFloorplanCard extends HTMLElement {
 
   _useLang() {
     const h = this._hass, c = this._config.language;
-    const l = c && c !== 'auto' ? c : h?.locale?.language || h?.language || navigator.language || 'en';
+    const l = c && c !== 'auto' ? c : h?.locale?.language || h?.language || 'en';
     LANG = String(l).toLowerCase().startsWith('de') ? 'de' : 'en';
     LOCALE = h?.locale?.language || h?.language || (LANG === 'de' ? 'de-DE' : 'en');
   }

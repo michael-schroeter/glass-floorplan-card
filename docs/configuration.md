@@ -29,7 +29,7 @@ The editor writes everything for you. For reference, all coordinates are **centi
 
 ```yaml
 type: custom:glass-floorplan-card
-language: auto            # auto | en | de
+language: auto            # auto (Home Assistant's language, otherwise English) | en | de
 rooms:
   - id: living
     name: Living room

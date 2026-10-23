@@ -9,10 +9,10 @@ right and y downwards. The origin is the top-left corner of the rooms.
  "version": 1,
  "scale": "measured",
  "rooms": [
-  { "name": "Wohnen", "rect": [0, 0, 555, 425],
+  { "name": "Living", "rect": [0, 0, 555, 425],
     "furniture": [[35, 255, 255, 345, "sofa"], [305, 205, 405, 305, "round_table"]] },
-  { "name": "Schlafen", "rect": [555, 0, 990, 425], "furniture": [[675, 35, 855, 235, "bed"]] },
-  { "name": "Küche", "rect": [0, 425, 375, 690], "label": "bottom" }
+  { "name": "Bedroom", "rect": [555, 0, 990, 425], "furniture": [[675, 35, 855, 235, "bed"]] },
+  { "name": "Kitchen", "rect": [0, 425, 375, 690], "label": "bottom" }
  ],
  "windows": [[115, 0, 415, 0], [635, 0, 895, 0]],
  "doors": [[555, 215, 555, 295], [145, 425, 235, 425]],

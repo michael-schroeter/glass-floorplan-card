@@ -125,7 +125,7 @@ Object.assign(GfcEditor.prototype, {
     const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'grundriss.floorplan.json';
+    a.download = 'home.floorplan.json';
     this.shadowRoot.append(a);
     a.click();
     a.remove();

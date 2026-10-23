@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- English by default wherever Home Assistant's language is unknown; the demo starts in English, the example sketch and skill examples are English
+
 ## 0.1.0 – first version
 
 - Glass floor plan with rooms, furniture, windows, passages and front door (centimetres, edge-to-edge rooms)

@@ -55,7 +55,7 @@
 <script>
 const P = new URLSearchParams(location.search);
 const SCENE = P.get('scene') || 'evening';
-const LANG = P.get('lang') || (navigator.language.startsWith('de') ? 'de' : 'en');
+const LANG = P.get('lang') === 'de' ? 'de' : 'en';
 const MOBILE = P.get('mobile') === '1';
 if (MOBILE) document.body.classList.add('mob');
 if (P.get('sidebar') === '0') document.body.classList.add('nosb');

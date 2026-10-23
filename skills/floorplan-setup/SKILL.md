@@ -14,7 +14,7 @@ Answer in the user's language. Keep the chat answer short.
 
 ## Steps
 
-1. **Look at the picture.** Find every room and its name as written on the plan, without area numbers: `WOHNEN 22,4 m²` → `Wohnen`.
+1. **Look at the picture.** Find every room and its name as written on the plan, without area numbers: `LIVING 22.4 m²` → `Living`.
    Also find printed dimensions, windows, doors between rooms, the front door and furniture symbols. Note how far the
    picture is skewed. For phone photos taken at an angle, work with what is reasonable and mention it.
 2. **Find the scale** (centimetres per picture pixel):
@@ -30,7 +30,7 @@ Answer in the user's language. Keep the chat answer short.
 4. **Write a draft** (`draft.json`, all coordinates in **picture pixels**). The format is in `reference/format.md`:
    rooms (name, rect, optional furniture), windows on outer walls, doors between rooms, entrance (front door), `image`
    size, `cm_per_px` and `scale`.
-   - Rooms are axis-aligned rectangles. Split L-shaped rooms into two rectangles: `Wohnen` + `Wohnen 2`.
+   - Rooms are axis-aligned rectangles. Split L-shaped rooms into two rectangles: `Living` + `Living 2`.
    - Furniture is optional and only for the looks, using the kinds in `reference/format.md`. Draw what the plan shows; for empty
      plans add a few typical pieces per room type (bed in bedrooms, sofa + table in living rooms, counter in kitchens,
      bath/shower + toilet + sink in bathrooms). Keep the top-left ~1.7 × 0.9 m of each room free for the room name.

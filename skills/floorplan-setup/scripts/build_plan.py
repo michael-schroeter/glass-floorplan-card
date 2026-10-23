@@ -8,7 +8,7 @@ Draft (all coordinates in pixels of the picture):
   "image": [1080, 780],            # picture size
   "cm_per_px": 1.0,                # scale (from a printed dimension; otherwise estimated)
   "scale": "measured",             # "measured" | "estimated"
-  "rooms": [ {"name": "Wohnen", "rect": [x1, y1, x2, y2],
+  "rooms": [ {"name": "Living", "rect": [x1, y1, x2, y2],
               "furniture": [[x1, y1, x2, y2, "sofa"], ...]}, ... ],
   "windows": [[x1, y1, x2, y2], ...],   # on outer walls
   "doors": [[x1, y1, x2, y2], ...],     # passages between two rooms
