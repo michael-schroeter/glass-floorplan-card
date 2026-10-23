@@ -1,6 +1,6 @@
 # Glass Floorplan Card
 
-**The cleanest, most beautiful floor plan dashboard for Home Assistant.**
+**A beautiful floor plan dashboard for Home Assistant.**
 Your home as a plan made of frosted glass, where every lamp glows in its real colour.
 
 [**▶ Try the live demo**](https://michael-schroeter.github.io/glass-floorplan-card/) · [Install](#install) · [Configuration](docs/configuration.md)
@@ -13,7 +13,7 @@ Your home as a plan made of frosted glass, where every lamp glows in its real co
 
 Tap a lamp to switch it. Tap a room and it opens as a pop-up with soft spring animations. Layers switch the plan between light, climate, covers, a Roborock vacuum or your own mix.
 
-The same card works on a phone. The plan turns upright, the layers move into a bar at the bottom, and pop-ups become sheets you swipe away. No second dashboard needed.
+There is a phone mode too.
 
 <br clear="right">
 
@@ -30,13 +30,13 @@ You never write coordinates. Pick whatever you have at hand:
 
 ![The editor finds the rooms in a sketch](docs/images/editor-sketch.jpg)
 
-Then drag your Home Assistant areas onto the rooms (or link them by name), drag your devices onto the plan, and click **Done**. The editor always shows the real card at the real size of your screen, so what you see is what you get.
+Then drag your Home Assistant areas onto the rooms (or link them by name), drag your devices onto the plan, and click **Done**. The editor always shows the real card at the real size of your screen.
 
 ## Simple by default, deep if you want
 
-**Out of the box** the card places your devices, finds the weather and indoor temperature, arranges its tiles in free corners and fits itself to any screen without scrolling.
+**Out of the box** link your rooms to Home Assistant areas and the rest falls into place: devices land in their rooms, lamps get the right symbol, and layers for light, climate, covers and your Roborock appear on their own.
 
-**If you like**, you can fine-tune nearly everything: furniture, windows and the front door, a glass symbol for each lamp, light cones for spots, power for the energy estimate, a door opener and doorbell, modes from your scenes and scripts, and your own layers such as *Night = lights + covers + front door lock*. All of it is in the editor. YAML is there if you want it, but you never need it.
+**If you like**, you can fine-tune a lot: furniture, windows and the front door, symbols for each device, light cones for light, a door opener and doorbell, modes from your scenes and scripts, and your own layers such as *Night = lights + covers + front door lock*. All of it is in the editor. YAML is there if you want it, but you never need it.
 
 ## Install
 
@@ -58,10 +58,10 @@ Copy `glass-floorplan-card.js` from the [latest release](https://github.com/mich
 - [Floor plan from a picture with Claude](docs/claude-skill.md)
 - [Development](docs/development.md): build, local demo, file overview
 
-English and German. Numbers and times follow your Home Assistant locale.
+English and German.
 
-**Auf Deutsch:** Über HACS installieren (benutzerdefiniertes Repository, Kategorie *Dashboard*), Karte hinzufügen, **Grundriss-Editor öffnen**. Den Grundriss erstellst du aus einem Foto oder einer Skizze (Räume werden automatisch erkannt), mit Claude, aus deinen HA-Bereichen oder von Hand. Danach Geräte auf den Plan ziehen, fertig.
 
 ---
 
-Built with [Claude](https://claude.ai) (Anthropic) as a pair-programming partner. It started as a private dashboard and became this card. · [MIT License](LICENSE)
+Built with Claude. It started as a private dashboard and became this card.
+[MIT License](LICENSE)
