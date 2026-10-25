@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1
 
 - Editor opens again the way you left it: tool, phone or laptop view, selection, the size check after an import and an import still waiting
 - The template picture only shows once you choose it. Before, a picture loaded earlier (for any card) could show up under an imported plan
