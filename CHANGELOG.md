@@ -9,6 +9,7 @@
 - Without a template, dragging a room moves it; new rooms are drawn on free space
 - **Typical furniture** in one click for rooms without furniture (bed, sofa and TV, kitchen, bath …)
 - Floor plan files may say where lamps and devices are (`devices`, without entity ids) – they go onto the matching devices of the room's area
+- Claude skill: asks where furniture and devices are and whether to add typical furniture before it builds the file
 
 ## 0.1.1
 

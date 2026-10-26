@@ -12,18 +12,21 @@ Draft (all coordinates in pixels of the picture):
               "furniture": [[x1, y1, x2, y2, "sofa"], ...]}, ... ],
   "windows": [[x1, y1, x2, y2], ...],   # on outer walls
   "doors": [[x1, y1, x2, y2], ...],     # passages between two rooms
-  "entrance": [x1, y1, x2, y2]          # optional, front door on an outer wall
+  "entrance": [x1, y1, x2, y2],         # optional, front door on an outer wall
+  "devices": [{"name": "Floor lamp", "kind": "light", "icon": "floorlamp", "at": [x, y]}, ...]   # optional
 }
 
 What the script does: converts to cm with the top-left room corner as origin, rounds to 5 cm, lets neighbouring rooms
 share exactly one wall line, puts windows / doors / the entrance exactly onto the nearest wall, keeps furniture inside
-its room and adds "image_rect" (where the picture lies in plan coordinates, so it lines up as a template in the editor).
+its room, keeps device spots inside their room and adds "image_rect" (where the picture lies in plan coordinates, so it lines up as a template in the editor).
 Warnings go to stderr. Standard library only.
 """
 import json, re, sys
 
 KINDS = {"sofa", "armchair", "bed", "bed_single", "table", "round_table", "chair", "desk", "wardrobe", "shelf", "sideboard", "tv",
          "counter", "fridge", "bath", "shower", "toilet", "sink", "washer", "plant", "rug", "stairs", "block"}
+DEVICE_KINDS = {"light", "tv", "speaker", "thermostat", "radiator", "sensor", "blind", "vacuum"}
+LAMP_ICONS = {"bulb", "ceiling", "chandelier", "pendant", "lamp", "floorlamp", "desklamp", "strip", "spot", "wall", "candle"}
 warn = lambda *a: print("warning:", *a, file=sys.stderr)
 
 
@@ -132,6 +135,24 @@ def main(src, dst):
         e = on_wall(d["entrance"], False)
         if e:
             out["entrance"] = e
+    devices = []
+    for x in d.get("devices", []) or []:
+        kind = str(x.get("kind", "")).lower()
+        if kind not in DEVICE_KINDS or not x.get("at"):
+            warn(f"device {x!r} needs a kind ({', '.join(sorted(DEVICE_KINDS))}) and at – skipped")
+            continue
+        px, py = cm(*[float(v) for v in x["at"][:2]])
+        room = next((q for q in R if q[0] <= px <= q[2] and q[1] <= py <= q[3]), None)
+        if not room:
+            warn(f"device {x.get('name')!r} is outside every room – skipped")
+            continue
+        dev = {"name": str(x.get("name") or kind).strip(), "kind": kind}
+        if kind == "light" and x.get("icon") in LAMP_ICONS:
+            dev["icon"] = x["icon"]
+        dev["at"] = [snap5(min(max(px, room[0] + 20), room[2] - 20)), snap5(min(max(py, room[1] + 20), room[3] - 20))]
+        devices.append(dev)
+    if devices:
+        out["devices"] = devices
     if d.get("image"):
         w, h = d["image"][:2]
         out["image_rect"] = [round(-ox * s), round(-oy * s), round((w - ox) * s), round((h - oy) * s)]
@@ -140,7 +161,7 @@ def main(src, dst):
     open(dst, "w", encoding="utf-8").write(txt + "\n")
     total = sum((q[2] - q[0]) * (q[3] - q[1]) for q in R) / 1e4
     print(f"{dst}: {len(out_rooms)} rooms ({total:.1f} m²), {len(out['doors'])} doors, {len(out['windows'])} windows, "
-          f"{sum(len(r.get('furniture', [])) for r in out_rooms)} furniture, scale {out['scale']}")
+          f"{sum(len(r.get('furniture', [])) for r in out_rooms)} furniture, {len(devices)} device spots, scale {out['scale']}")
 
 
 if __name__ == "__main__":

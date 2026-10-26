@@ -17,6 +17,11 @@ right and y downwards. The origin is the top-left corner of the rooms.
  "windows": [[115, 0, 415, 0], [635, 0, 895, 0]],
  "doors": [[555, 215, 555, 295], [145, 425, 235, 425]],
  "entrance": [990, 600, 990, 680],
+ "devices": [
+  { "name": "Ceiling light", "kind": "light", "icon": "ceiling", "at": [280, 210] },
+  { "name": "Floor lamp", "kind": "light", "icon": "floorlamp", "at": [60, 300] },
+  { "name": "TV", "kind": "tv", "at": [150, 30] }
+ ],
  "image_rect": [-46, -46, 1034, 734]
 }
 ```
@@ -31,6 +36,7 @@ right and y downwards. The origin is the top-left corner of the rooms.
 | `windows` | Segments on outer walls: `[x1, y, x2, y]` or `[x, y1, x, y2]` |
 | `doors` | Passages on the wall between two rooms (80–100 cm) |
 | `entrance` | The front door on an outer wall |
+| `devices` | Optional: where lamps and devices are, without entity ids – `name` (the user's words), `kind` (`light`, `tv`, `speaker`, `thermostat`, `radiator`, `sensor`, `blind`, `vacuum` = its station), `icon` for lamps (`ceiling`, `chandelier`, `pendant`, `lamp`, `floorlamp`, `desklamp`, `strip`, `spot`, `wall`, `candle`), `at` = `[x, y]` inside the room. The editor gives each one to a device of the same kind in the room's Home Assistant area. |
 | `image_rect` | Where the whole picture lies in plan coordinates (lines the photo up as a template) |
 | `entities` | Optional, only with real entity ids: `[{"entity": "light.x", "at": [x, y], "icon": "ceiling"}]` |
 
