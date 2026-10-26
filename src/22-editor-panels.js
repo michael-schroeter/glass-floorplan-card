@@ -44,7 +44,7 @@ Object.assign(GfcEditor.prototype, {
     if (i < 0 || this._pending || this._pasting || this._measure || (!this._c.rooms.length && !(this._tool === 'sketch' && this._ulSrc))) return;
     const next = ED_FLOW[i + 1], box = mk('div', 'enext');
     box.append(next
-      ? this._btn(`<span>${esc(t('ed_next', t(`ed_tool_${next}`)))}</span>${icon('chevR')}`, 'wide white', () => this._setTool(next))
+      ? this._btn(`<span>${esc(t('ed_next', t(`ed_tool_${next}`)))}</span>${icon('chevR')}`, 'wide white', () => { this._scaleCheck = false; this._setTool(next); })
       : this._btn(`${icon('check')}<span>${esc(t('ed_done'))}</span>`, 'wide white', () => this._close(true)));
     if (!next) box.append(this._el(`<p class="small">${esc(t('ed_doneHint'))}</p>`));
     I.append(box);
@@ -118,9 +118,10 @@ Object.assign(GfcEditor.prototype, {
    * Home Assistant areas). With a picture: 1 scale, 2 rooms, then how it looks. */
   _p_sketch(I) {
     const c = this._c, u = c.underlay, pic = !!(this._ulSrc && u?.rect), fresh = !pic && !c.rooms.length;
-    I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2><p class="lead">${esc(t(fresh ? 'ed_start_lead' : pic ? 'ed_sketch_lead' : 'ed_sketch_lead2'))}</p>`));
-    // an import waiting for confirmation, the size check after an import or the paste field come first
-    if (this._pending || this._scaleCheck || this._pasting) { this._importSection(I); if (this._pending || this._pasting) return; }
+    // an import waiting for confirmation, the size check after an import or the paste field – nothing else then
+    const busy = this._pending || this._scaleCheck || this._pasting;
+    I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2>${busy ? '' : `<p class="lead">${esc(t(fresh ? 'ed_start_lead' : pic ? 'ed_sketch_lead' : 'ed_sketch_lead2'))}</p>`}`));
+    if (busy) { this._importSection(I); return; }
     const file = mk('input');
     file.type = 'file'; file.accept = 'image/*'; file.hidden = true;
     file.addEventListener('change', () => this._readImage(file.files[0]));
@@ -131,7 +132,7 @@ Object.assign(GfcEditor.prototype, {
     I.append(file, drop);
     if (pic) this._picSteps(I, u);
     if (pic) I.append(this._el(`<h3>${esc(t('ed_otherWays'))}</h3>`));
-    if (!this._scaleCheck) this._importSection(I);
+    this._importSection(I);
     if (this._areas().length) I.append(this._choice('home', t('ed_fromAreas'), t('ed_fromAreasSub'), () => this._fromAreas()));
     const q = mk('div', '');
     q.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:14px';

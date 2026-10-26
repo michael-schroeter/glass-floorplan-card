@@ -6,6 +6,7 @@
 - While the plan itself is built (template, rooms, furniture, windows), no devices are shown; at **Devices** every linked area's devices are in their room by themselves (once – what you remove stays away, undo takes them back)
 - A room linked to an area takes the area's name (rename it as you like – linking again names it again). Rooms are linked by name on import and when you type a name, also across languages (*Living* ↔ *Wohnzimmer*)
 - Import without an extra question when nothing is drawn yet
+- After an import with an estimated size only the size check shows, then it goes on to Rooms; a plan with devices opens at Devices
 - Without a template, dragging a room moves it; new rooms are drawn on free space
 - **Typical furniture** in one click for rooms without furniture (bed, sofa and TV, kitchen, bath …)
 - Floor plan files may say where lamps and devices are (`devices`, without entity ids) – they go onto the matching devices of the room's area

@@ -190,7 +190,7 @@ Object.assign(GfcEditor.prototype, {
         const cur = () => { const r = rooms[pick].rect; return ((axis === 'w' ? r[2] - r[0] : r[3] - r[1]) / 100); };
         const upd = () => { inp.placeholder = fmt(cur(), 2); this._s = { t: 'room', i: pick, fresh: true, quiet: true }; this._draw(); };
         sel.addEventListener('change', () => { pick = +sel.value; upd(); });
-        const apply = () => { const v = parseFloat(String(inp.value).replace(',', '.')); if (v > 0.3) { this._scaleCheck = false; this._s = null; this._rescale(v / cur()); this._toast(t('ed_measured')); this._panel(); } };
+        const apply = () => { const v = parseFloat(String(inp.value).replace(',', '.')); if (v > 0.3) { this._scaleCheck = false; this._s = null; this._tool = 'rooms'; this._rescale(v / cur()); this._toast(t('ed_measured')); this._panel(); } };
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });
         box.append(this._fieldEl('', sel), this._fieldEl('', seg));
         const row = mk('div', 'ebtns');
@@ -202,6 +202,7 @@ Object.assign(GfcEditor.prototype, {
         box.append(skip);
         I.append(box);
         upd();
+        return;
       }
     }
     if (this._pasting) {

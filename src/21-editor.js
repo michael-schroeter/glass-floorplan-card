@@ -68,8 +68,8 @@ class GfcEditor extends HTMLElement {
     // pictures of version 0.1.0 were shared by all cards (and showed up under plans nobody had traced from them)
     try { for (const k of Object.keys(localStorage)) if (k.startsWith(`${CARD_TAG}:underlay:`)) localStorage.removeItem(k); } catch (e) { /* private mode */ }
     this._useLang();
-    // nothing drawn yet: start with the template, empty – otherwise the editor is as it was left
-    this._tool = this._c.rooms.length ? 'rooms' : 'sketch';
+    // nothing drawn yet: start with the template; a plan with devices at the devices – otherwise as it was left
+    this._tool = !this._c.rooms.length ? 'sketch' : this._c.entities.some((e) => e.at) ? 'devices' : 'rooms';
     this._mode = window.innerWidth < 700 ? 'phone' : 'laptop';
     this._doneAreas = new Set();
     this._markDone();

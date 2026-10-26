@@ -4993,8 +4993,8 @@ class GfcEditor extends HTMLElement {
     // pictures of version 0.1.0 were shared by all cards (and showed up under plans nobody had traced from them)
     try { for (const k of Object.keys(localStorage)) if (k.startsWith(`${CARD_TAG}:underlay:`)) localStorage.removeItem(k); } catch (e) { /* private mode */ }
     this._useLang();
-    // nothing drawn yet: start with the template, empty – otherwise the editor is as it was left
-    this._tool = this._c.rooms.length ? 'rooms' : 'sketch';
+    // nothing drawn yet: start with the template; a plan with devices at the devices – otherwise as it was left
+    this._tool = !this._c.rooms.length ? 'sketch' : this._c.entities.some((e) => e.at) ? 'devices' : 'rooms';
     this._mode = window.innerWidth < 700 ? 'phone' : 'laptop';
     this._doneAreas = new Set();
     this._markDone();
@@ -6536,7 +6536,7 @@ Object.assign(GfcEditor.prototype, {
     if (i < 0 || this._pending || this._pasting || this._measure || (!this._c.rooms.length && !(this._tool === 'sketch' && this._ulSrc))) return;
     const next = ED_FLOW[i + 1], box = mk('div', 'enext');
     box.append(next
-      ? this._btn(`<span>${esc(t('ed_next', t(`ed_tool_${next}`)))}</span>${icon('chevR')}`, 'wide white', () => this._setTool(next))
+      ? this._btn(`<span>${esc(t('ed_next', t(`ed_tool_${next}`)))}</span>${icon('chevR')}`, 'wide white', () => { this._scaleCheck = false; this._setTool(next); })
       : this._btn(`${icon('check')}<span>${esc(t('ed_done'))}</span>`, 'wide white', () => this._close(true)));
     if (!next) box.append(this._el(`<p class="small">${esc(t('ed_doneHint'))}</p>`));
     I.append(box);
@@ -6610,9 +6610,10 @@ Object.assign(GfcEditor.prototype, {
    * Home Assistant areas). With a picture: 1 scale, 2 rooms, then how it looks. */
   _p_sketch(I) {
     const c = this._c, u = c.underlay, pic = !!(this._ulSrc && u?.rect), fresh = !pic && !c.rooms.length;
-    I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2><p class="lead">${esc(t(fresh ? 'ed_start_lead' : pic ? 'ed_sketch_lead' : 'ed_sketch_lead2'))}</p>`));
-    // an import waiting for confirmation, the size check after an import or the paste field come first
-    if (this._pending || this._scaleCheck || this._pasting) { this._importSection(I); if (this._pending || this._pasting) return; }
+    // an import waiting for confirmation, the size check after an import or the paste field – nothing else then
+    const busy = this._pending || this._scaleCheck || this._pasting;
+    I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2>${busy ? '' : `<p class="lead">${esc(t(fresh ? 'ed_start_lead' : pic ? 'ed_sketch_lead' : 'ed_sketch_lead2'))}</p>`}`));
+    if (busy) { this._importSection(I); return; }
     const file = mk('input');
     file.type = 'file'; file.accept = 'image/*'; file.hidden = true;
     file.addEventListener('change', () => this._readImage(file.files[0]));
@@ -6623,7 +6624,7 @@ Object.assign(GfcEditor.prototype, {
     I.append(file, drop);
     if (pic) this._picSteps(I, u);
     if (pic) I.append(this._el(`<h3>${esc(t('ed_otherWays'))}</h3>`));
-    if (!this._scaleCheck) this._importSection(I);
+    this._importSection(I);
     if (this._areas().length) I.append(this._choice('home', t('ed_fromAreas'), t('ed_fromAreasSub'), () => this._fromAreas()));
     const q = mk('div', '');
     q.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:14px';
@@ -7628,7 +7629,7 @@ Object.assign(STR.en, {
   ed_autoArrange: 'Arrange automatically', ed_tileManual: 'Placed by you.', ed_tileAuto: 'Placed automatically – drag it to change.',
   ed_language: 'Language', ed_weather: 'Weather', ed_layout: 'Layout', ed_layout_help: 'Automatic: phone layout below 700 px card width.', ed_rotate_phone: 'Turn the plan on phones',
   ed_height: 'Height', ed_fit_screen: 'Fill the screen', ed_fit_width: 'By width', ed_modesLabel: 'Label for Mode', ed_modes_help: 'Scenes and scripts with this label appear under “Mode”.',
-  ed_ha_open: 'Open floor plan editor', ed_ha_lead: 'Draw rooms, furniture, windows and doors, then drag your devices onto the plan – everything is saved in this card.',
+  ed_ha_open: 'Open floor plan editor', ed_ha_lead: 'Draw or import your floor plan and link your Home Assistant areas – the devices come into their rooms by themselves. Everything is saved in this card.',
   ed_ha_empty: 'No floor plan yet. Open the editor and draw your home – a photo of your floor plan helps.',
   furn_sofa: 'Sofa', furn_armchair: 'Armchair', furn_bed: 'Bed', furn_bed_single: 'Single bed', furn_table: 'Table', furn_round_table: 'Round table', furn_chair: 'Chair', furn_desk: 'Desk',
   furn_wardrobe: 'Wardrobe', furn_shelf: 'Shelf', furn_sideboard: 'Sideboard', furn_tv: 'TV', furn_counter: 'Kitchen', furn_fridge: 'Fridge', furn_bath: 'Bathtub', furn_shower: 'Shower',
@@ -7697,7 +7698,7 @@ Object.assign(STR.de, {
   ed_autoArrange: 'Automatisch anordnen', ed_tileManual: 'Von dir platziert.', ed_tileAuto: 'Automatisch platziert – zum Ändern ziehen.',
   ed_language: 'Sprache', ed_weather: 'Wetter', ed_layout: 'Darstellung', ed_layout_help: 'Automatisch: Handy-Ansicht unter 700 px Kartenbreite.', ed_rotate_phone: 'Plan am Handy drehen',
   ed_height: 'Höhe', ed_fit_screen: 'Bildschirm füllen', ed_fit_width: 'Nach Breite', ed_modesLabel: 'Label für Mode', ed_modes_help: 'Szenen und Skripte mit diesem Label erscheinen unter „Mode“.',
-  ed_ha_open: 'Grundriss-Editor öffnen', ed_ha_lead: 'Räume, Möbel, Fenster und Türen zeichnen, dann deine Geräte auf den Plan ziehen – alles wird in dieser Karte gespeichert.',
+  ed_ha_open: 'Grundriss-Editor öffnen', ed_ha_lead: 'Grundriss zeichnen oder importieren, Home-Assistant-Bereiche zuordnen – die Geräte kommen von selbst in ihre Räume. Alles wird in dieser Karte gespeichert.',
   ed_ha_empty: 'Noch kein Grundriss. Öffne den Editor und zeichne deine Wohnung – ein Foto deines Grundrisses hilft.',
   furn_sofa: 'Sofa', furn_armchair: 'Sessel', furn_bed: 'Bett', furn_bed_single: 'Einzelbett', furn_table: 'Tisch', furn_round_table: 'Runder Tisch', furn_chair: 'Stuhl', furn_desk: 'Schreibtisch',
   furn_wardrobe: 'Schrank', furn_shelf: 'Regal', furn_sideboard: 'Kommode', furn_tv: 'Fernseher', furn_counter: 'Küche', furn_fridge: 'Kühlschrank', furn_bath: 'Badewanne', furn_shower: 'Dusche',
@@ -8086,7 +8087,7 @@ Object.assign(GfcEditor.prototype, {
         const cur = () => { const r = rooms[pick].rect; return ((axis === 'w' ? r[2] - r[0] : r[3] - r[1]) / 100); };
         const upd = () => { inp.placeholder = fmt(cur(), 2); this._s = { t: 'room', i: pick, fresh: true, quiet: true }; this._draw(); };
         sel.addEventListener('change', () => { pick = +sel.value; upd(); });
-        const apply = () => { const v = parseFloat(String(inp.value).replace(',', '.')); if (v > 0.3) { this._scaleCheck = false; this._s = null; this._rescale(v / cur()); this._toast(t('ed_measured')); this._panel(); } };
+        const apply = () => { const v = parseFloat(String(inp.value).replace(',', '.')); if (v > 0.3) { this._scaleCheck = false; this._s = null; this._tool = 'rooms'; this._rescale(v / cur()); this._toast(t('ed_measured')); this._panel(); } };
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });
         box.append(this._fieldEl('', sel), this._fieldEl('', seg));
         const row = mk('div', 'ebtns');
@@ -8098,6 +8099,7 @@ Object.assign(GfcEditor.prototype, {
         box.append(skip);
         I.append(box);
         upd();
+        return;
       }
     }
     if (this._pasting) {
