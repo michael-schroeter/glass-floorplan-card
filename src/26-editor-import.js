@@ -3,6 +3,10 @@
  * read from the plan, windows, doors, the front door and furniture. The editor imports it (file or pasted text),
  * then rooms are linked to Home Assistant areas by name or by dragging. A whole card configuration works as well. */
 const GFP_FORMAT = 'glass-floorplan';
+/* what a floor plan file may call a device (its "devices": a lamp, the TV … with a position, but no entity id) */
+const HINT_KINDS = { light: 'light', lamp: 'light', media: 'media', tv: 'media', speaker: 'media', climate: 'climate', thermostat: 'climate',
+  heating: 'climate', radiator: 'climate', temperature: 'climate', sensor: 'climate', cover: 'cover', blind: 'cover', blinds: 'cover',
+  shutter: 'cover', curtain: 'cover', vacuum: 'vacuum', robot: 'vacuum', dock: 'vacuum' };
 
 /* text from a file or a chat answer → object (```json fences and text around it are ignored) */
 function parsePlanText(text) {
@@ -33,10 +37,18 @@ function readPlanData(o) {
   const segs = (k) => (Array.isArray(o[k]) ? o[k] : []).map(normSeg).filter(Boolean).map((s) => s.map(r0));
   const ents = (Array.isArray(o.entities) ? o.entities : []).map(normEntity).filter(Boolean)
     .map((e) => { const x = { entity: e.entity }; if (e.at) x.at = e.at.map(r0); if (e.icon) x.icon = e.icon; if (e.name) x.name = e.name; if (e.watt) x.watt = e.watt; if (e.beams) x.beams = e.beams; return x; });
+  // where the lamps, the TV … are – they go onto the matching devices of the room's area later
+  const hints = (Array.isArray(o.devices) ? o.devices : []).map((x) => {
+    const kind = HINT_KINDS[slug(x?.kind)], at = Array.isArray(x?.at) && x.at.length >= 2 && x.at.slice(0, 2).every(Number.isFinite) ? x.at.slice(0, 2).map(r0) : null;
+    if (!kind || !at) return null;
+    const hint = { kind, at, name: String(x.name || '') };
+    if (kind === 'light' && LAMP_ICONS.includes(x.icon)) hint.icon = x.icon;
+    return hint;
+  }).filter(Boolean);
   const ul = normRect(o.image_rect || o.underlay?.rect);
   return {
     isCard: String(o.type || '').includes(CARD_TAG),
-    rooms, windows: segs('windows'), doors: segs('doors'), entrance: normSeg(o.entrance)?.map(r0) || null, entities: ents,
+    rooms, windows: segs('windows'), doors: segs('doors'), entrance: normSeg(o.entrance)?.map(r0) || null, entities: ents, hints,
     estimated: o.format === GFP_FORMAT && o.scale !== 'measured', imageRect: ul ? ul.map(r0) : null, full: o,
   };
 }
@@ -59,18 +71,22 @@ Object.assign(GfcEditor.prototype, {
     if (!d) { this._toast(t('ed_importBad')); return; }
     this._pending = d;
     this._pasting = false;
-    this._tool = 'sketch';
     this._s = null;
+    // nothing drawn yet: nothing to ask, it's in (undo takes it back)
+    if (!this._c.rooms.length) { this._applyImport(); return; }
+    this._tool = 'sketch';
     this._fit();
     this._draw();
     this._panel();
   },
 
-  /* take the pending import over: the floor plan is replaced, placed devices and layers stay */
+  /* take the pending import over: the floor plan is replaced, placed devices and layers stay; rooms named like an area
+   * are linked with it right away */
   _applyImport() {
     const d = this._pending;
     if (!d) return;
     this._pending = null;
+    let linked = [];
     this._change(() => {
       const c = this._c;
       if (d.isCard) {
@@ -79,6 +95,7 @@ Object.assign(GfcEditor.prototype, {
         for (const k of Object.keys(c)) delete c[k];
         Object.assign(c, normEditorConfig(deep(d.full)));
         if (keepLang && !c.language) c.language = keepLang;
+        this._markDone();
       } else {
         c.rooms = d.rooms;
         c.windows = d.windows;
@@ -95,6 +112,9 @@ Object.assign(GfcEditor.prototype, {
           c.underlay = this._ulSrc ? { ...c.underlay, rect: d.imageRect } : { opacity: 0.6, rect: d.imageRect };
         }
         delete c.widgets;
+        linked = this._nameMatches();
+        linked.forEach(([i, a]) => this._linkArea(c.rooms[i], a));
+        this._hints = d.hints || [];
       }
       this._loadUnderlay();
       this._tool = d.estimated ? 'sketch' : 'rooms';
@@ -103,7 +123,7 @@ Object.assign(GfcEditor.prototype, {
     this._fit();
     this._draw();
     this._panel();
-    this._toast(t('ed_imported', d.rooms.length));
+    this._toast(linked.length ? t('ed_importedLinked', d.rooms.length, linked.length) : t('ed_imported', d.rooms.length));
   },
 
   /* everything grows / shrinks around the top-left corner (wrong estimate of the size) */
@@ -120,6 +140,7 @@ Object.assign(GfcEditor.prototype, {
       if (c.underlay?.rect) c.underlay.rect = R(c.underlay.rect);
       if (c.widgets) for (const w of Object.keys(c.widgets)) if (Array.isArray(c.widgets[w])) c.widgets[w] = R(c.widgets[w]);
     });
+    this._hints = this._hints.map((x) => ({ ...x, at: P(x.at) }));
     this._fit();
     this._draw();
   },

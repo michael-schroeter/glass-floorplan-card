@@ -1068,6 +1068,9 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
   -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%); transition: background 1s ease; }
 .gcard > .gv { display: flex; flex-direction: column; height: 100%; animation: fadein .5s cubic-bezier(.2, .8, .2, 1) both; }
 .root.ev .gcard > .gv { animation: none; }
+/* editor, while the plan itself is built: only rooms, furniture, windows and doors – no devices, lamp light or layer bar */
+.root.bare .lamp, .root.bare .dev, .root.bare .glows, .root.bare .rgl > i[data-e], .root.bare .bot, .root.bare .dockm, .root.bare .trail,
+.root.bare .tabs, .root.bare .badge, .root.bare .ctint { visibility: hidden !important; }
 @keyframes fadein { from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
 .gk { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: max(11px, calc(14 * var(--u))); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t2); }
 .gk > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1545,7 +1548,7 @@ class GlassFloorplanCard extends HTMLElement {
 
   /* The floor plan editor shows the card live on a virtual screen: { w, h } size of that screen, the layer `tab`,
    * optionally a fixed `stage` (so the plan does not move while something is dragged) or a fixed scale and origin
-   * `fix` (while rooms are drawn). Nothing is stored for the viewer. */
+   * `fix` (while rooms are drawn), `bare` hides the devices (while the plan itself is built). Nothing is stored for the viewer. */
   setEditorView(config, ev) {
     this._ev = ev || null;
     this._config = JSON.parse(JSON.stringify(config));
@@ -1727,7 +1730,7 @@ class GlassFloorplanCard extends HTMLElement {
     const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
     this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}</style>
-<div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}" style="${springVars()}">
+<div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}${this._ev?.bare ? ' bare' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
     <linearGradient id="gfcdial" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5aa8ff"/><stop offset=".5" stop-color="#7fe0c0"/><stop offset="1" stop-color="#ff9f45"/></linearGradient>
@@ -4715,7 +4718,7 @@ dialog.ed[open] { display: block; }
 .eroom .en b { display: block; font-weight: inherit; overflow: hidden; text-overflow: ellipsis; }
 .efu { position: absolute; border-radius: calc(var(--fr, 8) * 1px); }
 .efu.c { border-radius: 50%; }
-.tool-furniture .efu { cursor: move; }
+.tool-furniture .efu, .tool-rooms:not(.ul-on) .eroom { cursor: move; }
 .tool-furniture .efu:hover { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .6); }
 .efu.sel { box-shadow: inset 0 0 0 2px rgba(var(--blue), .95), 0 0 0 4px rgba(var(--blue), .2); }
 .eopen { position: absolute; border-radius: 6px; cursor: pointer; }
@@ -4754,6 +4757,7 @@ dialog.ed[open] { display: block; }
 .ezoom button:hover { background: rgba(255, 255, 255, .1); }
 .ecv .elight { position: absolute; left: 14px; bottom: 14px; z-index: 6; align-items: center; padding: 4px; border-radius: 14px;
   background: rgba(30, 30, 36, .75); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 10px 28px rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.ecv.tool-sketch .elight, .ecv.tool-rooms .elight, .ecv.tool-furniture .elight, .ecv.tool-openings .elight { display: none; }
 .ecv .elight .lbl { display: grid; place-items: center; width: 30px; font-size: 17px; }
 .ecv .elight button { height: 34px; padding: 0 11px; border-radius: 10px; flex: none; }
 .ehint { position: absolute; left: 50%; bottom: 16px; z-index: 6; transform: translateX(-50%); max-width: min(560px, calc(100% - 420px)); padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--t2);
@@ -4774,6 +4778,12 @@ dialog.ed[open] { display: block; }
 .eins { position: relative; z-index: 4; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 18px 18px 30px;
   background: linear-gradient(270deg, rgba(24, 24, 30, .78), rgba(20, 20, 26, .6)); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .06); }
 .eins h2 { margin: 0 0 4px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+/* the way on: stays at the bottom of the panel */
+.enext { position: sticky; bottom: -30px; z-index: 3; margin: 26px -18px -30px; padding: 22px 18px 20px; }
+.enext.over { background: linear-gradient(180deg, rgba(21, 21, 27, 0), rgb(21, 21, 27) 38%); }
+.enext .ebtn { height: 44px; border-radius: 13px; font-size: 15px; }
+.enext .ebtn .ic { font-size: 18px; }
+.enext p.small { text-align: center; }
 .eback { display: inline-flex; align-items: center; gap: 2px; height: 32px; margin: -6px 0 10px -8px; padding: 0 12px 0 4px; border-radius: 10px; font-size: 14.5px; font-weight: 600; color: rgb(100, 170, 255); transition: background .15s; }
 .eback .ic { --ip: currentColor; font-size: 20px; }
 .eback:hover { background: rgba(var(--blue), .14); }
@@ -4935,6 +4945,10 @@ const LAYER_FILTER = {
 const ED_PHONE = { w: 390, h: 788 };
 /* tools that show the template picture (and keep it inside the visible plan) */
 const ED_UL_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
+/* the steps that build the plan itself: devices stay hidden there, they come into their rooms once the plan is built */
+const ED_BUILD_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
+/* the way through the editor – every step ends with a button to the next one */
+const ED_FLOW = ['sketch', 'rooms', 'furniture', 'openings', 'devices'];
 /* a template picture stays in this browser only – one entry per uploaded picture, the configuration names it */
 const UL_STORE = `${CARD_TAG}:template:`;
 /* how the editor was left (tool, size check, an import waiting …) – per floor plan, found again by its contents */
@@ -4982,6 +4996,9 @@ class GfcEditor extends HTMLElement {
     // nothing drawn yet: start with the template, empty – otherwise the editor is as it was left
     this._tool = this._c.rooms.length ? 'rooms' : 'sketch';
     this._mode = window.innerWidth < 700 ? 'phone' : 'laptop';
+    this._doneAreas = new Set();
+    this._markDone();
+    this._hints = [];
     this._recall();
     this._loadUnderlay();
     this._loadLabels();
@@ -4989,7 +5006,11 @@ class GfcEditor extends HTMLElement {
     if (!this.isConnected) document.body.append(this);
     this._dlg.showModal();
     this._cv.focus({ preventScroll: true });
-    requestAnimationFrame(() => { this._fit(true); this._draw(); this._panel(); requestAnimationFrame(() => { if (!this._viewTouched) { this._fit(true); this._draw(); } }); });
+    requestAnimationFrame(() => {
+      if (!this._bare()) this._autoDevices();
+      this._fit(true); this._draw(); this._panel();
+      requestAnimationFrame(() => { if (!this._viewTouched) { this._fit(true); this._draw(); } });
+    });
   }
 
   _useLang() {
@@ -5009,6 +5030,8 @@ class GfcEditor extends HTMLElement {
   }
 
   _close(save) {
+    // "Done" right after linking the areas: their devices come along anyway
+    if (save) this._autoDevices(true);
     const out = save ? cleanConfig(this._c) : null;
     if (save) this._onSave?.(out);
     // next time the editor opens as it was left – unless the changes were thrown away
@@ -5036,6 +5059,8 @@ class GfcEditor extends HTMLElement {
     if (this._picker) st.picker = this._picker;
     if (this._scaleCheck) st.scaleCheck = true;
     if (d) st.pending = d.isCard ? d : { ...d, full: null };
+    if (this._doneAreas.size) st.done = [...this._doneAreas];
+    if (this._hints.length) st.hints = this._hints;
     let all = {};
     try { all = JSON.parse(lsGet(ED_STATE) || '{}') || {}; } catch (e) { /* broken entry: start again */ }
     all[id] = st;
@@ -5061,6 +5086,8 @@ class GfcEditor extends HTMLElement {
     if (this._s && !this._selObj()) this._s = null;
     this._scaleCheck = !!st.scaleCheck && this._c.rooms.length > 0;
     this._pending = Array.isArray(st.pending?.rooms) && st.pending.rooms.length ? st.pending : null;
+    if (Array.isArray(st.done)) for (const a of st.done) this._doneAreas.add(a);
+    if (Array.isArray(st.hints)) this._hints = st.hints.filter((x) => Array.isArray(x?.at) && x.kind);
   }
 
   /* ---------------------------------------------------------------- shell */
@@ -5171,6 +5198,7 @@ class GfcEditor extends HTMLElement {
         if (!this._c.language) delete this._c.language;
       }, { panel: false });
       this._ulSrc = null;
+      this._doneAreas = new Set(); this._hints = [];
       this._pending = null; this._scaleCheck = null; this._pasting = false; this._measure = null; this._editLayer = null;
       this._tool = 'sketch'; this._layerSel = 'light'; this._s = null; this._scrollMem = {};
       this._viewTouched = false;
@@ -5186,9 +5214,13 @@ class GfcEditor extends HTMLElement {
     this._measure = null;
     this._editLayer = null;
     this._picker = null;
+    // the plan is built: the devices of the linked areas come into their rooms
+    if (!this._bare()) this._autoDevices();
     this._draw();
     this._panel();
   }
+  /* building the plan itself (template, rooms, furniture, windows): no devices on it yet */
+  _bare() { return ED_BUILD_TOOLS.includes(this._tool); }
   _setMode(m) {
     if (this._mode === m) return;
     this._mode = m;
@@ -5209,7 +5241,7 @@ class GfcEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll('.elight button').forEach((b) => b.classList.toggle('act', b.dataset.l === this._light));
     this.$('.undo').disabled = !this._undo.length;
     this.$('.redo').disabled = !this._redo.length;
-    const n = this._c.rooms.length, e = this._c.entities.filter((x) => x.at).length;
+    const n = this._c.rooms.length, e = this._c.entities.filter((x) => x.at).length + (this._c.vacuum?.entity && this._c.vacuum.dock ? 1 : 0);
     this.$('.etop h1 small').textContent = n ? t('ed_summary', n, e) : '';
     this._cv.className = `ecv tool-${this._tool}${this._showUl() ? ' ul-on' : ''}${this._tool === 'rooms' || (this._tool === 'sketch' && this._measure) ? ' draw' : ''}${this._cv.classList.contains('del-sel') ? ' del-sel' : ''}${this._cv.classList.contains('del-all') ? ' del-all' : ''}`;
   }
@@ -5279,16 +5311,17 @@ class GfcEditor extends HTMLElement {
   /* while rooms are drawn the plan stays where it is on the screen (a new room must not make it jump);
    * the fit button – or another tool – shows the exact view again */
   _drawing(cfg) { return ['sketch', 'rooms'].includes(this._tool) && cfg.layout !== 'mobile'; }
-  /* lights shown switched on / off while editing (or as they really are) */
+  /* lights shown switched on / off while editing (or as they really are) – off while the plan itself is built */
   _liveHass(h) {
-    if (!h || this._light === 'real') return h;
+    const mode = this._bare() ? 'off' : this._light;
+    if (!h || mode === 'real') return h;
     const ids = this._c.entities.map((e) => e.entity).filter((id) => domainOf(id) === 'light' && h.states?.[id]);
-    const key = `${this._light}|${ids.join(',')}|${ids.map((id) => this._c.entities.find((e) => e.entity === id)?.kelvin || '').join(',')}`;
+    const key = `${mode}|${ids.join(',')}|${ids.map((id) => this._c.entities.find((e) => e.entity === id)?.kelvin || '').join(',')}`;
     if (this._lh?.src === h && this._lh.key === key) return this._lh.out;
     const states = { ...h.states };
     for (const id of ids) {
       const st = h.states[id], a = st.attributes || {}, modes = a.supported_color_modes || [];
-      if (this._light === 'off') { states[id] = { ...st, state: 'off', attributes: { ...a, brightness: null, color_mode: null } }; continue; }
+      if (mode === 'off') { states[id] = { ...st, state: 'off', attributes: { ...a, brightness: null, color_mode: null } }; continue; }
       if (st.state === 'on') { states[id] = { ...st, attributes: { ...a, brightness: Math.max(a.brightness || 0, 180) } }; continue; }
       const ct = modes.includes('color_temp'), k = this._c.entities.find((e) => e.entity === id)?.kelvin || 2900;
       states[id] = { ...st, state: 'on', attributes: { ...a, brightness: 220, color_mode: ct ? 'color_temp' : modes.find((m) => m !== 'onoff') || 'onoff', ...(ct ? { color_temp_kelvin: k } : {}) } };
@@ -5306,13 +5339,13 @@ class GfcEditor extends HTMLElement {
     const area = draw && this._fix ? this._drawArea(cfg, this._screen(), this._fix) : null;
     const scr = area ? { w: area.w, h: area.h } : this._screen();
     const fix = area ? { pu: this._fix.pu, ox: this._fix.ox - area.x, oy: this._fix.oy - area.y } : null;
-    const stage = fix ? null : this._liveStage(cfg);
+    const stage = fix ? null : this._liveStage(cfg), bare = this._bare();
     this._area = area;
-    const key = JSON.stringify([cfg, scr, stage, fix]);
+    const key = JSON.stringify([cfg, scr, stage, fix, bare]);
     if (key !== this._liveKey) {
       this._liveKey = key;
       card.style.width = `${scr.w}px`;
-      card.setEditorView(cfg, { w: scr.w, h: scr.h, stage, fix, tab: this._layerSel });
+      card.setEditorView(cfg, { w: scr.w, h: scr.h, stage, fix, bare, tab: this._layerSel });
     }
     if (card.hass !== lh) card.hass = lh;
     if (card._M && card._tab !== this._layerSel && card._M.layers.some((l) => l.id === this._layerSel)) { card._tab = this._layerSel; card._applyTab(true); }
@@ -5464,9 +5497,10 @@ class GfcEditor extends HTMLElement {
         html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${k}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(t(`ed_tile_${k}`))}</span></div>`;
       }
     }
-    // device markers: exactly over the buttons the live card shows in its current layer (tap → settings)
-    const onCard = (el) => { const b = !el || el.classList.contains('hid') ? null : this._cardBox(el); return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]]; };
-    c.entities.forEach((e, i) => {
+    // device markers: exactly over the buttons the live card shows in its current layer (tap → settings) –
+    // none while the plan itself is built
+    const onCard = (el) => { const b = !el || el.classList.contains('hid') || this._bare() ? null : this._cardBox(el); return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]]; };
+    if (!this._bare()) c.entities.forEach((e, i) => {
       const on = sel?.t === 'ent' && sel.i === i, m = e.at && onCard(card?._mk?.[e.entity]);
       // a selected device without a button there (plan: false, another layer) is shown where it is
       const [x, y, w] = m || (on && e.at ? [...this.P(e.at[0], e.at[1]), 34 * F.k] : []);
@@ -5480,7 +5514,7 @@ class GfcEditor extends HTMLElement {
       html += `<div class="emk${sel?.t === 'door' ? ' sel' : ''}" data-k="mk" data-m="door" style="left:${x}px;top:${y}px;--s:${w.toFixed(1)}px"></div>`;
     }
     const mkSize = (el, dflt) => (el?.offsetWidth || dflt) * F.k;
-    if (c.vacuum?.entity && c.vacuum.dock && (sel?.t === 'dock' || card?._layer?.()?.type === 'vacuum')) {
+    if (c.vacuum?.entity && c.vacuum.dock && !this._bare() && (sel?.t === 'dock' || card?._layer?.()?.type === 'vacuum')) {
       const [x, y] = this.P(c.vacuum.dock[0], c.vacuum.dock[1]);
       html += `<div class="emk dock${sel?.t === 'dock' ? ' sel' : ''}" data-k="mk" data-m="dock" style="left:${x}px;top:${y}px;--s:${mkSize(card?.$?.('.bot'), 30).toFixed(1)}px"></div>`;
     }
@@ -5545,7 +5579,7 @@ class GfcEditor extends HTMLElement {
   _hint() {
     if (this._measure) return this._measure.b ? t('ed_hint_measure3') : this._measure.a ? t('ed_hint_measure2') : t('ed_hint_measure1');
     const tool = this._tool;
-    if (tool === 'rooms') return this._c.rooms.length ? t('ed_hint_rooms') : t('ed_hint_rooms0');
+    if (tool === 'rooms') return !this._c.rooms.length ? t('ed_hint_rooms0') : this._showUl() ? t('ed_hint_rooms') : t('ed_hint_roomsMove');
     if (tool === 'openings') return t(`ed_hint_open_${this._openKind}`);
     if (tool === 'furniture') return t('ed_hint_furniture');
     if (tool === 'devices') return t('ed_hint_devices');
@@ -5637,22 +5671,24 @@ class GfcEditor extends HTMLElement {
     if (e.button === 1 || this._space) { this._d = { ...base, mode: 'pan', f: { ...this._f } }; return; }
     if (this._measure) { this._d = { ...base, mode: 'measure' }; return; }
     if (k === 'hd') { this._d = { ...base, mode: 'resize', h: el.dataset.h, end: el.dataset.end, orig: deep(this._selObj()) }; return; }
-    // rooms tool: dragging always draws a new room (also across others – tracing a plan); a selected room moves,
-    // a short click on an unselected room selects it
-    if (k === 'room' && this._tool === 'rooms' && !(this._s?.t === 'room' && this._s.i === +el.dataset.i && !this._s.fresh)) {
+    // rooms tool over a template: dragging always draws a new room (also across others – tracing a plan); a selected
+    // room moves, a short click on an unselected room selects it. Without a template dragging a room moves it.
+    if (k === 'room' && this._tool === 'rooms' && this._showUl() && !(this._s?.t === 'room' && this._s.i === +el.dataset.i && !this._s.fresh)) {
       const s = [this._snapV(p[0], 'x').v, this._snapV(p[1], 'y').v];
       this._d = { ...base, mode: 'draw', a: s, click: +el.dataset.i };
       return;
     }
     if (k === 'room' && (this._tool === 'rooms' || this._tool === 'sketch' || this._tool === 'settings' || this._tool === 'layers')) {
       const i = +el.dataset.i;
-      this._select({ t: 'room', i }, 'rooms');
+      // quietly while it is dragged around, a tap shows its settings
+      this._select({ t: 'room', i, quiet: this._sameSel({ t: 'room', i }) ? !!this._s.quiet : true }, 'rooms');
       const R = this._c.rooms[i].rect;
       // everything inside the room moves along with it
       const ents = this._c.entities.map((x, j) => (x.at && inRect(R, x.at) ? j : -1)).filter((j) => j >= 0);
       const onWall = (s) => { const q = normSeg(s); return q && ((segH(q) && (q[1] === R[1] || q[1] === R[3]) && q[0] >= R[0] - 1 && q[2] <= R[2] + 1) || (!segH(q) && (q[0] === R[0] || q[0] === R[2]) && q[1] >= R[1] - 1 && q[3] <= R[3] + 1)); };
       const shared = (s) => this._c.rooms.some((o, j) => j !== i && segDist(o.rect, [(s[0] + s[2]) / 2, (s[1] + s[3]) / 2]) < 1);
-      this._d = { ...base, mode: 'move-room', i, orig: deep(this._c.rooms[i]), ents: ents.map((j) => [j, [...this._c.entities[j].at]]),
+      this._d = { ...base, mode: 'move-room', tap: true, i, orig: deep(this._c.rooms[i]), ents: ents.map((j) => [j, [...this._c.entities[j].at]]),
+        hints: this._hints.filter((x) => inRect(R, x.at)).map((x) => [x, [...x.at]]),
         wins: this._c.windows.map((s, j) => (onWall(s) && !shared(normSeg(s)) ? [j, deep(s)] : null)).filter(Boolean),
         door: this._c.door?.at && inRect(R, this._c.door.at) ? [...this._c.door.at] : null, dock: this._c.vacuum?.dock && inRect(R, this._c.vacuum.dock) ? [...this._c.vacuum.dock] : null,
         ent: this._c.entrance && onWall(this._c.entrance) ? deep(this._c.entrance) : null };
@@ -5759,6 +5795,7 @@ class GfcEditor extends HTMLElement {
       room.rect = [nx, ny, nx + w, ny + h];
       room.furniture = (d.orig.furniture || []).map((f) => shiftFurn(f, ddx, ddy));
       for (const [j, at] of d.ents) c.entities[j].at = [r0(at[0] + ddx), r0(at[1] + ddy)];
+      for (const [x, at] of d.hints) x.at = [r0(at[0] + ddx), r0(at[1] + ddy)];
       for (const [j, s] of d.wins) c.windows[j] = shiftSeg(s, ddx, ddy);
       if (d.door) c.door.at = [r0(d.door[0] + ddx), r0(d.door[1] + ddy)];
       if (d.dock) c.vacuum.dock = [r0(d.dock[0] + ddx), r0(d.dock[1] + ddy)];
@@ -5885,7 +5922,10 @@ class GfcEditor extends HTMLElement {
     const s = this._s, o = this._selObj();
     if (!o) return;
     this._change(() => {
-      if (s.t === 'room') { o.rect = [o.rect[0] + dx, o.rect[1] + dy, o.rect[2] + dx, o.rect[3] + dy]; o.furniture = (o.furniture || []).map((f) => shiftFurn(f, dx, dy)); }
+      if (s.t === 'room') {
+        for (const x of this._hints) if (inRect(o.rect, x.at)) x.at = [x.at[0] + dx, x.at[1] + dy];
+        o.rect = [o.rect[0] + dx, o.rect[1] + dy, o.rect[2] + dx, o.rect[3] + dy]; o.furniture = (o.furniture || []).map((f) => shiftFurn(f, dx, dy));
+      }
       else if (s.t === 'furn') setFurnRect(o, normFurn(o).r.map((v, i) => v + (i % 2 ? dy : dx)));
       else if (s.t === 'open') this._setOpening(s, shiftSeg(normSeg(o), dx, dy));
       else if (s.t === 'ent') o.at = [o.at[0] + dx, o.at[1] + dy];
@@ -5971,61 +6011,143 @@ class GfcEditor extends HTMLElement {
     });
   }
 
-  /* Home Assistant area → room: the room gets the area's name (if it still has a default name) and,
-   * if wanted, the area's lights, thermostats, covers, media players are placed in it */
-  _assignArea(i, areaId) {
-    const c = this._c, room = c.rooms[i], h = this._hs() || {};
-    if (!room || !areaId) return;
-    let placed = 0;
-    this._change(() => {
-      room.area = areaId;
-      const an = h.areas?.[areaId]?.name;
-      if (an && (!room.name || new RegExp(`^(${t('ed_room')}|Room|Raum)( \\d+)?$`).test(room.name))) room.name = an;
-      if (this._withDevices === false) return;
-      let ids = Object.keys(h.states || {}).filter((id) => this._areaOf(id) === areaId && this._isPlaceable(id) && !c.entities.some((e) => e.entity === id && e.at));
-      if (ids.some((id) => domainOf(id) === 'climate')) ids = ids.filter((id) => domainOf(id) !== 'sensor');
-      const taken = c.entities.filter((e) => e.at).map((e) => e.at);
-      for (const id of ids.sort()) {
-        const at = freeSpot(room.rect, taken);
-        taken.push(at);
-        if (domainOf(id) === 'vacuum') { if (!c.vacuum?.entity) c.vacuum = { entity: id, dock: at }; continue; }
-        const j = c.entities.findIndex((x) => x.entity === id);
-        if (j >= 0) c.entities[j].at = at;
-        else c.entities.push({ entity: id, at, ...(domainOf(id) === 'light' ? { icon: guessLampIcon(id, h.states[id]) } : {}) });
-        placed++;
-      }
-    });
-    this._toast(placed ? t('ed_assignedPlaced', room.name, placed) : t('ed_assigned', room.name));
+  /* Home Assistant area → room: the room is named like the area (rename it as you like – linking an area again names
+   * it again). Its devices come in once the plan is built (_autoDevices). */
+  _linkArea(room, areaId) {
+    const an = this._hs()?.areas?.[areaId]?.name;
+    room.area = areaId;
+    if (!an) return;
+    // a room in two parts (L-shaped: two rectangles) – the second part gets a number
+    const n = this._c.rooms.filter((r) => r !== room && r.area === areaId).length;
+    room.name = n ? `${an} ${n + 1}` : an;
   }
-  /* rooms whose name matches an area's name get that area */
+  _assignArea(i, areaId) {
+    const room = this._c.rooms[i];
+    if (!room || !areaId) return;
+    const old = room.area;
+    this._change(() => { this._linkArea(room, areaId); this._rehome([old, areaId]); });
+    this._toast(t('ed_assigned', room.name));
+  }
+  /* devices that sit in a room of another area (the areas were linked anew) move to their own area's room */
+  _rehome(areas) {
+    const c = this._c, taken = c.entities.filter((e) => e.at).map((e) => e.at);
+    for (const e of c.entities) {
+      const a = e.at && this._areaOf(e.entity), own = a && areas.includes(a) ? c.rooms.filter((r) => r.area === a) : [];
+      const cur = own.length && c.rooms.find((r) => inRect(r.rect, e.at));
+      if (!cur?.area || cur.area === a) continue;
+      e.at = freeSpot(own[0].rect, taken);
+      taken.push(e.at);
+    }
+  }
+  /* rooms whose name fits an area get that area (also right after an import, and when a room is named) */
   _matchAreasByName() {
     const pairs = this._nameMatches();
     if (!pairs.length) return;
-    const keep = this._withDevices;
-    pairs.forEach(([i, a]) => this._assignArea(i, a));
-    this._withDevices = keep;
+    this._change(() => pairs.forEach(([i, a]) => this._linkArea(this._c.rooms[i], a)));
     this._toast(t('ed_matched', pairs.length));
   }
   /* exact names first, then the same word stem without "room / zimmer / raum" ("Wohnen" ↔ "Wohnzimmer", "Bath" ↔ "Bathroom",
-   * "Bad" ↔ "Badezimmer") – only when exactly one area fits */
-  _nameMatches() {
-    const used = new Set(this._c.rooms.map((r) => r.area).filter(Boolean));
+   * "Bad" ↔ "Badezimmer"), then the same kind of room in the other language ("Living" ↔ "Wohnzimmer") – only when exactly
+   * one area fits. `only`: just this room. */
+  _nameMatches(only) {
+    const rooms = this._c.rooms, used = new Set(rooms.map((r) => r.area).filter(Boolean));
     const free = () => this._areas().filter((x) => !used.has(x.area_id));
     const stem = (s) => {
       let x = normName(s).replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u');
       for (let k = 0; k < 2; k++) x = x.replace(/(zimmer|raum|room|bereich|area)$/, '');
       return x.replace(/(en|e|s)$/, '');
     };
-    const out = [];
-    const open = this._c.rooms.map((r, i) => (r.area ? null : i)).filter((i) => i != null);
-    for (const pass of [0, 1]) for (const i of open) {
-      if (out.some(([j]) => j === i)) continue;
-      const n = normName(this._c.rooms[i].name);
+    const out = [], taken = (i) => out.some(([j]) => j === i);
+    const open = rooms.map((r, i) => (r.area || (only != null && i !== only) ? null : i)).filter((i) => i != null);
+    for (const pass of [0, 1, 2]) for (const i of open) {
+      if (taken(i)) continue;
+      const name = rooms[i].name, n = normName(name);
       if (!n) continue;
-      const st = stem(this._c.rooms[i].name);
-      const hits = free().filter((x) => (pass === 0 ? normName(x.name) === n : st.length >= 3 && stem(x.name) === st));
+      let hits;
+      if (pass === 0) hits = free().filter((x) => normName(x.name) === n);
+      else if (pass === 1) { const st = stem(name); hits = st.length >= 3 ? free().filter((x) => stem(x.name) === st) : []; }
+      else {
+        const k = roomKinds(name);
+        hits = k ? free().filter((x) => roomKinds(x.name) === k) : [];
+        // two bedrooms but one "Schlafzimmer": better ask than guess
+        if (rooms.some((r, j) => j !== i && !r.area && !taken(j) && roomKinds(r.name) === k)) hits = [];
+      }
       if (hits.length === 1) { out.push([i, hits[0].area_id]); used.add(hits[0].area_id); }
     }
+    return out;
+  }
+
+  /* areas whose devices are on the plan already (a plan someone made) – placed automatically only once, what was taken
+   * away stays away */
+  _markDone() {
+    for (const r of this._c.rooms) if (r.area && this._c.entities.some((e) => e.at && this._areaOf(e.entity) === r.area)) this._doneAreas.add(r.area);
+  }
+  /* The devices of every linked area come into their room by themselves – once per area, as soon as the plan itself is
+   * built (leaving the building steps, or "Done"). A floor plan file may say where the lamps or the TV are (hints);
+   * everything else gets a free spot. Undo takes them away again – they are not placed a second time. The caller draws. */
+  _autoDevices(quiet) {
+    const c = this._c, h = this._hs() || {};
+    const areas = [...new Set(c.rooms.filter((r) => r.area && !this._doneAreas.has(r.area)).map((r) => r.area))];
+    if (!areas.length || !h.states) return 0;
+    const have = new Set(c.entities.filter((e) => e.at).map((e) => e.entity)), todo = [];
+    for (const a of areas) {
+      this._doneAreas.add(a);
+      let ids = Object.keys(h.states).filter((id) => !have.has(id) && autoDevice(h, id) && this._areaOf(id) === a);
+      if (ids.some((id) => domainOf(id) === 'climate')) ids = ids.filter((id) => domainOf(id) !== 'sensor');
+      // an area in two rooms: free spots in the bigger one
+      if (ids.length) todo.push([c.rooms.filter((r) => r.area === a).sort((x, y) => rectArea(y.rect) - rectArea(x.rect)), ids.sort()]);
+    }
+    if (!todo.length) return 0;
+    this._snap();
+    const taken = c.entities.filter((e) => e.at).map((e) => e.at);
+    let n = 0;
+    for (const [rooms, ids] of todo) {
+      const hints = this._matchHints(rooms, ids);
+      // the spots a file names are taken first, free spots go around them
+      for (const x of hints.values()) taken.push(x.at);
+      for (const id of ids) {
+        const hint = hints.get(id), at = hint?.at || freeSpot(rooms[0].rect, taken), st = h.states[id], kind = kindOf(id, st);
+        if (!hint) taken.push(at);
+        if (domainOf(id) === 'vacuum') {
+          if (c.vacuum?.entity) continue;
+          c.vacuum = { ...(c.vacuum || {}), entity: id, dock: at };
+          if (c.layers?.length && !c.layers.some((l) => builtinType(l) === 'vacuum')) c.layers.push('vacuum');
+          n++;
+          continue;
+        }
+        const i = c.entities.findIndex((x) => x.entity === id), e = i >= 0 ? c.entities[i] : { entity: id };
+        e.at = at;
+        if (kind === 'light' && !e.icon) e.icon = hint?.icon || guessLampIcon(id, st);
+        if (i < 0) c.entities.push(e);
+        // with a list of layers: the device's layer is there, a TV joins the light layer
+        if (c.layers?.length) { if (kind === 'media') this._addToLayer('light', id); else this._ensureLayer(this._layerDef(kind)); }
+        n++;
+      }
+    }
+    if (n && !quiet) this._toast(t('ed_autoPlaced', n));
+    return n;
+  }
+  /* hints of a floor plan file in these rooms (a lamp, the TV … with a position) → devices of the same kind; where there
+   * are several, fitting names and lamp shapes decide. Used hints are gone. */
+  _matchHints(rooms, ids) {
+    const out = new Map(), h = this._hs() || {};
+    const hs = this._hints.filter((x) => rooms.some((r) => inRect(r.rect, x.at)));
+    if (!hs.length) return out;
+    const pairs = [];
+    for (const id of ids) {
+      const st = h.states?.[id], k = domainOf(id) === 'vacuum' ? 'vacuum' : kindOf(id, st);
+      const words = nameWords(`${this._fname(id)} ${id.split('.')[1]}`), lamp = k === 'light' ? guessLampIcon(id, st) : null;
+      hs.forEach((x, j) => {
+        if (x.kind !== k) return;
+        let s = 1 + nameWords(x.name).filter((w) => words.includes(w)).length;
+        if (lamp && lamp !== 'bulb' && (x.icon || guessLampIcon('', { attributes: { friendly_name: x.name } })) === lamp) s += 2;
+        pairs.push([s, id, j]);
+      });
+    }
+    pairs.sort((a, b) => b[0] - a[0]);
+    const used = new Set();
+    for (const [, id, j] of pairs) if (!out.has(id) && !used.has(j)) { out.set(id, hs[j]); used.add(j); }
+    this._hints = this._hints.filter((x) => !hs.some((y, j) => y === x && used.has(j)));
     return out;
   }
 
@@ -6290,6 +6412,61 @@ function setFurnRect(f, R) {
 }
 const shiftSeg = (s, dx, dy) => [r0(s[0] + dx), r0(s[1] + dy), r0(s[2] + dx), r0(s[3] + dy)];
 
+/* What kind of room a name means, in English or German – "Bedroom" and "Schlafzimmer" are both "bed", "Wohnküche" is
+ * living + kitchen. A sorted key, '' when the name says nothing (e.g. "Room 3"). Short stems only count at the start or
+ * the end of a word ("Badezimmer", "Gästebad"), longer ones anywhere. */
+const ROOM_WORDS = {
+  living: ['living', 'lounge', 'wohn'], bed: ['bed', 'schlaf', 'sleep'], kitchen: ['kitchen', 'kuche', 'kueche', 'kochen'],
+  bath: ['bath', 'bad', 'dusch', 'shower'], wc: ['wc', 'toilet', 'klo'], hall: ['hall', 'flur', 'diele', 'corridor', 'entr', 'eingang', 'foyer'],
+  office: ['office', 'study', 'buro', 'arbeit'], dining: ['dining', 'ess'], kids: ['kid', 'child', 'kinder', 'nursery'], guest: ['guest', 'gast'],
+  storage: ['storage', 'store', 'abstell', 'pantry', 'speis', 'vorrat'], laundry: ['laundry', 'utility', 'wasch', 'hauswirtschaft', 'hwr'],
+  balcony: ['balcony', 'balkon', 'terrace', 'terrasse', 'loggia'], garage: ['garage', 'carport'], cellar: ['cellar', 'basement', 'keller'],
+  attic: ['attic', 'dachboden'], dressing: ['dressing', 'closet', 'ankleide', 'wardrobe'], garden: ['garden', 'garten'],
+};
+function roomKinds(name) {
+  const words = slug(name).split('_').filter(Boolean);
+  const has = (s) => words.some((w) => (s.length <= 3 ? w.startsWith(s) || w.endsWith(s) : w.includes(s)));
+  return Object.keys(ROOM_WORDS).filter((k) => ROOM_WORDS[k].some(has)).sort().join(',');
+}
+/* Typical furniture for a kind of room (bed in a bedroom, sofa + TV in a living room …), along the walls and away from
+ * the room name. Each piece: [kinds, places] – t / b top / bottom wall (centred, else at the right end), l / r left / right
+ * wall (turned), corners bl / br / tr, c the middle; the first kind and place that fit win, else the piece is left out. */
+const TYPICAL_FURN = {
+  bed: [['bed|bed_single', 'b|t|r'], ['wardrobe', 't|r|l'], ['plant', 'br|bl']], guest: [['bed|bed_single', 'b|t|r'], ['plant', 'br|bl']],
+  kids: [['bed_single', 'r|l|b'], ['desk', 't|b'], ['shelf', 'b|l']], living: [['sofa', 'b|r'], ['tv', 't|l'], ['round_table', 'c'], ['plant', 'br|bl']],
+  kitchen: [['counter', 't|r|b|l'], ['fridge', 'bl|br|tr']], dining: [['table', 'c']], bath: [['bath|shower', 'bl|br|r'], ['toilet', 'br|tr|bl'], ['sink', 't|r|l']],
+  wc: [['toilet', 'b|r'], ['sink', 't|l']], office: [['desk', 't|r|b'], ['shelf', 'b|l'], ['plant', 'br|bl']], laundry: [['washer', 'br|bl'], ['shelf', 't|r']],
+  storage: [['shelf', 't|b|r'], ['shelf', 'b|l']], dressing: [['wardrobe', 't|r'], ['wardrobe', 'b|l']], hall: [['sideboard', 'b|r|l']],
+  balcony: [['plant', 'br'], ['plant', 'bl'], ['chair', 'c']], garden: [['plant', 'br'], ['plant', 'bl']],
+};
+function typicalFurniture(room, kinds) {
+  const R = room.rect, W = R[2] - R[0], H = R[3] - R[1], m = 12, snap = (v) => Math.round(v / 5) * 5;
+  const lw = Math.min(170, W * 0.6), lh = Math.min(90, H * 0.35);
+  const busy = [room.label === 'bottom' ? [R[0], R[3] - lh, R[0] + lw, R[3]] : [R[0], R[1], R[0] + lw, R[1] + lh]];
+  const free = (q) => q[0] >= R[0] + 5 && q[1] >= R[1] + 5 && q[2] <= R[2] - 5 && q[3] <= R[3] - 5
+    && !busy.some((b) => q[0] < b[2] + 5 && q[2] > b[0] - 5 && q[1] < b[3] + 5 && q[3] > b[1] - 5);
+  const spots = (where, w, h) => {
+    const cx = (R[0] + R[2] - w) / 2, cy = (R[1] + R[3] - h) / 2;
+    return {
+      t: [[cx, R[1] + m], [R[2] - m - w, R[1] + m]], b: [[cx, R[3] - m - h], [R[2] - m - w, R[3] - m - h]],
+      l: [[R[0] + m, cy]], r: [[R[2] - m - w, cy]], bl: [[R[0] + m, R[3] - m - h]], br: [[R[2] - m - w, R[3] - m - h]], tr: [[R[2] - m - w, R[1] + m]], c: [[cx, cy]],
+    }[where] || [];
+  };
+  const out = [];
+  const place = (kind, where) => {
+    const d = FURN_KINDS[kind], turn = where === 'l' || where === 'r', w = turn ? d.h : d.w, h = turn ? d.w : d.h;
+    return spots(where, w, h).map(([x, y]) => [snap(x), snap(y), snap(x) + w, snap(y) + h]).find(free);
+  };
+  for (const k of kinds.split(',')) for (const [alts, wheres] of TYPICAL_FURN[k] || []) {
+    let q = null, kind;
+    for (kind of alts.split('|')) { for (const where of wheres.split('|')) if ((q = place(kind, where))) break; if (q) break; }
+    if (q) { busy.push(q); out.push([...q, kind]); }
+  }
+  return out;
+}
+/* the words of a name, for comparing device names ("Ceiling light" ↔ "light.living_ceiling") */
+const nameWords = (s) => slug(s).split('_').filter((w) => w.length > 2);
+
 /* a free spot in a room: grid positions away from the room name and from other markers */
 function freeSpot(R, taken) {
   const [a, b, c, d] = R, w = c - a, h = d - b, m = Math.min(70, w / 4, h / 4);
@@ -6339,7 +6516,7 @@ Object.assign(GfcEditor.prototype, {
     if (detail) this[detail](I);
     else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
     else if (picker) this._pickerView(I, picker);
-    else this[`_p_${this._tool}`]?.(I);
+    else { this[`_p_${this._tool}`]?.(I); this._nextStep(I); }
     I.scrollTop = keep ?? (view.startsWith('t:') ? this._scrollMem[view] || 0 : 0);
     this._view = view;
     this._syncTop();
@@ -6351,6 +6528,20 @@ Object.assign(GfcEditor.prototype, {
     this._editLayer = null;
     this._draw();
     this._panel();
+  },
+  /* the way on: every step of building the plan ends with the next one, the devices with "Done" (layers, tiles and
+   * settings are extras – everything works without them) */
+  _nextStep(I) {
+    const i = ED_FLOW.indexOf(this._tool);
+    if (i < 0 || this._pending || this._pasting || this._measure || (!this._c.rooms.length && !(this._tool === 'sketch' && this._ulSrc))) return;
+    const next = ED_FLOW[i + 1], box = mk('div', 'enext');
+    box.append(next
+      ? this._btn(`<span>${esc(t('ed_next', t(`ed_tool_${next}`)))}</span>${icon('chevR')}`, 'wide white', () => this._setTool(next))
+      : this._btn(`${icon('check')}<span>${esc(t('ed_done'))}</span>`, 'wide white', () => this._close(true)));
+    if (!next) box.append(this._el(`<p class="small">${esc(t('ed_doneHint'))}</p>`));
+    I.append(box);
+    // a backdrop only when the list scrolls underneath
+    requestAnimationFrame(() => box.classList.toggle('over', I.scrollHeight > I.clientHeight + 2));
   },
   /* a red button that deletes (hovering it shows in red what goes) */
   _delBtn(label, onClick, scope = 'sel', cls = '') {
@@ -6415,64 +6606,28 @@ Object.assign(GfcEditor.prototype, {
   _areas() { const h = this._hs() || {}; return Object.values(h.areas || {}).sort((a, b) => String(a.name).localeCompare(String(b.name), LOCALE)); },
 
   /* ---------------------------------------------------------------- sketch / start */
+  /* Nothing drawn yet: the ways to a floor plan, side by side (a picture to trace, a file from the Claude skill, the
+   * Home Assistant areas). With a picture: 1 scale, 2 rooms, then how it looks. */
   _p_sketch(I) {
-    const c = this._c, u = c.underlay;
-    I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2><p class="lead">${esc(t('ed_sketch_lead'))}</p>`));
+    const c = this._c, u = c.underlay, pic = !!(this._ulSrc && u?.rect), fresh = !pic && !c.rooms.length;
+    I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2><p class="lead">${esc(t(fresh ? 'ed_start_lead' : pic ? 'ed_sketch_lead' : 'ed_sketch_lead2'))}</p>`));
     // an import waiting for confirmation, the size check after an import or the paste field come first
     if (this._pending || this._scaleCheck || this._pasting) { this._importSection(I); if (this._pending || this._pasting) return; }
     const file = mk('input');
     file.type = 'file'; file.accept = 'image/*'; file.hidden = true;
     file.addEventListener('change', () => this._readImage(file.files[0]));
-    const drop = this._el(`<div style="display:flex;align-items:center;gap:12px">${icon('image')}<div><b style="font-size:14px">${esc(t(this._ulSrc ? 'ed_ulReplace' : 'ed_ulPick'))}</b><div class="small" style="font-size:12px;color:var(--t3);margin-top:2px">${esc(t('ed_ulDrop'))}</div></div></div>`, 'ecard');
-    drop.style.cursor = 'pointer';
-    drop.querySelector('.ic').style.fontSize = '26px';
-    drop.addEventListener('click', () => file.click());
+    const drop = this._choice('image', t(pic ? 'ed_ulReplace' : 'ed_ulPick'), t('ed_ulDrop'), () => file.click());
     drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drop'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('drop'));
     drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('drop'); this._readDropped(e.dataTransfer.files[0]); });
     I.append(file, drop);
+    if (pic) this._picSteps(I, u);
+    if (pic) I.append(this._el(`<h3>${esc(t('ed_otherWays'))}</h3>`));
     if (!this._scaleCheck) this._importSection(I);
-    if (this._ulSrc && u?.rect) {
-      const op = mk('input', 'erange');
-      op.type = 'range'; op.min = '0.1'; op.max = '1'; op.step = '0.05'; op.value = String(u.opacity ?? 0.6);
-      op.addEventListener('input', () => { u.opacity = +op.value; this._draw(); });
-      I.append(this._fieldEl(t('ed_opacity'), op));
-      I.append(this._fieldEl(t('ed_invert'), this._tglEl(!!u.invert, (v) => this._change(() => { if (v) u.invert = true; else delete u.invert; }, { keepSel: true })), true));
-      const w = this._inp(fmt((u.rect[2] - u.rect[0]) / 100, 2).replace(',', '.'), (v) => {
-        if (!(v > 0.5)) return;
-        const k = (v * 100) / (u.rect[2] - u.rect[0]);
-        u.rect = [u.rect[0], u.rect[1], r0(u.rect[0] + (u.rect[2] - u.rect[0]) * k), r0(u.rect[1] + (u.rect[3] - u.rect[1]) * k)];
-      }, { num: true, type: 'number', step: '0.1' });
-      I.append(this._fieldEl(t('ed_ulWidth'), w, true));
-      const m = this._measure;
-      if (m?.a && m.b) {
-        const len = this._inp('', () => {}, { num: true, type: 'number', step: '0.01', placeholder: '4.20' });
-        const box = this._el(`<p class="lead" style="margin:0 0 8px">${esc(t('ed_measure_len'))}</p>`, 'ecard');
-        const apply = () => this._applyMeasure(parseFloat(String(len.value).replace(',', '.')) * 100);
-        len.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });
-        const row = mk('div', 'ebtns');
-        row.append(len, this._btn(`${icon('check')}<span>${esc(t('ed_apply'))}</span>`, 'blue', apply));
-        box.append(row);
-        I.append(box);
-        requestAnimationFrame(() => len.focus());
-      }
-      const det = this._btn(`${icon('wand')}<span>${esc(t('ed_detect'))}</span>`, 'wide blue', () => this._detect());
-      det.style.marginTop = '14px';
-      I.append(det);
-      I.append(this._el(`<p class="small">${esc(t('ed_detectHelp'))}</p>`));
-      const row = mk('div', 'ebtns');
-      row.append(
-        this._btn(`${icon('fit')}<span>${esc(t(m ? 'ed_measure_stop' : 'ed_measure'))}</span>`, m ? 'blue' : '', () => { this._measure = m ? null : {}; this._s = null; this._draw(); this._panel(); }),
-        this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._ulSrc = null; }), 'none'),
-      );
-      I.append(row);
-      I.append(this._el(`<p class="small">${esc(t('ed_ulNote'))}</p>`));
-    }
-    I.append(this._el(`<h3>${esc(t('ed_quick'))}</h3>`));
+    if (this._areas().length) I.append(this._choice('home', t('ed_fromAreas'), t('ed_fromAreasSub'), () => this._fromAreas()));
     const q = mk('div', '');
-    q.style.cssText = 'display:flex;flex-direction:column;gap:8px';
-    if (this._areas().length) q.append(this._btn(`${icon('wand')}<span>${esc(t('ed_fromAreas'))}</span>`, 'wide', () => this._fromAreas()));
-    q.append(this._btn(`${icon('home')}<span>${esc(t('ed_example'))}</span>`, 'wide', () => {
+    q.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:14px';
+    q.append(this._btn(`${icon('home')}<span>${esc(t('ed_example'))}</span>`, 'wide sm', () => {
       this._change(() => {
         const ex = exampleConfig(LANG), h = this._hs() || {};
         // in a real home the example devices do not exist – then only the floor plan is used
@@ -6480,16 +6635,63 @@ Object.assign(GfcEditor.prototype, {
         for (const k of ['rooms', 'windows', 'doors', 'entrance', 'entities', 'door', 'vacuum', 'layers', 'widgets']) delete this._c[k];
         Object.assign(this._c, normEditorConfig({ ...this._c, ...ex, language: this._c.language }));
         if (!this._c.language) delete this._c.language;
+        this._markDone();
       });
       this._fit(); this._draw(); this._toast(t('ed_exampleLoaded'));
     }));
-    if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide', () => this._exportPlan()));
-    if (c.rooms.length) q.append(this._delBtn(t('ed_clear'), () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; }), 'all', 'wide'));
+    if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide sm', () => this._exportPlan()));
+    if (c.rooms.length) q.append(this._delBtn(t('ed_clear'), () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; }), 'all', 'wide sm'));
     I.append(q);
     I.append(this._el(`<p class="small">${esc(t('ed_claudeTip'))}</p>`));
   },
+  /* a way to start: a card with symbol, title and one line */
+  _choice(ic, title, sub, onClick) {
+    const box = this._el(`<div style="display:flex;align-items:center;gap:12px">${icon(ic)}<div><b style="font-size:14px">${esc(title)}</b><div style="font-size:12px;color:var(--t3);margin-top:2px">${esc(sub)}</div></div></div>`, 'ecard pick');
+    box.querySelector('.ic').style.fontSize = '26px';
+    box.addEventListener('click', onClick);
+    return box;
+  },
+  /* a picture under the plan: 1 its scale, 2 the rooms (found automatically or traced), then how it looks */
+  _picSteps(I, u) {
+    const m = this._measure;
+    I.append(this._el(`<h3>${esc(t('ed_step_scale'))}</h3><p class="small" style="margin:-2px 0 10px">${esc(t('ed_measureHelp'))}</p>`));
+    const w = this._inp(fmt((u.rect[2] - u.rect[0]) / 100, 2).replace(',', '.'), (v) => {
+      if (!(v > 0.5)) return;
+      const k = (v * 100) / (u.rect[2] - u.rect[0]);
+      u.rect = [u.rect[0], u.rect[1], r0(u.rect[0] + (u.rect[2] - u.rect[0]) * k), r0(u.rect[1] + (u.rect[3] - u.rect[1]) * k)];
+    }, { num: true, type: 'number', step: '0.1' });
+    const row = mk('div', 'ebtns');
+    row.style.marginTop = '0';
+    row.append(this._btn(`${icon('fit')}<span>${esc(t(m ? 'ed_measure_stop' : 'ed_measure'))}</span>`, m ? 'blue' : '', () => { this._measure = m ? null : {}; this._s = null; this._draw(); this._panel(); }));
+    I.append(row);
+    if (m?.a && m.b) {
+      const len = this._inp('', () => {}, { num: true, type: 'number', step: '0.01', placeholder: '4.20' });
+      const box = this._el(`<p class="lead" style="margin:0 0 8px">${esc(t('ed_measure_len'))}</p>`, 'ecard');
+      const apply = () => this._applyMeasure(parseFloat(String(len.value).replace(',', '.')) * 100);
+      len.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });
+      const r2 = mk('div', 'ebtns');
+      r2.append(len, this._btn(`${icon('check')}<span>${esc(t('ed_apply'))}</span>`, 'blue', apply));
+      box.append(r2);
+      I.append(box);
+      requestAnimationFrame(() => len.focus());
+    }
+    I.append(this._fieldEl(t('ed_ulWidth'), w, true));
+    I.append(this._el(`<h3>${esc(t('ed_step_rooms'))}</h3>`));
+    I.append(this._btn(`${icon('wand')}<span>${esc(t('ed_detect'))}</span>`, 'wide blue', () => this._detect()));
+    I.append(this._el(`<p class="small">${esc(t('ed_detectHelp'))}</p>`));
+    I.append(this._el(`<h3>${esc(t('ed_look'))}</h3>`));
+    const op = mk('input', 'erange');
+    op.type = 'range'; op.min = '0.1'; op.max = '1'; op.step = '0.05'; op.value = String(u.opacity ?? 0.6);
+    op.addEventListener('input', () => { u.opacity = +op.value; this._draw(); });
+    I.append(this._fieldEl(t('ed_opacity'), op));
+    I.append(this._fieldEl(t('ed_invert'), this._tglEl(!!u.invert, (v) => this._change(() => { if (v) u.invert = true; else delete u.invert; }, { keepSel: true })), true));
+    const del = mk('div', 'ebtns');
+    del.append(this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._ulSrc = null; }), 'none'));
+    I.append(del);
+    I.append(this._el(`<p class="small">${esc(t('ed_ulNote'))}</p>`));
+  },
 
-  /* rooms from the Home Assistant areas, devices placed automatically */
+  /* rooms from the Home Assistant areas (their devices come in once the plan is arranged) */
   _fromAreas() {
     const h = this._hs() || {};
     const auto = autoConfig(h, { lang: LANG });
@@ -6501,12 +6703,7 @@ Object.assign(GfcEditor.prototype, {
     const B = this._c.rooms.length ? bboxOf(this._c.rooms.map((r) => r.rect)) : null;
     const oy = B ? B[3] + 100 - Math.min(...add.map((r) => r.rect[1])) : 0, ox = B ? B[0] : 0;
     this._change(() => {
-      for (const r of add) {
-        const room = { ...r, id: this._uniqueRoomId(r.id), rect: [r.rect[0] + ox, r.rect[1] + oy, r.rect[2] + ox, r.rect[3] + oy] };
-        this._c.rooms.push(room);
-        for (const e of auto.entities.filter((x) => inRect(r.rect, x.at))) if (!this._c.entities.some((x) => x.entity === e.entity)) this._c.entities.push({ ...e, at: [e.at[0] + ox, e.at[1] + oy] });
-      }
-      if (!this._c.vacuum && auto.vacuum) this._c.vacuum = auto.vacuum;
+      for (const r of add) this._c.rooms.push({ ...r, id: this._uniqueRoomId(r.id), rect: [r.rect[0] + ox, r.rect[1] + oy, r.rect[2] + ox, r.rect[3] + oy] });
       this._tool = 'rooms';
     });
     this._fit(); this._draw();
@@ -6561,7 +6758,6 @@ Object.assign(GfcEditor.prototype, {
       chips.append(b);
     }
     I.append(chips);
-    I.append(this._fieldEl(t('ed_withDevices'), this._tglEl(this._withDevices !== false, (v) => { this._withDevices = v; this._panel(); }), true));
     const m = this._nameMatches();
     if (m.length) {
       const b = this._btn(`${icon('wand')}<span>${esc(t('ed_matchByName', m.length))}</span>`, 'wide blue', () => this._matchAreasByName());
@@ -6571,16 +6767,16 @@ Object.assign(GfcEditor.prototype, {
   },
 
   _pRoom(I) {
-    const r = this._selObj(), h = this._hs() || {};
+    const r = this._selObj(), h = this._hs() || {}, i = this._s.i;
+    const an = () => h.areas?.[r.area]?.name || '';
     I.append(this._el(`<h2>${esc(r.name || t('ed_room'))}</h2>`));
-    I.append(this._fieldEl(t('ed_name'), this._inp(r.name, (v) => { r.name = v; I.querySelector('h2').textContent = v || t('ed_room'); })));
     const areas = this._areas();
     if (areas.length) {
       const sel = mk('select', 'esel2');
       sel.innerHTML = [['', t('ed_noArea')], ...areas.map((a) => [a.area_id, a.name])].map(([v, l]) => `<option value="${esc(v)}"${v === (r.area || '') ? ' selected' : ''}>${esc(l)}</option>`).join('');
-      sel.addEventListener('change', () => { if (sel.value) this._assignArea(this._s.i, sel.value); else this._change(() => { delete r.area; }, { keepSel: true }); });
+      sel.addEventListener('change', () => { if (sel.value) this._assignArea(i, sel.value); else this._change(() => { delete r.area; }, { keepSel: true }); });
       I.append(this._fieldEl(t('ed_area'), sel));
-      // one tap on a free area links it (name + devices come along)
+      // one tap on a free area links it (and names the room)
       if (!r.area) {
         const used = new Set(this._c.rooms.map((x) => x.area).filter(Boolean));
         const free = areas.filter((a) => !used.has(a.area_id));
@@ -6589,29 +6785,24 @@ Object.assign(GfcEditor.prototype, {
           chips.style.marginTop = '8px';
           for (const a of free) {
             const b = mk('button', 'echip area', `<span>${esc(a.name)}</span>`);
-            b.addEventListener('click', () => this._assignArea(this._s.i, a.area_id));
+            b.addEventListener('click', () => this._assignArea(i, a.area_id));
             chips.append(b);
           }
           I.append(chips);
         }
       }
-      I.append(this._el(`<p class="small">${esc(t('ed_area_help'))}</p>`));
     }
+    // the name of its area unless you call it differently; a name that fits a free area links it
+    const name = this._inp(r.name, (v) => { r.name = v.trim() || an() || v; I.querySelector('h2').textContent = r.name || t('ed_room'); }, { placeholder: an() || t('ed_room') });
+    name.addEventListener('change', () => { if (!r.area && this._nameMatches(i).length) this._assignArea(i, this._nameMatches(i)[0][1]); });
+    I.append(this._fieldEl(t('ed_name'), name));
+    if (areas.length) I.append(this._el(`<p class="small">${esc(t(r.area ? 'ed_area_help' : 'ed_area_help0'))}</p>`));
     I.append(this._fieldEl(t('ed_label'), this._segEl([['top', t('ed_top')], ['bottom', t('ed_bottom')]], r.label === 'bottom' ? 'bottom' : 'top', (v) => this._change(() => { if (v === 'bottom') r.label = 'bottom'; else delete r.label; }, { keepSel: true }))));
     const R = r.rect;
     const wI = this._inp(((R[2] - R[0]) / 100).toFixed(2), (v) => { if (v > 0.3) r.rect = [R[0], R[1], r0(R[0] + v * 100), R[3]]; }, { num: true, type: 'number', step: '0.05' });
     const hI = this._inp(((R[3] - R[1]) / 100).toFixed(2), (v) => { if (v > 0.3) r.rect = [R[0], R[1], r.rect[2], r0(R[1] + v * 100)]; }, { num: true, type: 'number', step: '0.05' });
     I.append(this._fieldEl(t('ed_width'), wI, true), this._fieldEl(t('ed_depth'), hI, true));
     I.append(this._el(`<p class="small">${esc(t('ed_area_m2', fmt(((R[2] - R[0]) * (R[3] - R[1])) / 1e4, 1)))}</p>`));
-    // devices of this room's area that are not on the plan yet
-    if (r.area) {
-      const ids = Object.keys(h.states || {}).filter((id) => this._areaOf(id) === r.area && this._isPlaceable(id) && !this._c.entities.some((e) => e.entity === id && e.at));
-      if (ids.length) {
-        const b = this._btn(`${icon('wand')}<span>${esc(t('ed_placeArea', ids.length))}</span>`, 'wide blue', () => this._autoPlace(ids));
-        b.style.marginTop = '16px';
-        I.append(b);
-      }
-    }
     const row = mk('div', 'ebtns');
     row.append(this._btn(`${icon('copy')}<span>${esc(t('ed_duplicate'))}</span>`, '', () => this._duplicateSel()), this._delBtn(t('ed_delete'), () => this._deleteSel()));
     I.append(row);
@@ -6639,7 +6830,20 @@ Object.assign(GfcEditor.prototype, {
   _p_furniture(I) {
     I.append(this._el(`<h2>${esc(t('ed_tool_furniture'))}</h2><p class="lead">${esc(t('ed_furn_lead'))}</p>`));
     if (!this._c.rooms.length) { I.append(this._el(esc(t('ed_needRoom')), 'eempty')); return; }
+    // empty rooms of a known kind: typical pieces in one go (then change them as you like)
+    const empty = this._c.rooms.filter((r) => !r.furniture?.length && this._kindsOf(r));
+    if (empty.length) {
+      I.append(this._btn(`${icon('wand')}<span>${esc(t('ed_typicalFurn'))}</span>`, 'wide blue', () => this._furnish(empty)));
+      I.append(this._el(`<p class="small" style="margin-bottom:14px">${esc(t('ed_typicalFurnHelp', empty.length))}</p>`));
+    }
     this._palette(I);
+  },
+  /* the kind of a room, from its name and its area's name */
+  _kindsOf(r) { return roomKinds(`${r.name} ${this._hs()?.areas?.[r.area]?.name || ''}`); },
+  _furnish(rooms) {
+    let n = 0;
+    this._change(() => { for (const r of rooms) { r.furniture = typicalFurniture(r, this._kindsOf(r)); n += r.furniture.length; } });
+    this._toast(t('ed_furnished', n, rooms.length));
   },
   /* one piece: kind and size (rotate / duplicate / delete also float next to it on the plan) */
   _pFurn(I) {
@@ -6698,7 +6902,15 @@ Object.assign(GfcEditor.prototype, {
   _iconHtml(n) { return GlassFloorplanCard.prototype._iconHtml(n); },
 
   _p_devices(I) {
-    I.append(this._el(`<h2>${esc(t('ed_tool_devices'))}</h2><p class="lead">${esc(t('ed_dev_lead'))}</p>`));
+    I.append(this._el(`<h2>${esc(t('ed_tool_devices'))}</h2><p class="lead">${esc(t(this._c.rooms.some((r) => r.area) ? 'ed_dev_lead' : 'ed_dev_lead0'))}</p>`));
+    // rooms without an area get no devices by themselves – one tap back to linking them
+    const open = this._areas().length ? this._c.rooms.filter((r) => !r.area).length : 0;
+    if (open) {
+      const box = this._el(`<p class="small" style="margin:0 0 10px;color:var(--t2)">${esc(t('ed_dev_noArea', open))}</p>`, 'ecard');
+      box.style.boxShadow = 'inset 0 0 0 1.5px rgba(var(--orange), .6)';
+      box.append(this._btn(`${icon('plan')}<span>${esc(t('ed_linkAreas'))}</span>`, 'sm', () => this._setTool('rooms')));
+      I.append(box);
+    }
     this._layerChips(I);
     const L = this._layerDef(this._layerSel);
     if (!L) return;
@@ -7206,20 +7418,24 @@ function exampleConfig(lang = 'en') {
 
 /* ================================================================== Home Assistant card editor, automatic first setup, YAML */
 
+/* the devices that come onto the plan by themselves: lights, thermostats, covers, media players, a Roborock vacuum and
+ * temperature sensors – no groups, hidden or diagnostic entities */
+function autoDevice(h, id) {
+  const st = h.states?.[id], d = domainOf(id), reg = h.entities?.[id];
+  if (!st || reg?.hidden || reg?.entity_category) return false;
+  if (d === 'vacuum') return reg?.platform === 'roborock';
+  if (['light', 'climate', 'cover', 'media_player'].includes(d)) return !Array.isArray(st.attributes?.entity_id);
+  return d === 'sensor' && st.attributes?.device_class === 'temperature';
+}
+
 /* A first floor plan from the Home Assistant areas: one room per area (with devices), packed edge to edge,
  * lights / thermostats / covers / media / temperature sensors placed inside. A starting point for the editor. */
 function autoConfig(hass, { lang } = {}) {
   const h = hass || {};
   const areaOf = (id) => h.entities?.[id]?.area_id || h.devices?.[h.entities?.[id]?.device_id]?.area_id || null;
-  const ok = (id) => {
-    const st = h.states?.[id], d = domainOf(id), reg = h.entities?.[id];
-    if (!st || reg?.hidden || reg?.entity_category) return false;
-    if (['light', 'climate', 'cover', 'media_player', 'vacuum'].includes(d)) return !Array.isArray(st.attributes?.entity_id);
-    return d === 'sensor' && st.attributes?.device_class === 'temperature';
-  };
   const by = new Map();
   for (const id of Object.keys(h.states || {})) {
-    if (!ok(id)) continue;
+    if (!autoDevice(h, id)) continue;
     const a = areaOf(id);
     if (!a || !h.areas?.[a]) continue;
     if (!by.has(a)) by.set(a, []);
@@ -7359,36 +7575,40 @@ class GfcCardEditor extends HTMLElement {
 
 /* ---------------------------------------------------------------- editor texts */
 Object.assign(STR.en, {
-  ed_selected: 'Selected', ed_ulAligned: 'Template placed exactly under the imported plan', ed_importBad: 'No floor plan found in this file / text', ed_imported: (n) => `${n} ${pl(n, 'room', 'rooms')} imported`, ed_importReady: 'Floor plan ready to import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'room', 'rooms')} · ${d} ${pl(d, 'passage', 'passages')} · ${w} ${pl(w, 'window', 'windows')} · ${f} pieces of furniture`, ed_importReplaces: 'Replaces the rooms drawn so far – placed devices stay.', ed_importApply: 'Import', ed_scaleTitle: 'Check the size', ed_scaleText: 'The size was estimated from the picture. Enter one real length and everything is adjusted.', ed_scaleOk: 'Size is right', ed_pastePlaceholder: 'Paste the answer or the file content from Claude here …', ed_importRead: 'Read', ed_importTitle: 'Import a floor plan file', ed_importSub: 'e.g. from the Claude skill – file or pasted text', ed_importFile: 'Choose file', ed_importPaste: 'Paste text', ed_export: 'Save floor plan as file', ed_roomList: 'Rooms', ed_areasHead: 'Home Assistant areas', ed_areasHelp: 'Drag an area onto its room – the name and the devices come along.', ed_withDevices: 'Place the area’s devices too', ed_assigned: (r) => `“${r}” linked`, ed_assignedPlaced: (r, n) => `“${r}” linked · ${n} ${pl(n, 'device', 'devices')} placed`, ed_areaDrag: 'Drag the area onto a room on the plan', ed_areaDropRoom: 'Drop the area onto a room', ed_areaIn: (r) => `Linked with ${r}`, ed_noAreaYet: 'no area yet', ed_matchByName: (n) => `Link ${n} ${pl(n, 'room', 'rooms')} by name`, ed_matched: (n) => `${n} ${pl(n, 'room', 'rooms')} linked by name`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now drag your areas onto them`, ed_invert: 'Invert colours', ed_detect: 'Find rooms automatically', ed_detectHelp: 'Set the scale first (Measure). Works best with clean plans – check the result and adjust the rooms.', ed_detectFail: 'The picture could not be analysed', ed_detectNone: 'No rooms found – draw them by hand', ed_detectNothingNew: 'No new rooms found', ed_detected: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now name them`, ed_title: 'Floor plan', ed_undo: 'Undo', ed_redo: 'Redo', ed_preview: 'Preview', ed_cancel: 'Cancel', ed_done: 'Done', ed_fit: 'Fit to screen',
+  ed_selected: 'Selected', ed_ulAligned: 'Template placed exactly under the imported plan', ed_importBad: 'No floor plan found in this file / text', ed_imported: (n) => `${n} ${pl(n, 'room', 'rooms')} imported`, ed_importedLinked: (n, m) => `${n} ${pl(n, 'room', 'rooms')} imported · ${m} linked with areas`, ed_importReady: 'Floor plan ready to import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'room', 'rooms')} · ${d} ${pl(d, 'passage', 'passages')} · ${w} ${pl(w, 'window', 'windows')} · ${f} pieces of furniture`, ed_importReplaces: 'Replaces the rooms drawn so far – placed devices stay.', ed_importApply: 'Import', ed_scaleTitle: 'Check the size', ed_scaleText: 'The size was estimated from the picture. Enter one real length and everything is adjusted.', ed_scaleOk: 'Size is right', ed_pastePlaceholder: 'Paste the answer or the file content from Claude here …', ed_importRead: 'Read', ed_importTitle: 'Import a floor plan file', ed_importSub: 'e.g. from the Claude skill – file or pasted text', ed_importFile: 'Choose file', ed_importPaste: 'Paste text', ed_export: 'Save floor plan as file', ed_roomList: 'Rooms', ed_areasHead: 'Home Assistant areas', ed_areasHelp: 'Drag an area onto its room – the room takes its name. Its devices come in by themselves in the Devices step.', ed_assigned: (r) => `“${r}” linked`, ed_areaDrag: 'Drag the area onto a room on the plan', ed_areaDropRoom: 'Drop the area onto a room', ed_areaIn: (r) => `Linked with ${r}`, ed_noAreaYet: 'no area yet', ed_matchByName: (n) => `Link ${n} ${pl(n, 'room', 'rooms')} by name`, ed_matched: (n) => `${n} ${pl(n, 'room', 'rooms')} linked by name`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now drag your areas onto them`, ed_invert: 'Invert colours', ed_detect: 'Find rooms automatically', ed_detectHelp: 'Works best with clean plans – check the result. Or trace the rooms yourself: Next: Rooms.', ed_detectFail: 'The picture could not be analysed', ed_detectNone: 'No rooms found – draw them by hand', ed_detectNothingNew: 'No new rooms found', ed_detected: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now name them`, ed_title: 'Floor plan', ed_undo: 'Undo', ed_redo: 'Redo', ed_preview: 'Preview', ed_cancel: 'Cancel', ed_done: 'Done', ed_fit: 'Fit to screen',
   ed_summary: (r, d) => `${r} ${pl(r, 'room', 'rooms')} · ${d} ${pl(d, 'device', 'devices')}`,
   ed_tool_sketch: 'Template', ed_tool_rooms: 'Rooms', ed_tool_furniture: 'Furniture', ed_tool_openings: 'Windows & doors', ed_tool_devices: 'Devices', ed_tool_layers: 'Layers', ed_tool_tiles: 'Tiles', ed_tool_settings: 'Settings',
   ed_room: 'Room', ed_open_window: 'Window', ed_open_door: 'Passage', ed_open_entrance: 'Front door',
   ed_tile_card: 'Layer card', ed_tile_weather: 'Weather', ed_tile_indoor: 'Inside', ed_tile_door: 'Front door', ed_tile_bar: 'Layer bar',
   ed_hint_measure1: 'Click the start of a wall whose length you know', ed_hint_measure2: 'Now click the end of that wall', ed_hint_measure3: 'Enter the real length on the right',
-  ed_hint_rooms: 'Drag to draw a room (also across others) · tap a room, then drag it to move · edges snap to each other', ed_hint_rooms0: 'Drag a rectangle to draw your first room – or start from your Home Assistant areas',
+  ed_hint_rooms: 'Drag to draw a room (also across others) · tap a room, then drag it to move · edges snap to each other', ed_hint_roomsMove: 'Drag a room to move it · drag on free space for a new room · tap a room for its settings', ed_hint_rooms0: 'Drag a rectangle to draw your first room – or start from your Home Assistant areas',
   ed_hint_open_window: 'Click on an outer wall to add a window', ed_hint_open_door: 'Click on a wall between two rooms to add a passage', ed_hint_open_entrance: 'Click on the wall with your front door',
-  ed_hint_furniture: 'Drag furniture from the right into a room · R rotates · ⌫ deletes', ed_hint_devices: 'Drag devices from the list onto the plan – or let them be placed in their room',
+  ed_hint_furniture: 'Drag furniture from the right into a room · R rotates · ⌫ deletes', ed_hint_devices: 'Drag to move · tap for settings · more in the list on the right',
   ed_hint_tiles: 'Drag the tiles where you like them', ed_hint_sketch: 'Drag the picture to move it, the corners to scale it',
   ed_needRoom: 'Draw a room first', ed_placed: (n) => `${n} ${pl(n, 'device', 'devices')} placed`, ed_ulNotStored: 'The picture is too large to keep in this browser',
   ed_ulLoaded: 'Template loaded – now set its size and trace the rooms', ed_measured: 'Scale set', ed_prev_laptop: 'Laptop', ed_prev_phone: 'Phone',
-  ed_sketch_lead: 'Start with a photo, screenshot or sketch of your floor plan. Set its scale, then trace the rooms on top.',
-  ed_ulReplace: 'Replace picture', ed_ulPick: 'Choose a picture', ed_ulDrop: 'or drop it here – JPG, PNG, screenshot', ed_opacity: 'Visibility', ed_ulWidth: 'Width of the picture (m)',
-  ed_measure_len: 'How long is this distance in reality (m)?', ed_apply: 'Apply', ed_measure: 'Measure', ed_measure_stop: 'Stop measuring', ed_ulRemove: 'Remove',
+  ed_start_lead: 'Three ways to your floor plan – take the one that is easiest for you.', ed_sketch_lead: 'Set the scale, then let the rooms be found – or trace them yourself under Rooms.',
+  ed_sketch_lead2: 'A picture under the plan helps to trace or check it. Or start again another way.', ed_otherWays: 'Other ways', ed_fromAreasSub: 'One room per area – you only arrange them',
+  ed_step_scale: '1 · Scale', ed_step_rooms: '2 · Rooms', ed_look: 'Look', ed_measureHelp: 'Measure: click the start and the end of a wall whose length you know – or enter the width of the picture.',
+  ed_ulReplace: 'Replace picture', ed_ulPick: 'Trace a photo or sketch', ed_ulDrop: 'Choose a picture or drop it here – JPG, PNG, screenshot', ed_opacity: 'Visibility', ed_ulWidth: 'Width of the picture (m)',
+  ed_measure_len: 'How long is this distance in reality (m)?', ed_apply: 'Apply', ed_measure: 'Measure', ed_measure_stop: 'Stop measuring', ed_ulRemove: 'Remove template',
   ed_ulNote: 'The template is only kept in this browser and never shown on the dashboard.', ed_quick: 'Quick start', ed_fromAreas: 'Rooms from Home Assistant areas',
   ed_example: 'Load example flat', ed_exampleLoaded: 'Example loaded', ed_clear: 'Start over', ed_claudeTip: 'Tip: hard-to-read photo or sketch? The Claude skill from the project page turns it into a floor plan file for “Import”.',
   ed_noAreas: 'No areas with devices found', ed_areasDone: 'All areas already have a room', ed_areasAdded: (n) => `${n} ${pl(n, 'room', 'rooms')} added – now arrange them`,
   ed_rooms_lead: 'Drag a rectangle on the plan for each room. Rooms snap to each other, so walls line up by themselves.', ed_rooms_empty: 'No rooms yet.',
-  ed_name: 'Name', ed_area: 'Home Assistant area', ed_noArea: '— none —', ed_area_help: 'Used for the vacuum and to place this area’s devices automatically.',
+  ed_name: 'Name', ed_area: 'Home Assistant area', ed_noArea: '— none —', ed_area_help: 'Named like its area – rename it as you like. The area’s devices come into this room by themselves.', ed_area_help0: 'Pick the room’s area: it names the room and brings its devices along. Or type a name – one that fits an area links it.',
   ed_label: 'Room name', ed_top: 'Top', ed_bottom: 'Bottom', ed_width: 'Width (m)', ed_depth: 'Depth (m)', ed_area_m2: (v) => `Floor area ≈ ${v} m²`,
-  ed_placeArea: (n) => `Place ${n} ${pl(n, 'device', 'devices')} of this area`, ed_duplicate: 'Duplicate', ed_delete: 'Delete',
-  ed_furn_drag: 'Drag into a room or click', ed_furn_lead: 'Purely for the looks: drag a piece into a room or tap it to add it to the selected room. Resize with the handles, R rotates.',
+  ed_duplicate: 'Duplicate', ed_delete: 'Delete',
+  ed_furn_drag: 'Drag into a room or click', ed_typicalFurn: 'Add typical furniture', ed_typicalFurnHelp: (n) => `Bed, sofa, kitchen, bath … in ${n} ${pl(n, 'room', 'rooms')} without furniture – change it as you like afterwards.`, ed_furnished: (n, r) => `${n} pieces in ${r} ${pl(r, 'room', 'rooms')}`, ed_furn_lead: 'Purely for the looks: drag a piece into a room or tap it to add it to the selected room. Resize with the handles, R rotates.',
   ed_kind: 'Kind', ed_widthCm: 'Width (cm)', ed_depthCm: 'Depth (cm)', ed_rotate: 'Rotate', ed_moreFurniture: 'Add more',
   ed_open_lead_window: 'Hover over an outer wall and click – the window snaps onto the wall. Windows let daylight in and show your covers.',
   ed_open_lead_door: 'Click on the wall between two rooms. Passages are drawn as glass bridges and show the vacuum its way.',
   ed_open_lead_entrance: 'Click on the wall with your front door. It glows green when the door is opened.',
   ed_open_counts: (w, d, e) => `${w} ${pl(w, 'window', 'windows')} · ${d} ${pl(d, 'passage', 'passages')} · ${e ? 'front door set' : 'no front door'}`,
   ed_lengthCm: 'Length (cm)', ed_open_move: 'Drag it along the wall, the round handles change its length.',
-  ed_ownLayer: 'Own layer', ed_dev_lead: 'Pick a layer, then drag devices onto the plan. Lamps, sensors and switches get the symbol you choose.',
+  ed_ownLayer: 'Own layer', ed_dev_lead: 'The devices of your areas are in their rooms already. Drag them to move, tap them for settings – and drag more from the list onto the plan.', ed_dev_lead0: 'Pick a layer, then drag devices onto the plan. Lamps, sensors and switches get the symbol you choose.',
+  ed_dev_noArea: (n) => `${n} ${pl(n, 'room', 'rooms')} without an area – their devices are still missing.`, ed_linkAreas: 'Link areas', ed_autoPlaced: (n) => `${n} ${pl(n, 'device', 'devices')} placed in their rooms`,
+  ed_next: (s) => `Next: ${s}`, ed_doneHint: 'Layers, tiles and settings are optional – everything works as it is.',
   ed_search: 'Search devices …', ed_autoAll: (n) => `Place ${n} ${pl(n, 'device', 'devices')} automatically`, ed_noAreaGroup: 'Without area', ed_noMatch: 'Nothing found.', ed_noEntities: 'No matching devices in Home Assistant.',
   ed_customDevHint: (n) => `Devices you add here appear in the layer “${n}”.`, ed_showOnPlan: 'Show on the plan', ed_add: 'Place on the plan',
   ed_doorOpen: 'Door opener (button / lock)', ed_none: '— none —', ed_doorBell: 'Doorbell (event / sensor)', ed_doorPlace: 'Place the door button', ed_doorHelp: 'The door opens only after sliding all the way – never by accident.',
@@ -7424,36 +7644,40 @@ Object.assign(STR.en, {
   ed_removeFromLayers: 'Remove from all layers', ed_deleteLayer: 'Delete layer', ed_layerEditLead: 'What this layer shows: whole categories and single devices.',
 });
 Object.assign(STR.de, {
-  ed_selected: 'Ausgewählt', ed_ulAligned: 'Vorlage liegt genau unter dem importierten Plan', ed_importBad: 'In dieser Datei / diesem Text wurde kein Grundriss gefunden', ed_imported: (n) => `${n} ${pl(n, 'Raum', 'Räume')} importiert`, ed_importReady: 'Grundriss bereit zum Import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${w} Fenster · ${f} Möbel`, ed_importReplaces: 'Ersetzt die bisher gezeichneten Räume – platzierte Geräte bleiben.', ed_importApply: 'Importieren', ed_scaleTitle: 'Größe prüfen', ed_scaleText: 'Die Größe wurde aus dem Bild geschätzt. Gib eine echte Länge ein, dann wird alles angepasst.', ed_scaleOk: 'Größe stimmt', ed_pastePlaceholder: 'Antwort oder Dateiinhalt von Claude hier einfügen …', ed_importRead: 'Einlesen', ed_importTitle: 'Grundriss-Datei importieren', ed_importSub: 'z. B. vom Claude-Skill – Datei oder eingefügter Text', ed_importFile: 'Datei wählen', ed_importPaste: 'Text einfügen', ed_export: 'Grundriss als Datei sichern', ed_roomList: 'Räume', ed_areasHead: 'Home-Assistant-Bereiche', ed_areasHelp: 'Ziehe einen Bereich auf seinen Raum – Name und Geräte kommen mit.', ed_withDevices: 'Geräte des Bereichs gleich platzieren', ed_assigned: (r) => `„${r}“ verknüpft`, ed_assignedPlaced: (r, n) => `„${r}“ verknüpft · ${n} ${pl(n, 'Gerät', 'Geräte')} platziert`, ed_areaDrag: 'Ziehe den Bereich auf einen Raum im Plan', ed_areaDropRoom: 'Den Bereich auf einen Raum ziehen', ed_areaIn: (r) => `Verknüpft mit ${r}`, ed_noAreaYet: 'noch kein Bereich', ed_matchByName: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpfen`, ed_matched: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpft`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt deine Bereiche auf die Räume ziehen`, ed_invert: 'Farben umkehren', ed_detect: 'Räume automatisch erkennen', ed_detectHelp: 'Vorher den Maßstab setzen (Ausmessen). Klappt am besten mit sauberen Plänen – Ergebnis prüfen und Räume anpassen.', ed_detectFail: 'Das Bild konnte nicht ausgewertet werden', ed_detectNone: 'Keine Räume gefunden – bitte von Hand zeichnen', ed_detectNothingNew: 'Keine neuen Räume gefunden', ed_detected: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt benennen`, ed_title: 'Grundriss', ed_undo: 'Rückgängig', ed_redo: 'Wiederholen', ed_preview: 'Vorschau', ed_cancel: 'Abbrechen', ed_done: 'Fertig', ed_fit: 'Einpassen',
+  ed_selected: 'Ausgewählt', ed_ulAligned: 'Vorlage liegt genau unter dem importierten Plan', ed_importBad: 'In dieser Datei / diesem Text wurde kein Grundriss gefunden', ed_imported: (n) => `${n} ${pl(n, 'Raum', 'Räume')} importiert`, ed_importedLinked: (n, m) => `${n} ${pl(n, 'Raum', 'Räume')} importiert · ${m} mit Bereichen verknüpft`, ed_importReady: 'Grundriss bereit zum Import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${w} Fenster · ${f} Möbel`, ed_importReplaces: 'Ersetzt die bisher gezeichneten Räume – platzierte Geräte bleiben.', ed_importApply: 'Importieren', ed_scaleTitle: 'Größe prüfen', ed_scaleText: 'Die Größe wurde aus dem Bild geschätzt. Gib eine echte Länge ein, dann wird alles angepasst.', ed_scaleOk: 'Größe stimmt', ed_pastePlaceholder: 'Antwort oder Dateiinhalt von Claude hier einfügen …', ed_importRead: 'Einlesen', ed_importTitle: 'Grundriss-Datei importieren', ed_importSub: 'z. B. vom Claude-Skill – Datei oder eingefügter Text', ed_importFile: 'Datei wählen', ed_importPaste: 'Text einfügen', ed_export: 'Grundriss als Datei sichern', ed_roomList: 'Räume', ed_areasHead: 'Home-Assistant-Bereiche', ed_areasHelp: 'Ziehe einen Bereich auf seinen Raum – der Raum heißt dann wie der Bereich. Die Geräte kommen im Schritt „Geräte“ von selbst dazu.', ed_assigned: (r) => `„${r}“ verknüpft`, ed_areaDrag: 'Ziehe den Bereich auf einen Raum im Plan', ed_areaDropRoom: 'Den Bereich auf einen Raum ziehen', ed_areaIn: (r) => `Verknüpft mit ${r}`, ed_noAreaYet: 'noch kein Bereich', ed_matchByName: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpfen`, ed_matched: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpft`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt deine Bereiche auf die Räume ziehen`, ed_invert: 'Farben umkehren', ed_detect: 'Räume automatisch erkennen', ed_detectHelp: 'Klappt am besten mit sauberen Plänen – Ergebnis prüfen. Oder die Räume selbst nachzeichnen: „Weiter: Räume“.', ed_detectFail: 'Das Bild konnte nicht ausgewertet werden', ed_detectNone: 'Keine Räume gefunden – bitte von Hand zeichnen', ed_detectNothingNew: 'Keine neuen Räume gefunden', ed_detected: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt benennen`, ed_title: 'Grundriss', ed_undo: 'Rückgängig', ed_redo: 'Wiederholen', ed_preview: 'Vorschau', ed_cancel: 'Abbrechen', ed_done: 'Fertig', ed_fit: 'Einpassen',
   ed_summary: (r, d) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Gerät', 'Geräte')}`,
   ed_tool_sketch: 'Vorlage', ed_tool_rooms: 'Räume', ed_tool_furniture: 'Möbel', ed_tool_openings: 'Fenster & Türen', ed_tool_devices: 'Geräte', ed_tool_layers: 'Ebenen', ed_tool_tiles: 'Kacheln', ed_tool_settings: 'Optionen',
   ed_room: 'Raum', ed_open_window: 'Fenster', ed_open_door: 'Durchgang', ed_open_entrance: 'Haustür',
   ed_tile_card: 'Ebenen-Karte', ed_tile_weather: 'Wetter', ed_tile_indoor: 'Innen', ed_tile_door: 'Haustür', ed_tile_bar: 'Ebenen-Leiste',
   ed_hint_measure1: 'Klicke auf den Anfang einer Wand, deren Länge du kennst', ed_hint_measure2: 'Jetzt auf das Ende dieser Wand klicken', ed_hint_measure3: 'Rechts die echte Länge eingeben',
-  ed_hint_rooms: 'Ziehen = neuer Raum (auch über anderen) · Raum antippen, dann ziehen = verschieben · Kanten rasten ein', ed_hint_rooms0: 'Ziehe ein Rechteck für deinen ersten Raum – oder starte mit deinen Home-Assistant-Bereichen',
+  ed_hint_rooms: 'Ziehen = neuer Raum (auch über anderen) · Raum antippen, dann ziehen = verschieben · Kanten rasten ein', ed_hint_roomsMove: 'Raum ziehen = verschieben · auf freier Fläche ziehen = neuer Raum · antippen = Einstellungen', ed_hint_rooms0: 'Ziehe ein Rechteck für deinen ersten Raum – oder starte mit deinen Home-Assistant-Bereichen',
   ed_hint_open_window: 'Klicke auf eine Außenwand, um ein Fenster zu setzen', ed_hint_open_door: 'Klicke auf die Wand zwischen zwei Räumen für einen Durchgang', ed_hint_open_entrance: 'Klicke auf die Wand mit deiner Haustür',
-  ed_hint_furniture: 'Möbel von rechts in einen Raum ziehen · R dreht · ⌫ löscht', ed_hint_devices: 'Geräte aus der Liste auf den Plan ziehen – oder automatisch in ihren Raum setzen lassen',
+  ed_hint_furniture: 'Möbel von rechts in einen Raum ziehen · R dreht · ⌫ löscht', ed_hint_devices: 'Ziehen = verschieben · antippen = Einstellungen · weitere in der Liste rechts',
   ed_hint_tiles: 'Kacheln an die gewünschte Stelle ziehen', ed_hint_sketch: 'Bild ziehen zum Verschieben, Ecken ziehen zum Skalieren',
   ed_needRoom: 'Zeichne zuerst einen Raum', ed_placed: (n) => `${n} ${pl(n, 'Gerät', 'Geräte')} platziert`, ed_ulNotStored: 'Das Bild ist zu groß, um es in diesem Browser zu behalten',
   ed_ulLoaded: 'Vorlage geladen – jetzt Maßstab setzen und Räume nachzeichnen', ed_measured: 'Maßstab gesetzt', ed_prev_laptop: 'Laptop', ed_prev_phone: 'Handy',
-  ed_sketch_lead: 'Starte mit einem Foto, Screenshot oder einer Skizze deines Grundrisses. Maßstab setzen, dann die Räume darüber nachzeichnen.',
-  ed_ulReplace: 'Bild ersetzen', ed_ulPick: 'Bild auswählen', ed_ulDrop: 'oder hierher ziehen – JPG, PNG, Screenshot', ed_opacity: 'Sichtbarkeit', ed_ulWidth: 'Breite des Bildes (m)',
-  ed_measure_len: 'Wie lang ist diese Strecke in echt (m)?', ed_apply: 'Übernehmen', ed_measure: 'Ausmessen', ed_measure_stop: 'Messen beenden', ed_ulRemove: 'Entfernen',
+  ed_start_lead: 'Drei Wege zu deinem Grundriss – nimm den, der für dich am einfachsten ist.', ed_sketch_lead: 'Maßstab setzen, dann die Räume erkennen lassen – oder unter „Räume“ selbst nachzeichnen.',
+  ed_sketch_lead2: 'Ein Bild unter dem Plan hilft beim Nachzeichnen und Prüfen. Oder fang auf einem anderen Weg neu an.', ed_otherWays: 'Andere Wege', ed_fromAreasSub: 'Ein Raum je Bereich – du ordnest sie nur noch an',
+  ed_step_scale: '1 · Maßstab', ed_step_rooms: '2 · Räume', ed_look: 'Darstellung', ed_measureHelp: 'Ausmessen: Anfang und Ende einer Wand anklicken, deren Länge du kennst – oder die Breite des Bildes eingeben.',
+  ed_ulReplace: 'Bild ersetzen', ed_ulPick: 'Foto oder Skizze nachzeichnen', ed_ulDrop: 'Bild wählen oder hierher ziehen – JPG, PNG, Screenshot', ed_opacity: 'Sichtbarkeit', ed_ulWidth: 'Breite des Bildes (m)',
+  ed_measure_len: 'Wie lang ist diese Strecke in echt (m)?', ed_apply: 'Übernehmen', ed_measure: 'Ausmessen', ed_measure_stop: 'Messen beenden', ed_ulRemove: 'Vorlage entfernen',
   ed_ulNote: 'Die Vorlage bleibt nur in diesem Browser und erscheint nie im Dashboard.', ed_quick: 'Schnellstart', ed_fromAreas: 'Räume aus Home-Assistant-Bereichen',
   ed_example: 'Beispielwohnung laden', ed_exampleLoaded: 'Beispiel geladen', ed_clear: 'Neu beginnen', ed_claudeTip: 'Tipp: Schwer lesbares Foto oder Skizze? Der Claude-Skill von der Projektseite macht daraus eine Grundriss-Datei zum Importieren.',
   ed_noAreas: 'Keine Bereiche mit Geräten gefunden', ed_areasDone: 'Alle Bereiche haben schon einen Raum', ed_areasAdded: (n) => `${n} ${pl(n, 'Raum', 'Räume')} angelegt – jetzt anordnen`,
   ed_rooms_lead: 'Ziehe für jeden Raum ein Rechteck auf. Räume rasten aneinander ein, so passen die Wände von selbst.', ed_rooms_empty: 'Noch keine Räume.',
-  ed_name: 'Name', ed_area: 'Bereich in Home Assistant', ed_noArea: '— keiner —', ed_area_help: 'Für den Saugroboter und um die Geräte dieses Bereichs automatisch zu platzieren.',
+  ed_name: 'Name', ed_area: 'Bereich in Home Assistant', ed_noArea: '— keiner —', ed_area_help: 'Heißt wie der Bereich – umbenennen geht jederzeit. Die Geräte des Bereichs kommen von selbst in diesen Raum.', ed_area_help0: 'Wähle den Bereich des Raums: Er gibt den Namen und bringt die Geräte mit. Oder tippe einen Namen – passt er zu einem Bereich, wird verknüpft.',
   ed_label: 'Raumname', ed_top: 'Oben', ed_bottom: 'Unten', ed_width: 'Breite (m)', ed_depth: 'Tiefe (m)', ed_area_m2: (v) => `Fläche ≈ ${v} m²`,
-  ed_placeArea: (n) => `${n} ${pl(n, 'Gerät', 'Geräte')} dieses Bereichs platzieren`, ed_duplicate: 'Duplizieren', ed_delete: 'Löschen',
-  ed_furn_drag: 'In einen Raum ziehen oder antippen', ed_furn_lead: 'Rein fürs Auge: Möbel in einen Raum ziehen oder antippen (landet im gewählten Raum). Größe über die Griffe, R dreht.',
+  ed_duplicate: 'Duplizieren', ed_delete: 'Löschen',
+  ed_furn_drag: 'In einen Raum ziehen oder antippen', ed_typicalFurn: 'Typische Möbel einsetzen', ed_typicalFurnHelp: (n) => `Bett, Sofa, Küche, Bad … in ${n} ${pl(n, 'Raum', 'Räumen')} ohne Möbel – danach nach Belieben anpassen.`, ed_furnished: (n, r) => `${n} Möbel in ${r} ${pl(r, 'Raum', 'Räumen')}`, ed_furn_lead: 'Rein fürs Auge: Möbel in einen Raum ziehen oder antippen (landet im gewählten Raum). Größe über die Griffe, R dreht.',
   ed_kind: 'Art', ed_widthCm: 'Breite (cm)', ed_depthCm: 'Tiefe (cm)', ed_rotate: 'Drehen', ed_moreFurniture: 'Weitere hinzufügen',
   ed_open_lead_window: 'Mit der Maus über eine Außenwand fahren und klicken – das Fenster rastet auf der Wand ein. Fenster lassen Tageslicht herein und zeigen die Rollläden.',
   ed_open_lead_door: 'Auf die Wand zwischen zwei Räumen klicken. Durchgänge erscheinen als Glasbrücken und zeigen dem Saugroboter den Weg.',
   ed_open_lead_entrance: 'Auf die Wand mit deiner Haustür klicken. Sie leuchtet grün, wenn die Tür geöffnet wurde.',
   ed_open_counts: (w, d, e) => `${w} Fenster · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${e ? 'Haustür gesetzt' : 'keine Haustür'}`,
   ed_lengthCm: 'Länge (cm)', ed_open_move: 'Entlang der Wand ziehen, die runden Griffe ändern die Länge.',
-  ed_ownLayer: 'Eigene Ebene', ed_dev_lead: 'Ebene wählen, dann Geräte auf den Plan ziehen. Lampen, Sensoren und Schalter bekommen das Symbol, das du auswählst.',
+  ed_ownLayer: 'Eigene Ebene', ed_dev_lead: 'Die Geräte deiner Bereiche stehen schon in ihren Räumen. Ziehen zum Verschieben, antippen für Einstellungen – weitere aus der Liste auf den Plan ziehen.', ed_dev_lead0: 'Ebene wählen, dann Geräte auf den Plan ziehen. Lampen, Sensoren und Schalter bekommen das Symbol, das du auswählst.',
+  ed_dev_noArea: (n) => `${n} ${pl(n, 'Raum', 'Räume')} ohne Bereich – ihre Geräte fehlen noch.`, ed_linkAreas: 'Bereiche zuordnen', ed_autoPlaced: (n) => `${n} ${pl(n, 'Gerät', 'Geräte')} in ihre Räume gesetzt`,
+  ed_next: (s) => `Weiter: ${s}`, ed_doneHint: 'Ebenen, Kacheln und Optionen sind optional – es funktioniert schon so.',
   ed_search: 'Geräte suchen …', ed_autoAll: (n) => `${n} ${pl(n, 'Gerät', 'Geräte')} automatisch platzieren`, ed_noAreaGroup: 'Ohne Bereich', ed_noMatch: 'Nichts gefunden.', ed_noEntities: 'Keine passenden Geräte in Home Assistant.',
   ed_customDevHint: (n) => `Geräte, die du hier hinzufügst, erscheinen in der Ebene „${n}“.`, ed_showOnPlan: 'Im Plan zeigen', ed_add: 'Auf den Plan setzen',
   ed_doorOpen: 'Türöffner (Taste / Schloss)', ed_none: '— keiner —', ed_doorBell: 'Klingel (Ereignis / Sensor)', ed_doorPlace: 'Tür-Knopf platzieren', ed_doorHelp: 'Die Tür öffnet erst, wenn ganz durchgeschoben wurde – nie aus Versehen.',
@@ -7675,6 +7899,10 @@ Object.assign(GfcEditor.prototype, {
  * read from the plan, windows, doors, the front door and furniture. The editor imports it (file or pasted text),
  * then rooms are linked to Home Assistant areas by name or by dragging. A whole card configuration works as well. */
 const GFP_FORMAT = 'glass-floorplan';
+/* what a floor plan file may call a device (its "devices": a lamp, the TV … with a position, but no entity id) */
+const HINT_KINDS = { light: 'light', lamp: 'light', media: 'media', tv: 'media', speaker: 'media', climate: 'climate', thermostat: 'climate',
+  heating: 'climate', radiator: 'climate', temperature: 'climate', sensor: 'climate', cover: 'cover', blind: 'cover', blinds: 'cover',
+  shutter: 'cover', curtain: 'cover', vacuum: 'vacuum', robot: 'vacuum', dock: 'vacuum' };
 
 /* text from a file or a chat answer → object (```json fences and text around it are ignored) */
 function parsePlanText(text) {
@@ -7705,10 +7933,18 @@ function readPlanData(o) {
   const segs = (k) => (Array.isArray(o[k]) ? o[k] : []).map(normSeg).filter(Boolean).map((s) => s.map(r0));
   const ents = (Array.isArray(o.entities) ? o.entities : []).map(normEntity).filter(Boolean)
     .map((e) => { const x = { entity: e.entity }; if (e.at) x.at = e.at.map(r0); if (e.icon) x.icon = e.icon; if (e.name) x.name = e.name; if (e.watt) x.watt = e.watt; if (e.beams) x.beams = e.beams; return x; });
+  // where the lamps, the TV … are – they go onto the matching devices of the room's area later
+  const hints = (Array.isArray(o.devices) ? o.devices : []).map((x) => {
+    const kind = HINT_KINDS[slug(x?.kind)], at = Array.isArray(x?.at) && x.at.length >= 2 && x.at.slice(0, 2).every(Number.isFinite) ? x.at.slice(0, 2).map(r0) : null;
+    if (!kind || !at) return null;
+    const hint = { kind, at, name: String(x.name || '') };
+    if (kind === 'light' && LAMP_ICONS.includes(x.icon)) hint.icon = x.icon;
+    return hint;
+  }).filter(Boolean);
   const ul = normRect(o.image_rect || o.underlay?.rect);
   return {
     isCard: String(o.type || '').includes(CARD_TAG),
-    rooms, windows: segs('windows'), doors: segs('doors'), entrance: normSeg(o.entrance)?.map(r0) || null, entities: ents,
+    rooms, windows: segs('windows'), doors: segs('doors'), entrance: normSeg(o.entrance)?.map(r0) || null, entities: ents, hints,
     estimated: o.format === GFP_FORMAT && o.scale !== 'measured', imageRect: ul ? ul.map(r0) : null, full: o,
   };
 }
@@ -7731,18 +7967,22 @@ Object.assign(GfcEditor.prototype, {
     if (!d) { this._toast(t('ed_importBad')); return; }
     this._pending = d;
     this._pasting = false;
-    this._tool = 'sketch';
     this._s = null;
+    // nothing drawn yet: nothing to ask, it's in (undo takes it back)
+    if (!this._c.rooms.length) { this._applyImport(); return; }
+    this._tool = 'sketch';
     this._fit();
     this._draw();
     this._panel();
   },
 
-  /* take the pending import over: the floor plan is replaced, placed devices and layers stay */
+  /* take the pending import over: the floor plan is replaced, placed devices and layers stay; rooms named like an area
+   * are linked with it right away */
   _applyImport() {
     const d = this._pending;
     if (!d) return;
     this._pending = null;
+    let linked = [];
     this._change(() => {
       const c = this._c;
       if (d.isCard) {
@@ -7751,6 +7991,7 @@ Object.assign(GfcEditor.prototype, {
         for (const k of Object.keys(c)) delete c[k];
         Object.assign(c, normEditorConfig(deep(d.full)));
         if (keepLang && !c.language) c.language = keepLang;
+        this._markDone();
       } else {
         c.rooms = d.rooms;
         c.windows = d.windows;
@@ -7767,6 +8008,9 @@ Object.assign(GfcEditor.prototype, {
           c.underlay = this._ulSrc ? { ...c.underlay, rect: d.imageRect } : { opacity: 0.6, rect: d.imageRect };
         }
         delete c.widgets;
+        linked = this._nameMatches();
+        linked.forEach(([i, a]) => this._linkArea(c.rooms[i], a));
+        this._hints = d.hints || [];
       }
       this._loadUnderlay();
       this._tool = d.estimated ? 'sketch' : 'rooms';
@@ -7775,7 +8019,7 @@ Object.assign(GfcEditor.prototype, {
     this._fit();
     this._draw();
     this._panel();
-    this._toast(t('ed_imported', d.rooms.length));
+    this._toast(linked.length ? t('ed_importedLinked', d.rooms.length, linked.length) : t('ed_imported', d.rooms.length));
   },
 
   /* everything grows / shrinks around the top-left corner (wrong estimate of the size) */
@@ -7792,6 +8036,7 @@ Object.assign(GfcEditor.prototype, {
       if (c.underlay?.rect) c.underlay.rect = R(c.underlay.rect);
       if (c.widgets) for (const w of Object.keys(c.widgets)) if (Array.isArray(c.widgets[w])) c.widgets[w] = R(c.widgets[w]);
     });
+    this._hints = this._hints.map((x) => ({ ...x, at: P(x.at) }));
     this._fit();
     this._draw();
   },

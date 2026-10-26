@@ -216,6 +216,9 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
   -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%); transition: background 1s ease; }
 .gcard > .gv { display: flex; flex-direction: column; height: 100%; animation: fadein .5s cubic-bezier(.2, .8, .2, 1) both; }
 .root.ev .gcard > .gv { animation: none; }
+/* editor, while the plan itself is built: only rooms, furniture, windows and doors – no devices, lamp light or layer bar */
+.root.bare .lamp, .root.bare .dev, .root.bare .glows, .root.bare .rgl > i[data-e], .root.bare .bot, .root.bare .dockm, .root.bare .trail,
+.root.bare .tabs, .root.bare .badge, .root.bare .ctint { visibility: hidden !important; }
 @keyframes fadein { from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
 .gk { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: max(11px, calc(14 * var(--u))); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t2); }
 .gk > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

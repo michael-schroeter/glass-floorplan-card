@@ -25,12 +25,12 @@ You never write coordinates. Pick whatever you have at hand:
 |---|---|
 | 📷 **A picture** of your floor plan (listing, photo, screenshot, hand sketch) | Load it in the editor, measure one wall, click **Find rooms automatically**. Rooms and doorways appear on their own. |
 | ✨ **A hard-to-read picture** (taken at an angle, busy, hand-drawn) | Send it to **Claude** with the [floor plan skill](docs/claude-skill.md). You get a file back and import it with one click. |
-| 🏠 **Your Home Assistant areas** | One click creates a room for each area, with its devices already placed. Arrange the rooms and you're done. |
+| 🏠 **Your Home Assistant areas** | One click creates a room for each area. Drag them where they are – the devices follow by themselves. |
 | ✏️ **Nothing but your memory** | Drag rectangles. Edges snap together, so the rooms line up like walls. |
 
 ![The editor finds the rooms in a sketch](docs/images/editor-sketch.jpg)
 
-Then drag your Home Assistant areas onto the rooms (or link them by name), drag your devices onto the plan, and click **Done**. The editor always shows the real card at the real size of your screen.
+Rooms named like a Home Assistant area are linked by themselves (also across languages, *Living* ↔ *Wohnzimmer*) and take its name; drag any other area onto its room. **Next** takes you through furniture (one click for typical pieces), windows and doors to your devices, which are in their rooms already. Click **Done**. The editor always shows the real card at the real size of your screen.
 
 ## Simple by default, deep if you want
 

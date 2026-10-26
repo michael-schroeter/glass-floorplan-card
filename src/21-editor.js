@@ -20,6 +20,10 @@ const LAYER_FILTER = {
 const ED_PHONE = { w: 390, h: 788 };
 /* tools that show the template picture (and keep it inside the visible plan) */
 const ED_UL_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
+/* the steps that build the plan itself: devices stay hidden there, they come into their rooms once the plan is built */
+const ED_BUILD_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
+/* the way through the editor – every step ends with a button to the next one */
+const ED_FLOW = ['sketch', 'rooms', 'furniture', 'openings', 'devices'];
 /* a template picture stays in this browser only – one entry per uploaded picture, the configuration names it */
 const UL_STORE = `${CARD_TAG}:template:`;
 /* how the editor was left (tool, size check, an import waiting …) – per floor plan, found again by its contents */
@@ -67,6 +71,9 @@ class GfcEditor extends HTMLElement {
     // nothing drawn yet: start with the template, empty – otherwise the editor is as it was left
     this._tool = this._c.rooms.length ? 'rooms' : 'sketch';
     this._mode = window.innerWidth < 700 ? 'phone' : 'laptop';
+    this._doneAreas = new Set();
+    this._markDone();
+    this._hints = [];
     this._recall();
     this._loadUnderlay();
     this._loadLabels();
@@ -74,7 +81,11 @@ class GfcEditor extends HTMLElement {
     if (!this.isConnected) document.body.append(this);
     this._dlg.showModal();
     this._cv.focus({ preventScroll: true });
-    requestAnimationFrame(() => { this._fit(true); this._draw(); this._panel(); requestAnimationFrame(() => { if (!this._viewTouched) { this._fit(true); this._draw(); } }); });
+    requestAnimationFrame(() => {
+      if (!this._bare()) this._autoDevices();
+      this._fit(true); this._draw(); this._panel();
+      requestAnimationFrame(() => { if (!this._viewTouched) { this._fit(true); this._draw(); } });
+    });
   }
 
   _useLang() {
@@ -94,6 +105,8 @@ class GfcEditor extends HTMLElement {
   }
 
   _close(save) {
+    // "Done" right after linking the areas: their devices come along anyway
+    if (save) this._autoDevices(true);
     const out = save ? cleanConfig(this._c) : null;
     if (save) this._onSave?.(out);
     // next time the editor opens as it was left – unless the changes were thrown away
@@ -121,6 +134,8 @@ class GfcEditor extends HTMLElement {
     if (this._picker) st.picker = this._picker;
     if (this._scaleCheck) st.scaleCheck = true;
     if (d) st.pending = d.isCard ? d : { ...d, full: null };
+    if (this._doneAreas.size) st.done = [...this._doneAreas];
+    if (this._hints.length) st.hints = this._hints;
     let all = {};
     try { all = JSON.parse(lsGet(ED_STATE) || '{}') || {}; } catch (e) { /* broken entry: start again */ }
     all[id] = st;
@@ -146,6 +161,8 @@ class GfcEditor extends HTMLElement {
     if (this._s && !this._selObj()) this._s = null;
     this._scaleCheck = !!st.scaleCheck && this._c.rooms.length > 0;
     this._pending = Array.isArray(st.pending?.rooms) && st.pending.rooms.length ? st.pending : null;
+    if (Array.isArray(st.done)) for (const a of st.done) this._doneAreas.add(a);
+    if (Array.isArray(st.hints)) this._hints = st.hints.filter((x) => Array.isArray(x?.at) && x.kind);
   }
 
   /* ---------------------------------------------------------------- shell */
@@ -256,6 +273,7 @@ class GfcEditor extends HTMLElement {
         if (!this._c.language) delete this._c.language;
       }, { panel: false });
       this._ulSrc = null;
+      this._doneAreas = new Set(); this._hints = [];
       this._pending = null; this._scaleCheck = null; this._pasting = false; this._measure = null; this._editLayer = null;
       this._tool = 'sketch'; this._layerSel = 'light'; this._s = null; this._scrollMem = {};
       this._viewTouched = false;
@@ -271,9 +289,13 @@ class GfcEditor extends HTMLElement {
     this._measure = null;
     this._editLayer = null;
     this._picker = null;
+    // the plan is built: the devices of the linked areas come into their rooms
+    if (!this._bare()) this._autoDevices();
     this._draw();
     this._panel();
   }
+  /* building the plan itself (template, rooms, furniture, windows): no devices on it yet */
+  _bare() { return ED_BUILD_TOOLS.includes(this._tool); }
   _setMode(m) {
     if (this._mode === m) return;
     this._mode = m;
@@ -294,7 +316,7 @@ class GfcEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll('.elight button').forEach((b) => b.classList.toggle('act', b.dataset.l === this._light));
     this.$('.undo').disabled = !this._undo.length;
     this.$('.redo').disabled = !this._redo.length;
-    const n = this._c.rooms.length, e = this._c.entities.filter((x) => x.at).length;
+    const n = this._c.rooms.length, e = this._c.entities.filter((x) => x.at).length + (this._c.vacuum?.entity && this._c.vacuum.dock ? 1 : 0);
     this.$('.etop h1 small').textContent = n ? t('ed_summary', n, e) : '';
     this._cv.className = `ecv tool-${this._tool}${this._showUl() ? ' ul-on' : ''}${this._tool === 'rooms' || (this._tool === 'sketch' && this._measure) ? ' draw' : ''}${this._cv.classList.contains('del-sel') ? ' del-sel' : ''}${this._cv.classList.contains('del-all') ? ' del-all' : ''}`;
   }
@@ -364,16 +386,17 @@ class GfcEditor extends HTMLElement {
   /* while rooms are drawn the plan stays where it is on the screen (a new room must not make it jump);
    * the fit button – or another tool – shows the exact view again */
   _drawing(cfg) { return ['sketch', 'rooms'].includes(this._tool) && cfg.layout !== 'mobile'; }
-  /* lights shown switched on / off while editing (or as they really are) */
+  /* lights shown switched on / off while editing (or as they really are) – off while the plan itself is built */
   _liveHass(h) {
-    if (!h || this._light === 'real') return h;
+    const mode = this._bare() ? 'off' : this._light;
+    if (!h || mode === 'real') return h;
     const ids = this._c.entities.map((e) => e.entity).filter((id) => domainOf(id) === 'light' && h.states?.[id]);
-    const key = `${this._light}|${ids.join(',')}|${ids.map((id) => this._c.entities.find((e) => e.entity === id)?.kelvin || '').join(',')}`;
+    const key = `${mode}|${ids.join(',')}|${ids.map((id) => this._c.entities.find((e) => e.entity === id)?.kelvin || '').join(',')}`;
     if (this._lh?.src === h && this._lh.key === key) return this._lh.out;
     const states = { ...h.states };
     for (const id of ids) {
       const st = h.states[id], a = st.attributes || {}, modes = a.supported_color_modes || [];
-      if (this._light === 'off') { states[id] = { ...st, state: 'off', attributes: { ...a, brightness: null, color_mode: null } }; continue; }
+      if (mode === 'off') { states[id] = { ...st, state: 'off', attributes: { ...a, brightness: null, color_mode: null } }; continue; }
       if (st.state === 'on') { states[id] = { ...st, attributes: { ...a, brightness: Math.max(a.brightness || 0, 180) } }; continue; }
       const ct = modes.includes('color_temp'), k = this._c.entities.find((e) => e.entity === id)?.kelvin || 2900;
       states[id] = { ...st, state: 'on', attributes: { ...a, brightness: 220, color_mode: ct ? 'color_temp' : modes.find((m) => m !== 'onoff') || 'onoff', ...(ct ? { color_temp_kelvin: k } : {}) } };
@@ -391,13 +414,13 @@ class GfcEditor extends HTMLElement {
     const area = draw && this._fix ? this._drawArea(cfg, this._screen(), this._fix) : null;
     const scr = area ? { w: area.w, h: area.h } : this._screen();
     const fix = area ? { pu: this._fix.pu, ox: this._fix.ox - area.x, oy: this._fix.oy - area.y } : null;
-    const stage = fix ? null : this._liveStage(cfg);
+    const stage = fix ? null : this._liveStage(cfg), bare = this._bare();
     this._area = area;
-    const key = JSON.stringify([cfg, scr, stage, fix]);
+    const key = JSON.stringify([cfg, scr, stage, fix, bare]);
     if (key !== this._liveKey) {
       this._liveKey = key;
       card.style.width = `${scr.w}px`;
-      card.setEditorView(cfg, { w: scr.w, h: scr.h, stage, fix, tab: this._layerSel });
+      card.setEditorView(cfg, { w: scr.w, h: scr.h, stage, fix, bare, tab: this._layerSel });
     }
     if (card.hass !== lh) card.hass = lh;
     if (card._M && card._tab !== this._layerSel && card._M.layers.some((l) => l.id === this._layerSel)) { card._tab = this._layerSel; card._applyTab(true); }
@@ -549,9 +572,10 @@ class GfcEditor extends HTMLElement {
         html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${k}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(t(`ed_tile_${k}`))}</span></div>`;
       }
     }
-    // device markers: exactly over the buttons the live card shows in its current layer (tap → settings)
-    const onCard = (el) => { const b = !el || el.classList.contains('hid') ? null : this._cardBox(el); return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]]; };
-    c.entities.forEach((e, i) => {
+    // device markers: exactly over the buttons the live card shows in its current layer (tap → settings) –
+    // none while the plan itself is built
+    const onCard = (el) => { const b = !el || el.classList.contains('hid') || this._bare() ? null : this._cardBox(el); return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]]; };
+    if (!this._bare()) c.entities.forEach((e, i) => {
       const on = sel?.t === 'ent' && sel.i === i, m = e.at && onCard(card?._mk?.[e.entity]);
       // a selected device without a button there (plan: false, another layer) is shown where it is
       const [x, y, w] = m || (on && e.at ? [...this.P(e.at[0], e.at[1]), 34 * F.k] : []);
@@ -565,7 +589,7 @@ class GfcEditor extends HTMLElement {
       html += `<div class="emk${sel?.t === 'door' ? ' sel' : ''}" data-k="mk" data-m="door" style="left:${x}px;top:${y}px;--s:${w.toFixed(1)}px"></div>`;
     }
     const mkSize = (el, dflt) => (el?.offsetWidth || dflt) * F.k;
-    if (c.vacuum?.entity && c.vacuum.dock && (sel?.t === 'dock' || card?._layer?.()?.type === 'vacuum')) {
+    if (c.vacuum?.entity && c.vacuum.dock && !this._bare() && (sel?.t === 'dock' || card?._layer?.()?.type === 'vacuum')) {
       const [x, y] = this.P(c.vacuum.dock[0], c.vacuum.dock[1]);
       html += `<div class="emk dock${sel?.t === 'dock' ? ' sel' : ''}" data-k="mk" data-m="dock" style="left:${x}px;top:${y}px;--s:${mkSize(card?.$?.('.bot'), 30).toFixed(1)}px"></div>`;
     }
@@ -630,7 +654,7 @@ class GfcEditor extends HTMLElement {
   _hint() {
     if (this._measure) return this._measure.b ? t('ed_hint_measure3') : this._measure.a ? t('ed_hint_measure2') : t('ed_hint_measure1');
     const tool = this._tool;
-    if (tool === 'rooms') return this._c.rooms.length ? t('ed_hint_rooms') : t('ed_hint_rooms0');
+    if (tool === 'rooms') return !this._c.rooms.length ? t('ed_hint_rooms0') : this._showUl() ? t('ed_hint_rooms') : t('ed_hint_roomsMove');
     if (tool === 'openings') return t(`ed_hint_open_${this._openKind}`);
     if (tool === 'furniture') return t('ed_hint_furniture');
     if (tool === 'devices') return t('ed_hint_devices');
@@ -722,22 +746,24 @@ class GfcEditor extends HTMLElement {
     if (e.button === 1 || this._space) { this._d = { ...base, mode: 'pan', f: { ...this._f } }; return; }
     if (this._measure) { this._d = { ...base, mode: 'measure' }; return; }
     if (k === 'hd') { this._d = { ...base, mode: 'resize', h: el.dataset.h, end: el.dataset.end, orig: deep(this._selObj()) }; return; }
-    // rooms tool: dragging always draws a new room (also across others – tracing a plan); a selected room moves,
-    // a short click on an unselected room selects it
-    if (k === 'room' && this._tool === 'rooms' && !(this._s?.t === 'room' && this._s.i === +el.dataset.i && !this._s.fresh)) {
+    // rooms tool over a template: dragging always draws a new room (also across others – tracing a plan); a selected
+    // room moves, a short click on an unselected room selects it. Without a template dragging a room moves it.
+    if (k === 'room' && this._tool === 'rooms' && this._showUl() && !(this._s?.t === 'room' && this._s.i === +el.dataset.i && !this._s.fresh)) {
       const s = [this._snapV(p[0], 'x').v, this._snapV(p[1], 'y').v];
       this._d = { ...base, mode: 'draw', a: s, click: +el.dataset.i };
       return;
     }
     if (k === 'room' && (this._tool === 'rooms' || this._tool === 'sketch' || this._tool === 'settings' || this._tool === 'layers')) {
       const i = +el.dataset.i;
-      this._select({ t: 'room', i }, 'rooms');
+      // quietly while it is dragged around, a tap shows its settings
+      this._select({ t: 'room', i, quiet: this._sameSel({ t: 'room', i }) ? !!this._s.quiet : true }, 'rooms');
       const R = this._c.rooms[i].rect;
       // everything inside the room moves along with it
       const ents = this._c.entities.map((x, j) => (x.at && inRect(R, x.at) ? j : -1)).filter((j) => j >= 0);
       const onWall = (s) => { const q = normSeg(s); return q && ((segH(q) && (q[1] === R[1] || q[1] === R[3]) && q[0] >= R[0] - 1 && q[2] <= R[2] + 1) || (!segH(q) && (q[0] === R[0] || q[0] === R[2]) && q[1] >= R[1] - 1 && q[3] <= R[3] + 1)); };
       const shared = (s) => this._c.rooms.some((o, j) => j !== i && segDist(o.rect, [(s[0] + s[2]) / 2, (s[1] + s[3]) / 2]) < 1);
-      this._d = { ...base, mode: 'move-room', i, orig: deep(this._c.rooms[i]), ents: ents.map((j) => [j, [...this._c.entities[j].at]]),
+      this._d = { ...base, mode: 'move-room', tap: true, i, orig: deep(this._c.rooms[i]), ents: ents.map((j) => [j, [...this._c.entities[j].at]]),
+        hints: this._hints.filter((x) => inRect(R, x.at)).map((x) => [x, [...x.at]]),
         wins: this._c.windows.map((s, j) => (onWall(s) && !shared(normSeg(s)) ? [j, deep(s)] : null)).filter(Boolean),
         door: this._c.door?.at && inRect(R, this._c.door.at) ? [...this._c.door.at] : null, dock: this._c.vacuum?.dock && inRect(R, this._c.vacuum.dock) ? [...this._c.vacuum.dock] : null,
         ent: this._c.entrance && onWall(this._c.entrance) ? deep(this._c.entrance) : null };
@@ -844,6 +870,7 @@ class GfcEditor extends HTMLElement {
       room.rect = [nx, ny, nx + w, ny + h];
       room.furniture = (d.orig.furniture || []).map((f) => shiftFurn(f, ddx, ddy));
       for (const [j, at] of d.ents) c.entities[j].at = [r0(at[0] + ddx), r0(at[1] + ddy)];
+      for (const [x, at] of d.hints) x.at = [r0(at[0] + ddx), r0(at[1] + ddy)];
       for (const [j, s] of d.wins) c.windows[j] = shiftSeg(s, ddx, ddy);
       if (d.door) c.door.at = [r0(d.door[0] + ddx), r0(d.door[1] + ddy)];
       if (d.dock) c.vacuum.dock = [r0(d.dock[0] + ddx), r0(d.dock[1] + ddy)];
@@ -970,7 +997,10 @@ class GfcEditor extends HTMLElement {
     const s = this._s, o = this._selObj();
     if (!o) return;
     this._change(() => {
-      if (s.t === 'room') { o.rect = [o.rect[0] + dx, o.rect[1] + dy, o.rect[2] + dx, o.rect[3] + dy]; o.furniture = (o.furniture || []).map((f) => shiftFurn(f, dx, dy)); }
+      if (s.t === 'room') {
+        for (const x of this._hints) if (inRect(o.rect, x.at)) x.at = [x.at[0] + dx, x.at[1] + dy];
+        o.rect = [o.rect[0] + dx, o.rect[1] + dy, o.rect[2] + dx, o.rect[3] + dy]; o.furniture = (o.furniture || []).map((f) => shiftFurn(f, dx, dy));
+      }
       else if (s.t === 'furn') setFurnRect(o, normFurn(o).r.map((v, i) => v + (i % 2 ? dy : dx)));
       else if (s.t === 'open') this._setOpening(s, shiftSeg(normSeg(o), dx, dy));
       else if (s.t === 'ent') o.at = [o.at[0] + dx, o.at[1] + dy];
@@ -1056,61 +1086,143 @@ class GfcEditor extends HTMLElement {
     });
   }
 
-  /* Home Assistant area → room: the room gets the area's name (if it still has a default name) and,
-   * if wanted, the area's lights, thermostats, covers, media players are placed in it */
-  _assignArea(i, areaId) {
-    const c = this._c, room = c.rooms[i], h = this._hs() || {};
-    if (!room || !areaId) return;
-    let placed = 0;
-    this._change(() => {
-      room.area = areaId;
-      const an = h.areas?.[areaId]?.name;
-      if (an && (!room.name || new RegExp(`^(${t('ed_room')}|Room|Raum)( \\d+)?$`).test(room.name))) room.name = an;
-      if (this._withDevices === false) return;
-      let ids = Object.keys(h.states || {}).filter((id) => this._areaOf(id) === areaId && this._isPlaceable(id) && !c.entities.some((e) => e.entity === id && e.at));
-      if (ids.some((id) => domainOf(id) === 'climate')) ids = ids.filter((id) => domainOf(id) !== 'sensor');
-      const taken = c.entities.filter((e) => e.at).map((e) => e.at);
-      for (const id of ids.sort()) {
-        const at = freeSpot(room.rect, taken);
-        taken.push(at);
-        if (domainOf(id) === 'vacuum') { if (!c.vacuum?.entity) c.vacuum = { entity: id, dock: at }; continue; }
-        const j = c.entities.findIndex((x) => x.entity === id);
-        if (j >= 0) c.entities[j].at = at;
-        else c.entities.push({ entity: id, at, ...(domainOf(id) === 'light' ? { icon: guessLampIcon(id, h.states[id]) } : {}) });
-        placed++;
-      }
-    });
-    this._toast(placed ? t('ed_assignedPlaced', room.name, placed) : t('ed_assigned', room.name));
+  /* Home Assistant area → room: the room is named like the area (rename it as you like – linking an area again names
+   * it again). Its devices come in once the plan is built (_autoDevices). */
+  _linkArea(room, areaId) {
+    const an = this._hs()?.areas?.[areaId]?.name;
+    room.area = areaId;
+    if (!an) return;
+    // a room in two parts (L-shaped: two rectangles) – the second part gets a number
+    const n = this._c.rooms.filter((r) => r !== room && r.area === areaId).length;
+    room.name = n ? `${an} ${n + 1}` : an;
   }
-  /* rooms whose name matches an area's name get that area */
+  _assignArea(i, areaId) {
+    const room = this._c.rooms[i];
+    if (!room || !areaId) return;
+    const old = room.area;
+    this._change(() => { this._linkArea(room, areaId); this._rehome([old, areaId]); });
+    this._toast(t('ed_assigned', room.name));
+  }
+  /* devices that sit in a room of another area (the areas were linked anew) move to their own area's room */
+  _rehome(areas) {
+    const c = this._c, taken = c.entities.filter((e) => e.at).map((e) => e.at);
+    for (const e of c.entities) {
+      const a = e.at && this._areaOf(e.entity), own = a && areas.includes(a) ? c.rooms.filter((r) => r.area === a) : [];
+      const cur = own.length && c.rooms.find((r) => inRect(r.rect, e.at));
+      if (!cur?.area || cur.area === a) continue;
+      e.at = freeSpot(own[0].rect, taken);
+      taken.push(e.at);
+    }
+  }
+  /* rooms whose name fits an area get that area (also right after an import, and when a room is named) */
   _matchAreasByName() {
     const pairs = this._nameMatches();
     if (!pairs.length) return;
-    const keep = this._withDevices;
-    pairs.forEach(([i, a]) => this._assignArea(i, a));
-    this._withDevices = keep;
+    this._change(() => pairs.forEach(([i, a]) => this._linkArea(this._c.rooms[i], a)));
     this._toast(t('ed_matched', pairs.length));
   }
   /* exact names first, then the same word stem without "room / zimmer / raum" ("Wohnen" ↔ "Wohnzimmer", "Bath" ↔ "Bathroom",
-   * "Bad" ↔ "Badezimmer") – only when exactly one area fits */
-  _nameMatches() {
-    const used = new Set(this._c.rooms.map((r) => r.area).filter(Boolean));
+   * "Bad" ↔ "Badezimmer"), then the same kind of room in the other language ("Living" ↔ "Wohnzimmer") – only when exactly
+   * one area fits. `only`: just this room. */
+  _nameMatches(only) {
+    const rooms = this._c.rooms, used = new Set(rooms.map((r) => r.area).filter(Boolean));
     const free = () => this._areas().filter((x) => !used.has(x.area_id));
     const stem = (s) => {
       let x = normName(s).replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u');
       for (let k = 0; k < 2; k++) x = x.replace(/(zimmer|raum|room|bereich|area)$/, '');
       return x.replace(/(en|e|s)$/, '');
     };
-    const out = [];
-    const open = this._c.rooms.map((r, i) => (r.area ? null : i)).filter((i) => i != null);
-    for (const pass of [0, 1]) for (const i of open) {
-      if (out.some(([j]) => j === i)) continue;
-      const n = normName(this._c.rooms[i].name);
+    const out = [], taken = (i) => out.some(([j]) => j === i);
+    const open = rooms.map((r, i) => (r.area || (only != null && i !== only) ? null : i)).filter((i) => i != null);
+    for (const pass of [0, 1, 2]) for (const i of open) {
+      if (taken(i)) continue;
+      const name = rooms[i].name, n = normName(name);
       if (!n) continue;
-      const st = stem(this._c.rooms[i].name);
-      const hits = free().filter((x) => (pass === 0 ? normName(x.name) === n : st.length >= 3 && stem(x.name) === st));
+      let hits;
+      if (pass === 0) hits = free().filter((x) => normName(x.name) === n);
+      else if (pass === 1) { const st = stem(name); hits = st.length >= 3 ? free().filter((x) => stem(x.name) === st) : []; }
+      else {
+        const k = roomKinds(name);
+        hits = k ? free().filter((x) => roomKinds(x.name) === k) : [];
+        // two bedrooms but one "Schlafzimmer": better ask than guess
+        if (rooms.some((r, j) => j !== i && !r.area && !taken(j) && roomKinds(r.name) === k)) hits = [];
+      }
       if (hits.length === 1) { out.push([i, hits[0].area_id]); used.add(hits[0].area_id); }
     }
+    return out;
+  }
+
+  /* areas whose devices are on the plan already (a plan someone made) – placed automatically only once, what was taken
+   * away stays away */
+  _markDone() {
+    for (const r of this._c.rooms) if (r.area && this._c.entities.some((e) => e.at && this._areaOf(e.entity) === r.area)) this._doneAreas.add(r.area);
+  }
+  /* The devices of every linked area come into their room by themselves – once per area, as soon as the plan itself is
+   * built (leaving the building steps, or "Done"). A floor plan file may say where the lamps or the TV are (hints);
+   * everything else gets a free spot. Undo takes them away again – they are not placed a second time. The caller draws. */
+  _autoDevices(quiet) {
+    const c = this._c, h = this._hs() || {};
+    const areas = [...new Set(c.rooms.filter((r) => r.area && !this._doneAreas.has(r.area)).map((r) => r.area))];
+    if (!areas.length || !h.states) return 0;
+    const have = new Set(c.entities.filter((e) => e.at).map((e) => e.entity)), todo = [];
+    for (const a of areas) {
+      this._doneAreas.add(a);
+      let ids = Object.keys(h.states).filter((id) => !have.has(id) && autoDevice(h, id) && this._areaOf(id) === a);
+      if (ids.some((id) => domainOf(id) === 'climate')) ids = ids.filter((id) => domainOf(id) !== 'sensor');
+      // an area in two rooms: free spots in the bigger one
+      if (ids.length) todo.push([c.rooms.filter((r) => r.area === a).sort((x, y) => rectArea(y.rect) - rectArea(x.rect)), ids.sort()]);
+    }
+    if (!todo.length) return 0;
+    this._snap();
+    const taken = c.entities.filter((e) => e.at).map((e) => e.at);
+    let n = 0;
+    for (const [rooms, ids] of todo) {
+      const hints = this._matchHints(rooms, ids);
+      // the spots a file names are taken first, free spots go around them
+      for (const x of hints.values()) taken.push(x.at);
+      for (const id of ids) {
+        const hint = hints.get(id), at = hint?.at || freeSpot(rooms[0].rect, taken), st = h.states[id], kind = kindOf(id, st);
+        if (!hint) taken.push(at);
+        if (domainOf(id) === 'vacuum') {
+          if (c.vacuum?.entity) continue;
+          c.vacuum = { ...(c.vacuum || {}), entity: id, dock: at };
+          if (c.layers?.length && !c.layers.some((l) => builtinType(l) === 'vacuum')) c.layers.push('vacuum');
+          n++;
+          continue;
+        }
+        const i = c.entities.findIndex((x) => x.entity === id), e = i >= 0 ? c.entities[i] : { entity: id };
+        e.at = at;
+        if (kind === 'light' && !e.icon) e.icon = hint?.icon || guessLampIcon(id, st);
+        if (i < 0) c.entities.push(e);
+        // with a list of layers: the device's layer is there, a TV joins the light layer
+        if (c.layers?.length) { if (kind === 'media') this._addToLayer('light', id); else this._ensureLayer(this._layerDef(kind)); }
+        n++;
+      }
+    }
+    if (n && !quiet) this._toast(t('ed_autoPlaced', n));
+    return n;
+  }
+  /* hints of a floor plan file in these rooms (a lamp, the TV … with a position) → devices of the same kind; where there
+   * are several, fitting names and lamp shapes decide. Used hints are gone. */
+  _matchHints(rooms, ids) {
+    const out = new Map(), h = this._hs() || {};
+    const hs = this._hints.filter((x) => rooms.some((r) => inRect(r.rect, x.at)));
+    if (!hs.length) return out;
+    const pairs = [];
+    for (const id of ids) {
+      const st = h.states?.[id], k = domainOf(id) === 'vacuum' ? 'vacuum' : kindOf(id, st);
+      const words = nameWords(`${this._fname(id)} ${id.split('.')[1]}`), lamp = k === 'light' ? guessLampIcon(id, st) : null;
+      hs.forEach((x, j) => {
+        if (x.kind !== k) return;
+        let s = 1 + nameWords(x.name).filter((w) => words.includes(w)).length;
+        if (lamp && lamp !== 'bulb' && (x.icon || guessLampIcon('', { attributes: { friendly_name: x.name } })) === lamp) s += 2;
+        pairs.push([s, id, j]);
+      });
+    }
+    pairs.sort((a, b) => b[0] - a[0]);
+    const used = new Set();
+    for (const [, id, j] of pairs) if (!out.has(id) && !used.has(j)) { out.set(id, hs[j]); used.add(j); }
+    this._hints = this._hints.filter((x) => !hs.some((y, j) => y === x && used.has(j)));
     return out;
   }
 
@@ -1374,6 +1486,61 @@ function setFurnRect(f, R) {
   if (Array.isArray(f)) { f[0] = r0(R[0]); f[1] = r0(R[1]); f[2] = r0(R[2]); f[3] = r0(R[3]); } else f.rect = R.map(r0);
 }
 const shiftSeg = (s, dx, dy) => [r0(s[0] + dx), r0(s[1] + dy), r0(s[2] + dx), r0(s[3] + dy)];
+
+/* What kind of room a name means, in English or German – "Bedroom" and "Schlafzimmer" are both "bed", "Wohnküche" is
+ * living + kitchen. A sorted key, '' when the name says nothing (e.g. "Room 3"). Short stems only count at the start or
+ * the end of a word ("Badezimmer", "Gästebad"), longer ones anywhere. */
+const ROOM_WORDS = {
+  living: ['living', 'lounge', 'wohn'], bed: ['bed', 'schlaf', 'sleep'], kitchen: ['kitchen', 'kuche', 'kueche', 'kochen'],
+  bath: ['bath', 'bad', 'dusch', 'shower'], wc: ['wc', 'toilet', 'klo'], hall: ['hall', 'flur', 'diele', 'corridor', 'entr', 'eingang', 'foyer'],
+  office: ['office', 'study', 'buro', 'arbeit'], dining: ['dining', 'ess'], kids: ['kid', 'child', 'kinder', 'nursery'], guest: ['guest', 'gast'],
+  storage: ['storage', 'store', 'abstell', 'pantry', 'speis', 'vorrat'], laundry: ['laundry', 'utility', 'wasch', 'hauswirtschaft', 'hwr'],
+  balcony: ['balcony', 'balkon', 'terrace', 'terrasse', 'loggia'], garage: ['garage', 'carport'], cellar: ['cellar', 'basement', 'keller'],
+  attic: ['attic', 'dachboden'], dressing: ['dressing', 'closet', 'ankleide', 'wardrobe'], garden: ['garden', 'garten'],
+};
+function roomKinds(name) {
+  const words = slug(name).split('_').filter(Boolean);
+  const has = (s) => words.some((w) => (s.length <= 3 ? w.startsWith(s) || w.endsWith(s) : w.includes(s)));
+  return Object.keys(ROOM_WORDS).filter((k) => ROOM_WORDS[k].some(has)).sort().join(',');
+}
+/* Typical furniture for a kind of room (bed in a bedroom, sofa + TV in a living room …), along the walls and away from
+ * the room name. Each piece: [kinds, places] – t / b top / bottom wall (centred, else at the right end), l / r left / right
+ * wall (turned), corners bl / br / tr, c the middle; the first kind and place that fit win, else the piece is left out. */
+const TYPICAL_FURN = {
+  bed: [['bed|bed_single', 'b|t|r'], ['wardrobe', 't|r|l'], ['plant', 'br|bl']], guest: [['bed|bed_single', 'b|t|r'], ['plant', 'br|bl']],
+  kids: [['bed_single', 'r|l|b'], ['desk', 't|b'], ['shelf', 'b|l']], living: [['sofa', 'b|r'], ['tv', 't|l'], ['round_table', 'c'], ['plant', 'br|bl']],
+  kitchen: [['counter', 't|r|b|l'], ['fridge', 'bl|br|tr']], dining: [['table', 'c']], bath: [['bath|shower', 'bl|br|r'], ['toilet', 'br|tr|bl'], ['sink', 't|r|l']],
+  wc: [['toilet', 'b|r'], ['sink', 't|l']], office: [['desk', 't|r|b'], ['shelf', 'b|l'], ['plant', 'br|bl']], laundry: [['washer', 'br|bl'], ['shelf', 't|r']],
+  storage: [['shelf', 't|b|r'], ['shelf', 'b|l']], dressing: [['wardrobe', 't|r'], ['wardrobe', 'b|l']], hall: [['sideboard', 'b|r|l']],
+  balcony: [['plant', 'br'], ['plant', 'bl'], ['chair', 'c']], garden: [['plant', 'br'], ['plant', 'bl']],
+};
+function typicalFurniture(room, kinds) {
+  const R = room.rect, W = R[2] - R[0], H = R[3] - R[1], m = 12, snap = (v) => Math.round(v / 5) * 5;
+  const lw = Math.min(170, W * 0.6), lh = Math.min(90, H * 0.35);
+  const busy = [room.label === 'bottom' ? [R[0], R[3] - lh, R[0] + lw, R[3]] : [R[0], R[1], R[0] + lw, R[1] + lh]];
+  const free = (q) => q[0] >= R[0] + 5 && q[1] >= R[1] + 5 && q[2] <= R[2] - 5 && q[3] <= R[3] - 5
+    && !busy.some((b) => q[0] < b[2] + 5 && q[2] > b[0] - 5 && q[1] < b[3] + 5 && q[3] > b[1] - 5);
+  const spots = (where, w, h) => {
+    const cx = (R[0] + R[2] - w) / 2, cy = (R[1] + R[3] - h) / 2;
+    return {
+      t: [[cx, R[1] + m], [R[2] - m - w, R[1] + m]], b: [[cx, R[3] - m - h], [R[2] - m - w, R[3] - m - h]],
+      l: [[R[0] + m, cy]], r: [[R[2] - m - w, cy]], bl: [[R[0] + m, R[3] - m - h]], br: [[R[2] - m - w, R[3] - m - h]], tr: [[R[2] - m - w, R[1] + m]], c: [[cx, cy]],
+    }[where] || [];
+  };
+  const out = [];
+  const place = (kind, where) => {
+    const d = FURN_KINDS[kind], turn = where === 'l' || where === 'r', w = turn ? d.h : d.w, h = turn ? d.w : d.h;
+    return spots(where, w, h).map(([x, y]) => [snap(x), snap(y), snap(x) + w, snap(y) + h]).find(free);
+  };
+  for (const k of kinds.split(',')) for (const [alts, wheres] of TYPICAL_FURN[k] || []) {
+    let q = null, kind;
+    for (kind of alts.split('|')) { for (const where of wheres.split('|')) if ((q = place(kind, where))) break; if (q) break; }
+    if (q) { busy.push(q); out.push([...q, kind]); }
+  }
+  return out;
+}
+/* the words of a name, for comparing device names ("Ceiling light" ↔ "light.living_ceiling") */
+const nameWords = (s) => slug(s).split('_').filter((w) => w.length > 2);
 
 /* a free spot in a room: grid positions away from the room name and from other markers */
 function freeSpot(R, taken) {

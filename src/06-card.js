@@ -72,7 +72,7 @@ class GlassFloorplanCard extends HTMLElement {
 
   /* The floor plan editor shows the card live on a virtual screen: { w, h } size of that screen, the layer `tab`,
    * optionally a fixed `stage` (so the plan does not move while something is dragged) or a fixed scale and origin
-   * `fix` (while rooms are drawn). Nothing is stored for the viewer. */
+   * `fix` (while rooms are drawn), `bare` hides the devices (while the plan itself is built). Nothing is stored for the viewer. */
   setEditorView(config, ev) {
     this._ev = ev || null;
     this._config = JSON.parse(JSON.stringify(config));
@@ -254,7 +254,7 @@ class GlassFloorplanCard extends HTMLElement {
     const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
     this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}</style>
-<div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}" style="${springVars()}">
+<div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}${this._ev?.bare ? ' bare' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
     <linearGradient id="gfcdial" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5aa8ff"/><stop offset=".5" stop-color="#7fe0c0"/><stop offset="1" stop-color="#ff9f45"/></linearGradient>

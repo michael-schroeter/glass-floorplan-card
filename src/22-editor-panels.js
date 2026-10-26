@@ -24,7 +24,7 @@ Object.assign(GfcEditor.prototype, {
     if (detail) this[detail](I);
     else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
     else if (picker) this._pickerView(I, picker);
-    else this[`_p_${this._tool}`]?.(I);
+    else { this[`_p_${this._tool}`]?.(I); this._nextStep(I); }
     I.scrollTop = keep ?? (view.startsWith('t:') ? this._scrollMem[view] || 0 : 0);
     this._view = view;
     this._syncTop();
@@ -36,6 +36,20 @@ Object.assign(GfcEditor.prototype, {
     this._editLayer = null;
     this._draw();
     this._panel();
+  },
+  /* the way on: every step of building the plan ends with the next one, the devices with "Done" (layers, tiles and
+   * settings are extras – everything works without them) */
+  _nextStep(I) {
+    const i = ED_FLOW.indexOf(this._tool);
+    if (i < 0 || this._pending || this._pasting || this._measure || (!this._c.rooms.length && !(this._tool === 'sketch' && this._ulSrc))) return;
+    const next = ED_FLOW[i + 1], box = mk('div', 'enext');
+    box.append(next
+      ? this._btn(`<span>${esc(t('ed_next', t(`ed_tool_${next}`)))}</span>${icon('chevR')}`, 'wide white', () => this._setTool(next))
+      : this._btn(`${icon('check')}<span>${esc(t('ed_done'))}</span>`, 'wide white', () => this._close(true)));
+    if (!next) box.append(this._el(`<p class="small">${esc(t('ed_doneHint'))}</p>`));
+    I.append(box);
+    // a backdrop only when the list scrolls underneath
+    requestAnimationFrame(() => box.classList.toggle('over', I.scrollHeight > I.clientHeight + 2));
   },
   /* a red button that deletes (hovering it shows in red what goes) */
   _delBtn(label, onClick, scope = 'sel', cls = '') {
@@ -100,64 +114,28 @@ Object.assign(GfcEditor.prototype, {
   _areas() { const h = this._hs() || {}; return Object.values(h.areas || {}).sort((a, b) => String(a.name).localeCompare(String(b.name), LOCALE)); },
 
   /* ---------------------------------------------------------------- sketch / start */
+  /* Nothing drawn yet: the ways to a floor plan, side by side (a picture to trace, a file from the Claude skill, the
+   * Home Assistant areas). With a picture: 1 scale, 2 rooms, then how it looks. */
   _p_sketch(I) {
-    const c = this._c, u = c.underlay;
-    I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2><p class="lead">${esc(t('ed_sketch_lead'))}</p>`));
+    const c = this._c, u = c.underlay, pic = !!(this._ulSrc && u?.rect), fresh = !pic && !c.rooms.length;
+    I.append(this._el(`<h2>${esc(t('ed_tool_sketch'))}</h2><p class="lead">${esc(t(fresh ? 'ed_start_lead' : pic ? 'ed_sketch_lead' : 'ed_sketch_lead2'))}</p>`));
     // an import waiting for confirmation, the size check after an import or the paste field come first
     if (this._pending || this._scaleCheck || this._pasting) { this._importSection(I); if (this._pending || this._pasting) return; }
     const file = mk('input');
     file.type = 'file'; file.accept = 'image/*'; file.hidden = true;
     file.addEventListener('change', () => this._readImage(file.files[0]));
-    const drop = this._el(`<div style="display:flex;align-items:center;gap:12px">${icon('image')}<div><b style="font-size:14px">${esc(t(this._ulSrc ? 'ed_ulReplace' : 'ed_ulPick'))}</b><div class="small" style="font-size:12px;color:var(--t3);margin-top:2px">${esc(t('ed_ulDrop'))}</div></div></div>`, 'ecard');
-    drop.style.cursor = 'pointer';
-    drop.querySelector('.ic').style.fontSize = '26px';
-    drop.addEventListener('click', () => file.click());
+    const drop = this._choice('image', t(pic ? 'ed_ulReplace' : 'ed_ulPick'), t('ed_ulDrop'), () => file.click());
     drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drop'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('drop'));
     drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('drop'); this._readDropped(e.dataTransfer.files[0]); });
     I.append(file, drop);
+    if (pic) this._picSteps(I, u);
+    if (pic) I.append(this._el(`<h3>${esc(t('ed_otherWays'))}</h3>`));
     if (!this._scaleCheck) this._importSection(I);
-    if (this._ulSrc && u?.rect) {
-      const op = mk('input', 'erange');
-      op.type = 'range'; op.min = '0.1'; op.max = '1'; op.step = '0.05'; op.value = String(u.opacity ?? 0.6);
-      op.addEventListener('input', () => { u.opacity = +op.value; this._draw(); });
-      I.append(this._fieldEl(t('ed_opacity'), op));
-      I.append(this._fieldEl(t('ed_invert'), this._tglEl(!!u.invert, (v) => this._change(() => { if (v) u.invert = true; else delete u.invert; }, { keepSel: true })), true));
-      const w = this._inp(fmt((u.rect[2] - u.rect[0]) / 100, 2).replace(',', '.'), (v) => {
-        if (!(v > 0.5)) return;
-        const k = (v * 100) / (u.rect[2] - u.rect[0]);
-        u.rect = [u.rect[0], u.rect[1], r0(u.rect[0] + (u.rect[2] - u.rect[0]) * k), r0(u.rect[1] + (u.rect[3] - u.rect[1]) * k)];
-      }, { num: true, type: 'number', step: '0.1' });
-      I.append(this._fieldEl(t('ed_ulWidth'), w, true));
-      const m = this._measure;
-      if (m?.a && m.b) {
-        const len = this._inp('', () => {}, { num: true, type: 'number', step: '0.01', placeholder: '4.20' });
-        const box = this._el(`<p class="lead" style="margin:0 0 8px">${esc(t('ed_measure_len'))}</p>`, 'ecard');
-        const apply = () => this._applyMeasure(parseFloat(String(len.value).replace(',', '.')) * 100);
-        len.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });
-        const row = mk('div', 'ebtns');
-        row.append(len, this._btn(`${icon('check')}<span>${esc(t('ed_apply'))}</span>`, 'blue', apply));
-        box.append(row);
-        I.append(box);
-        requestAnimationFrame(() => len.focus());
-      }
-      const det = this._btn(`${icon('wand')}<span>${esc(t('ed_detect'))}</span>`, 'wide blue', () => this._detect());
-      det.style.marginTop = '14px';
-      I.append(det);
-      I.append(this._el(`<p class="small">${esc(t('ed_detectHelp'))}</p>`));
-      const row = mk('div', 'ebtns');
-      row.append(
-        this._btn(`${icon('fit')}<span>${esc(t(m ? 'ed_measure_stop' : 'ed_measure'))}</span>`, m ? 'blue' : '', () => { this._measure = m ? null : {}; this._s = null; this._draw(); this._panel(); }),
-        this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._ulSrc = null; }), 'none'),
-      );
-      I.append(row);
-      I.append(this._el(`<p class="small">${esc(t('ed_ulNote'))}</p>`));
-    }
-    I.append(this._el(`<h3>${esc(t('ed_quick'))}</h3>`));
+    if (this._areas().length) I.append(this._choice('home', t('ed_fromAreas'), t('ed_fromAreasSub'), () => this._fromAreas()));
     const q = mk('div', '');
-    q.style.cssText = 'display:flex;flex-direction:column;gap:8px';
-    if (this._areas().length) q.append(this._btn(`${icon('wand')}<span>${esc(t('ed_fromAreas'))}</span>`, 'wide', () => this._fromAreas()));
-    q.append(this._btn(`${icon('home')}<span>${esc(t('ed_example'))}</span>`, 'wide', () => {
+    q.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:14px';
+    q.append(this._btn(`${icon('home')}<span>${esc(t('ed_example'))}</span>`, 'wide sm', () => {
       this._change(() => {
         const ex = exampleConfig(LANG), h = this._hs() || {};
         // in a real home the example devices do not exist – then only the floor plan is used
@@ -165,16 +143,63 @@ Object.assign(GfcEditor.prototype, {
         for (const k of ['rooms', 'windows', 'doors', 'entrance', 'entities', 'door', 'vacuum', 'layers', 'widgets']) delete this._c[k];
         Object.assign(this._c, normEditorConfig({ ...this._c, ...ex, language: this._c.language }));
         if (!this._c.language) delete this._c.language;
+        this._markDone();
       });
       this._fit(); this._draw(); this._toast(t('ed_exampleLoaded'));
     }));
-    if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide', () => this._exportPlan()));
-    if (c.rooms.length) q.append(this._delBtn(t('ed_clear'), () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; }), 'all', 'wide'));
+    if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide sm', () => this._exportPlan()));
+    if (c.rooms.length) q.append(this._delBtn(t('ed_clear'), () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; }), 'all', 'wide sm'));
     I.append(q);
     I.append(this._el(`<p class="small">${esc(t('ed_claudeTip'))}</p>`));
   },
+  /* a way to start: a card with symbol, title and one line */
+  _choice(ic, title, sub, onClick) {
+    const box = this._el(`<div style="display:flex;align-items:center;gap:12px">${icon(ic)}<div><b style="font-size:14px">${esc(title)}</b><div style="font-size:12px;color:var(--t3);margin-top:2px">${esc(sub)}</div></div></div>`, 'ecard pick');
+    box.querySelector('.ic').style.fontSize = '26px';
+    box.addEventListener('click', onClick);
+    return box;
+  },
+  /* a picture under the plan: 1 its scale, 2 the rooms (found automatically or traced), then how it looks */
+  _picSteps(I, u) {
+    const m = this._measure;
+    I.append(this._el(`<h3>${esc(t('ed_step_scale'))}</h3><p class="small" style="margin:-2px 0 10px">${esc(t('ed_measureHelp'))}</p>`));
+    const w = this._inp(fmt((u.rect[2] - u.rect[0]) / 100, 2).replace(',', '.'), (v) => {
+      if (!(v > 0.5)) return;
+      const k = (v * 100) / (u.rect[2] - u.rect[0]);
+      u.rect = [u.rect[0], u.rect[1], r0(u.rect[0] + (u.rect[2] - u.rect[0]) * k), r0(u.rect[1] + (u.rect[3] - u.rect[1]) * k)];
+    }, { num: true, type: 'number', step: '0.1' });
+    const row = mk('div', 'ebtns');
+    row.style.marginTop = '0';
+    row.append(this._btn(`${icon('fit')}<span>${esc(t(m ? 'ed_measure_stop' : 'ed_measure'))}</span>`, m ? 'blue' : '', () => { this._measure = m ? null : {}; this._s = null; this._draw(); this._panel(); }));
+    I.append(row);
+    if (m?.a && m.b) {
+      const len = this._inp('', () => {}, { num: true, type: 'number', step: '0.01', placeholder: '4.20' });
+      const box = this._el(`<p class="lead" style="margin:0 0 8px">${esc(t('ed_measure_len'))}</p>`, 'ecard');
+      const apply = () => this._applyMeasure(parseFloat(String(len.value).replace(',', '.')) * 100);
+      len.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });
+      const r2 = mk('div', 'ebtns');
+      r2.append(len, this._btn(`${icon('check')}<span>${esc(t('ed_apply'))}</span>`, 'blue', apply));
+      box.append(r2);
+      I.append(box);
+      requestAnimationFrame(() => len.focus());
+    }
+    I.append(this._fieldEl(t('ed_ulWidth'), w, true));
+    I.append(this._el(`<h3>${esc(t('ed_step_rooms'))}</h3>`));
+    I.append(this._btn(`${icon('wand')}<span>${esc(t('ed_detect'))}</span>`, 'wide blue', () => this._detect()));
+    I.append(this._el(`<p class="small">${esc(t('ed_detectHelp'))}</p>`));
+    I.append(this._el(`<h3>${esc(t('ed_look'))}</h3>`));
+    const op = mk('input', 'erange');
+    op.type = 'range'; op.min = '0.1'; op.max = '1'; op.step = '0.05'; op.value = String(u.opacity ?? 0.6);
+    op.addEventListener('input', () => { u.opacity = +op.value; this._draw(); });
+    I.append(this._fieldEl(t('ed_opacity'), op));
+    I.append(this._fieldEl(t('ed_invert'), this._tglEl(!!u.invert, (v) => this._change(() => { if (v) u.invert = true; else delete u.invert; }, { keepSel: true })), true));
+    const del = mk('div', 'ebtns');
+    del.append(this._delBtn(t('ed_ulRemove'), () => this._change(() => { delete this._c.underlay; this._ulSrc = null; }), 'none'));
+    I.append(del);
+    I.append(this._el(`<p class="small">${esc(t('ed_ulNote'))}</p>`));
+  },
 
-  /* rooms from the Home Assistant areas, devices placed automatically */
+  /* rooms from the Home Assistant areas (their devices come in once the plan is arranged) */
   _fromAreas() {
     const h = this._hs() || {};
     const auto = autoConfig(h, { lang: LANG });
@@ -186,12 +211,7 @@ Object.assign(GfcEditor.prototype, {
     const B = this._c.rooms.length ? bboxOf(this._c.rooms.map((r) => r.rect)) : null;
     const oy = B ? B[3] + 100 - Math.min(...add.map((r) => r.rect[1])) : 0, ox = B ? B[0] : 0;
     this._change(() => {
-      for (const r of add) {
-        const room = { ...r, id: this._uniqueRoomId(r.id), rect: [r.rect[0] + ox, r.rect[1] + oy, r.rect[2] + ox, r.rect[3] + oy] };
-        this._c.rooms.push(room);
-        for (const e of auto.entities.filter((x) => inRect(r.rect, x.at))) if (!this._c.entities.some((x) => x.entity === e.entity)) this._c.entities.push({ ...e, at: [e.at[0] + ox, e.at[1] + oy] });
-      }
-      if (!this._c.vacuum && auto.vacuum) this._c.vacuum = auto.vacuum;
+      for (const r of add) this._c.rooms.push({ ...r, id: this._uniqueRoomId(r.id), rect: [r.rect[0] + ox, r.rect[1] + oy, r.rect[2] + ox, r.rect[3] + oy] });
       this._tool = 'rooms';
     });
     this._fit(); this._draw();
@@ -246,7 +266,6 @@ Object.assign(GfcEditor.prototype, {
       chips.append(b);
     }
     I.append(chips);
-    I.append(this._fieldEl(t('ed_withDevices'), this._tglEl(this._withDevices !== false, (v) => { this._withDevices = v; this._panel(); }), true));
     const m = this._nameMatches();
     if (m.length) {
       const b = this._btn(`${icon('wand')}<span>${esc(t('ed_matchByName', m.length))}</span>`, 'wide blue', () => this._matchAreasByName());
@@ -256,16 +275,16 @@ Object.assign(GfcEditor.prototype, {
   },
 
   _pRoom(I) {
-    const r = this._selObj(), h = this._hs() || {};
+    const r = this._selObj(), h = this._hs() || {}, i = this._s.i;
+    const an = () => h.areas?.[r.area]?.name || '';
     I.append(this._el(`<h2>${esc(r.name || t('ed_room'))}</h2>`));
-    I.append(this._fieldEl(t('ed_name'), this._inp(r.name, (v) => { r.name = v; I.querySelector('h2').textContent = v || t('ed_room'); })));
     const areas = this._areas();
     if (areas.length) {
       const sel = mk('select', 'esel2');
       sel.innerHTML = [['', t('ed_noArea')], ...areas.map((a) => [a.area_id, a.name])].map(([v, l]) => `<option value="${esc(v)}"${v === (r.area || '') ? ' selected' : ''}>${esc(l)}</option>`).join('');
-      sel.addEventListener('change', () => { if (sel.value) this._assignArea(this._s.i, sel.value); else this._change(() => { delete r.area; }, { keepSel: true }); });
+      sel.addEventListener('change', () => { if (sel.value) this._assignArea(i, sel.value); else this._change(() => { delete r.area; }, { keepSel: true }); });
       I.append(this._fieldEl(t('ed_area'), sel));
-      // one tap on a free area links it (name + devices come along)
+      // one tap on a free area links it (and names the room)
       if (!r.area) {
         const used = new Set(this._c.rooms.map((x) => x.area).filter(Boolean));
         const free = areas.filter((a) => !used.has(a.area_id));
@@ -274,29 +293,24 @@ Object.assign(GfcEditor.prototype, {
           chips.style.marginTop = '8px';
           for (const a of free) {
             const b = mk('button', 'echip area', `<span>${esc(a.name)}</span>`);
-            b.addEventListener('click', () => this._assignArea(this._s.i, a.area_id));
+            b.addEventListener('click', () => this._assignArea(i, a.area_id));
             chips.append(b);
           }
           I.append(chips);
         }
       }
-      I.append(this._el(`<p class="small">${esc(t('ed_area_help'))}</p>`));
     }
+    // the name of its area unless you call it differently; a name that fits a free area links it
+    const name = this._inp(r.name, (v) => { r.name = v.trim() || an() || v; I.querySelector('h2').textContent = r.name || t('ed_room'); }, { placeholder: an() || t('ed_room') });
+    name.addEventListener('change', () => { if (!r.area && this._nameMatches(i).length) this._assignArea(i, this._nameMatches(i)[0][1]); });
+    I.append(this._fieldEl(t('ed_name'), name));
+    if (areas.length) I.append(this._el(`<p class="small">${esc(t(r.area ? 'ed_area_help' : 'ed_area_help0'))}</p>`));
     I.append(this._fieldEl(t('ed_label'), this._segEl([['top', t('ed_top')], ['bottom', t('ed_bottom')]], r.label === 'bottom' ? 'bottom' : 'top', (v) => this._change(() => { if (v === 'bottom') r.label = 'bottom'; else delete r.label; }, { keepSel: true }))));
     const R = r.rect;
     const wI = this._inp(((R[2] - R[0]) / 100).toFixed(2), (v) => { if (v > 0.3) r.rect = [R[0], R[1], r0(R[0] + v * 100), R[3]]; }, { num: true, type: 'number', step: '0.05' });
     const hI = this._inp(((R[3] - R[1]) / 100).toFixed(2), (v) => { if (v > 0.3) r.rect = [R[0], R[1], r.rect[2], r0(R[1] + v * 100)]; }, { num: true, type: 'number', step: '0.05' });
     I.append(this._fieldEl(t('ed_width'), wI, true), this._fieldEl(t('ed_depth'), hI, true));
     I.append(this._el(`<p class="small">${esc(t('ed_area_m2', fmt(((R[2] - R[0]) * (R[3] - R[1])) / 1e4, 1)))}</p>`));
-    // devices of this room's area that are not on the plan yet
-    if (r.area) {
-      const ids = Object.keys(h.states || {}).filter((id) => this._areaOf(id) === r.area && this._isPlaceable(id) && !this._c.entities.some((e) => e.entity === id && e.at));
-      if (ids.length) {
-        const b = this._btn(`${icon('wand')}<span>${esc(t('ed_placeArea', ids.length))}</span>`, 'wide blue', () => this._autoPlace(ids));
-        b.style.marginTop = '16px';
-        I.append(b);
-      }
-    }
     const row = mk('div', 'ebtns');
     row.append(this._btn(`${icon('copy')}<span>${esc(t('ed_duplicate'))}</span>`, '', () => this._duplicateSel()), this._delBtn(t('ed_delete'), () => this._deleteSel()));
     I.append(row);
@@ -324,7 +338,20 @@ Object.assign(GfcEditor.prototype, {
   _p_furniture(I) {
     I.append(this._el(`<h2>${esc(t('ed_tool_furniture'))}</h2><p class="lead">${esc(t('ed_furn_lead'))}</p>`));
     if (!this._c.rooms.length) { I.append(this._el(esc(t('ed_needRoom')), 'eempty')); return; }
+    // empty rooms of a known kind: typical pieces in one go (then change them as you like)
+    const empty = this._c.rooms.filter((r) => !r.furniture?.length && this._kindsOf(r));
+    if (empty.length) {
+      I.append(this._btn(`${icon('wand')}<span>${esc(t('ed_typicalFurn'))}</span>`, 'wide blue', () => this._furnish(empty)));
+      I.append(this._el(`<p class="small" style="margin-bottom:14px">${esc(t('ed_typicalFurnHelp', empty.length))}</p>`));
+    }
     this._palette(I);
+  },
+  /* the kind of a room, from its name and its area's name */
+  _kindsOf(r) { return roomKinds(`${r.name} ${this._hs()?.areas?.[r.area]?.name || ''}`); },
+  _furnish(rooms) {
+    let n = 0;
+    this._change(() => { for (const r of rooms) { r.furniture = typicalFurniture(r, this._kindsOf(r)); n += r.furniture.length; } });
+    this._toast(t('ed_furnished', n, rooms.length));
   },
   /* one piece: kind and size (rotate / duplicate / delete also float next to it on the plan) */
   _pFurn(I) {
@@ -383,7 +410,15 @@ Object.assign(GfcEditor.prototype, {
   _iconHtml(n) { return GlassFloorplanCard.prototype._iconHtml(n); },
 
   _p_devices(I) {
-    I.append(this._el(`<h2>${esc(t('ed_tool_devices'))}</h2><p class="lead">${esc(t('ed_dev_lead'))}</p>`));
+    I.append(this._el(`<h2>${esc(t('ed_tool_devices'))}</h2><p class="lead">${esc(t(this._c.rooms.some((r) => r.area) ? 'ed_dev_lead' : 'ed_dev_lead0'))}</p>`));
+    // rooms without an area get no devices by themselves – one tap back to linking them
+    const open = this._areas().length ? this._c.rooms.filter((r) => !r.area).length : 0;
+    if (open) {
+      const box = this._el(`<p class="small" style="margin:0 0 10px;color:var(--t2)">${esc(t('ed_dev_noArea', open))}</p>`, 'ecard');
+      box.style.boxShadow = 'inset 0 0 0 1.5px rgba(var(--orange), .6)';
+      box.append(this._btn(`${icon('plan')}<span>${esc(t('ed_linkAreas'))}</span>`, 'sm', () => this._setTool('rooms')));
+      I.append(box);
+    }
     this._layerChips(I);
     const L = this._layerDef(this._layerSel);
     if (!L) return;

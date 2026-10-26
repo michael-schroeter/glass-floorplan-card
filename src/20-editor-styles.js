@@ -76,7 +76,7 @@ dialog.ed[open] { display: block; }
 .eroom .en b { display: block; font-weight: inherit; overflow: hidden; text-overflow: ellipsis; }
 .efu { position: absolute; border-radius: calc(var(--fr, 8) * 1px); }
 .efu.c { border-radius: 50%; }
-.tool-furniture .efu { cursor: move; }
+.tool-furniture .efu, .tool-rooms:not(.ul-on) .eroom { cursor: move; }
 .tool-furniture .efu:hover { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .6); }
 .efu.sel { box-shadow: inset 0 0 0 2px rgba(var(--blue), .95), 0 0 0 4px rgba(var(--blue), .2); }
 .eopen { position: absolute; border-radius: 6px; cursor: pointer; }
@@ -115,6 +115,7 @@ dialog.ed[open] { display: block; }
 .ezoom button:hover { background: rgba(255, 255, 255, .1); }
 .ecv .elight { position: absolute; left: 14px; bottom: 14px; z-index: 6; align-items: center; padding: 4px; border-radius: 14px;
   background: rgba(30, 30, 36, .75); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 10px 28px rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.ecv.tool-sketch .elight, .ecv.tool-rooms .elight, .ecv.tool-furniture .elight, .ecv.tool-openings .elight { display: none; }
 .ecv .elight .lbl { display: grid; place-items: center; width: 30px; font-size: 17px; }
 .ecv .elight button { height: 34px; padding: 0 11px; border-radius: 10px; flex: none; }
 .ehint { position: absolute; left: 50%; bottom: 16px; z-index: 6; transform: translateX(-50%); max-width: min(560px, calc(100% - 420px)); padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--t2);
@@ -135,6 +136,12 @@ dialog.ed[open] { display: block; }
 .eins { position: relative; z-index: 4; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 18px 18px 30px;
   background: linear-gradient(270deg, rgba(24, 24, 30, .78), rgba(20, 20, 26, .6)); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .06); }
 .eins h2 { margin: 0 0 4px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+/* the way on: stays at the bottom of the panel */
+.enext { position: sticky; bottom: -30px; z-index: 3; margin: 26px -18px -30px; padding: 22px 18px 20px; }
+.enext.over { background: linear-gradient(180deg, rgba(21, 21, 27, 0), rgb(21, 21, 27) 38%); }
+.enext .ebtn { height: 44px; border-radius: 13px; font-size: 15px; }
+.enext .ebtn .ic { font-size: 18px; }
+.enext p.small { text-align: center; }
 .eback { display: inline-flex; align-items: center; gap: 2px; height: 32px; margin: -6px 0 10px -8px; padding: 0 12px 0 4px; border-radius: 10px; font-size: 14.5px; font-weight: 600; color: rgb(100, 170, 255); transition: background .15s; }
 .eback .ic { --ip: currentColor; font-size: 20px; }
 .eback:hover { background: rgba(var(--blue), .14); }
