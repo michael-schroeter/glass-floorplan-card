@@ -120,7 +120,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const canPos = () => !!((st()?.attributes?.supported_features || 0) & 4);
     let down = false, moved = false, held = false, holdT = 0, sy = 0, start = 0, v = 0;
     const show = (p) => { tb.style.setProperty('--v', `${p}%`); tb.classList.toggle('lo', p < 30); };
-    const hold = () => { held = true; down = false; tb.classList.remove('pressed', 'drag'); this._openDevice(eid, tb); };
+    const hold = () => { held = true; down = false; tb.classList.remove('pressed', 'drag'); this._holdDevice(eid, tb); };
     tb.addEventListener('contextmenu', (ev) => { ev.preventDefault(); if (!held) { clearTimeout(holdT); hold(); } });
     tb.addEventListener('pointerdown', (ev) => {
       if (ev.button > 0) return;

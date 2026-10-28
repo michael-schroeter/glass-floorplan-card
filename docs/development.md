@@ -29,6 +29,6 @@ python3 tools/build.py 0.2.0    # with a version
 | `src/04-model.js` | config → geometry, layers, automatic tile layout, room graph for the robot |
 | `src/05-styles.js` | all styles (everything scales with `--u`) |
 | `src/06-card.js` … `12-mobile.js` | card, pop-ups, climate, covers, other devices, vacuum, phone layout |
-| `src/20-…25-editor*.js` | floor plan editor, room detection, card editor for Home Assistant |
+| `src/20-…27-editor*.js` | floor plan editor, room detection, card editor for Home Assistant, import, actions and own tiles |
 | `demo/` | demo page with simulated `hass` |
 

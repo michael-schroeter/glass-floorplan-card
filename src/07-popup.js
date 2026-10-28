@@ -405,8 +405,8 @@ Object.assign(GlassFloorplanCard.prototype, {
     const st = () => this._st(l.entity);
     let down = false, moved = false, held = false, holdT = 0, sy = 0, start = 0, v = 0, sent = 0;
     const show = (val, on) => { tb.style.setProperty('--v', `${val}%`); tb.classList.toggle('on', on); tb.classList.toggle('lo', val < 22); };
-    // press and hold (without dragging) → device page in Home Assistant
-    const hold = () => { held = true; down = false; tb.classList.remove('pressed', 'drag'); this._openDevice(l.entity, tb); };
+    // press and hold (without dragging) → hold_action, else the device page in Home Assistant
+    const hold = () => { held = true; down = false; tb.classList.remove('pressed', 'drag'); this._holdDevice(l.entity, tb); };
     tb.addEventListener('contextmenu', (e) => { e.preventDefault(); if (!held) { clearTimeout(holdT); hold(); } });
     tb.addEventListener('pointerdown', (e) => {
       if (e.button > 0) return;
@@ -712,17 +712,19 @@ Object.assign(GlassFloorplanCard.prototype, {
     try { navigator.vibrate?.(10); } catch (e) { /* never mind */ }
     if (el && !this._reduced) el.animate([{ transform: 'scale(.93)' }, { transform: 'scale(1.02)', offset: 0.6 }, { transform: 'none' }], { duration: 260, easing: 'ease-out' });
     if (dev && h.user?.is_admin && !infoOnly) {
-      setTimeout(() => {
-        const r = this._reduced; this._reduced = true; this._closePop(); this._reduced = r;
-        history.pushState(null, '', `/config/devices/device/${dev}`);
-        window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
-      }, 140);
+      setTimeout(() => this._navigate(`/config/devices/device/${dev}`), 140);
       return;
     }
     fire(this, 'hass-more-info', { entityId: eid });
   },
+  /* holding a device: its hold_action if it has one, else its page in Home Assistant */
+  _holdDevice(eid, el) {
+    const e = this._M.ents.find((x) => x.entity === eid);
+    if (e?.hold) this._act(e.hold, { entity: eid, el, name: this._name(e) });
+    else this._openDevice(eid, el);
+  },
 
-  /* press and hold (≈ ½ s, without moving) or right-click on a row → _openDevice */
+  /* press and hold (≈ ½ s, without moving) or right-click on a row → _holdDevice */
   _hold(el, eid) {
     if (!el || !eid) return;
     el.classList.add('hold');
@@ -732,11 +734,11 @@ Object.assign(GlassFloorplanCard.prototype, {
       if (e.button > 0 || e.target.closest('button, .hs, .slide, .ks, .sws, .tgl, .dial, .hvac')) return;
       fired = false; sx = e.clientX; sy = e.clientY;
       el.classList.add('holding');
-      tm = setTimeout(() => { fired = true; el.classList.remove('holding'); this._openDevice(eid, el); }, 520);
+      tm = setTimeout(() => { fired = true; el.classList.remove('holding'); this._holdDevice(eid, el); }, 520);
     });
     el.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - sx, e.clientY - sy) > 8) cancel(); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((n) => el.addEventListener(n, cancel));
-    el.addEventListener('contextmenu', (e) => { e.preventDefault(); cancel(); if (!fired) { fired = true; this._openDevice(eid, el); } });
+    el.addEventListener('contextmenu', (e) => { e.preventDefault(); cancel(); if (!fired) { fired = true; this._holdDevice(eid, el); } });
   },
 
   /* ---------------------------------------------------------------- Menu */
@@ -747,6 +749,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       if (it.sep) { m.append(mk('div', 'msep')); continue; }
       if (it.head) { m.append(mk('div', 'mh', esc(it.head))); continue; }
       if (it.note) { m.append(mk('div', 'mnote', esc(it.note))); continue; }
+      if (it.ask) { m.append(mk('div', 'mask', esc(it.ask))); continue; }
       if (it.seg) {
         const s = mk('div', 'mseg', `<i class="knob"></i>${it.seg.options.map((o) => `<button data-v="${esc(o.v)}">${esc(o.t)}</button>`).join('')}`);
         s.style.setProperty('--n', it.seg.options.length);

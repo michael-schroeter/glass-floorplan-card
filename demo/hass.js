@@ -63,6 +63,9 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
   reg('sensor.kitchen_temperature', { area_id: 'kitchen', device_id: 'dev_kitchen_sensor' });
   reg('sensor.kitchen_humidity', { area_id: 'kitchen', device_id: 'dev_kitchen_sensor' });
   reg('sensor.guest_room_temperature', { area_id: 'guest_room' });
+  // energy (an own tile in the example)
+  set('sensor.home_power', ev ? 486 : day ? 212 : 138, { friendly_name: N('Power now', 'Leistung jetzt'), device_class: 'power', unit_of_measurement: 'W', state_class: 'measurement' });
+  set('sensor.energy_today', ev ? 7.4 : day ? 3.1 : 5.2, { friendly_name: N('Energy today', 'Energie heute'), device_class: 'energy', unit_of_measurement: 'kWh', state_class: 'total_increasing' });
 
   // covers
   const cover = (id, name, pos, area) => {
@@ -168,7 +171,8 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
     upd(`sensor.${V}_cleaning_progress`, { state: '0' });
   }
 
-  function callService(domain, service, data = {}) {
+  function callService(domain, service, data = {}, target) {
+    if (target?.entity_id) data = { ...data, entity_id: target.entity_id };
     console.log('[demo] callService', domain, service, JSON.stringify(data));
     calls.push([domain, service, data]);
     const ids = [].concat(data.entity_id || []);

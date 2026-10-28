@@ -54,7 +54,7 @@ function exampleConfig(lang = 'en') {
       { entity: 'cover.living_room_right', at: [290, 620] },
       { entity: 'cover.office', at: [720, 860] },
       { entity: 'cover.guest_room', at: [1020, 860] },
-      { entity: 'lock.front_door', at: [1140, 490] },
+      { entity: 'lock.front_door', at: [1140, 490], tap_action: { action: 'toggle', confirmation: true } },
       { entity: 'binary_sensor.living_room_window', at: [50, 600] },
       { entity: 'binary_sensor.kitchen_window', at: [50, 220] },
       { entity: 'binary_sensor.hallway_motion', at: [970, 490] },
@@ -63,6 +63,7 @@ function exampleConfig(lang = 'en') {
     door: { open: 'button.front_door_open', doorbell: 'event.front_door_doorbell', at: [1140, 490] },
     vacuum: { entity: 'vacuum.roborock_s8', dock: [960, 536] },
     weather: 'weather.home',
+    tiles: [{ id: 'energy', name: N('Energy', 'Energie'), icon: 'bolt', entities: ['sensor.home_power', { entity: 'sensor.energy_today', name: N('Today', 'Heute') }] }],
     layers: ['light', 'climate', 'cover', 'vacuum',
       { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }],
   };

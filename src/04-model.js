@@ -95,14 +95,35 @@ function normFurn(f) {
   if (def.c) circle = true;
   return { r: rect, kind, rad: rad ?? def.r ?? 8, circle };
 }
+/* Home Assistant's action schema (tap_action / hold_action / double_tap_action): { action: toggle | more-info | navigate | url |
+ * perform-action | assist | fire-dom-event | none, … } – a plain string is the action alone; missing or "default" = the card's own */
+function normAction(a) {
+  if (typeof a === 'string') a = { action: a };
+  return a && typeof a === 'object' && a.action && a.action !== 'default' ? a : null;
+}
+const actionsOf = (o) => ({ tap: normAction(o.tap_action), hold: normAction(o.hold_action), dbl: normAction(o.double_tap_action) });
 function normEntity(e) {
   if (typeof e === 'string') e = { entity: e };
   if (!e || typeof e.entity !== 'string' || !e.entity.includes('.')) return null;
   return {
     entity: e.entity, at: normPt(e.at), room: e.room != null ? String(e.room) : null, name: e.name || null, icon: e.icon || null,
     watt: +e.watt || null, power: e.power || null, kelvin: +e.kelvin || null, beams: Math.max(0, Math.min(6, e.beams | 0)),
-    plan: e.plan !== false, reach: +e.reach || null, color: Array.isArray(e.color) ? e.color.map(Number) : null,
+    plan: e.plan !== false, reach: +e.reach || null, color: Array.isArray(e.color) ? e.color.map(Number) : null, ...actionsOf(e),
   };
+}
+/* Own tiles: a few values (the first one large) or any Home Assistant card in a glass frame. `size` = [width, height]
+ * in tiles – a Home Assistant card gets two tiles of height unless it says otherwise. */
+const BUILTIN_TILES = ['card', 'weather', 'indoor', 'door', 'bar', 'side'];
+function normTile(x, i) {
+  if (!x || typeof x !== 'object') return null;
+  let id = String(x.id || `tile_${i + 1}`);
+  if (BUILTIN_TILES.includes(id)) id = `tile_${id}`;
+  const card = x.card && typeof x.card === 'object' && x.card.type ? x.card : null;
+  const sz = [].concat(x.size ?? []).map(Number);
+  const size = [clamp(Math.round(sz.length > 1 ? sz[0] : 1) || 1, 1, 3), clamp(Math.round(sz.length > 1 ? sz[1] : sz[0] || (card ? 2 : 1)) || 1, 1, 4)];
+  const ents = [].concat(x.entities || x.entity || []).map((e) => (typeof e === 'string' ? { entity: e } : e))
+    .filter((e) => e && typeof e.entity === 'string' && e.entity.includes('.')).map((e) => ({ entity: e.entity, name: e.name || null }));
+  return { id, name: x.name ?? null, icon: x.icon || null, ents, card, size, ...actionsOf(x) };
 }
 
 const rectArea = (r) => (r[2] - r[0]) * (r[3] - r[1]);
@@ -157,8 +178,10 @@ function buildModel(cfg, hass, { mobile = false } = {}) {
   const door = d && (d.open || d.doorbell) ? { open: d.open || null, bell: d.doorbell || null, at: normPt(d.at), room: d.room || null, name: d.name || null } : null;
   const v = cfg.vacuum;
   const vac = v && v.entity ? { ...v, dock: normPt(v.dock) } : null;
+  const tids = new Set();
+  const tiles = (Array.isArray(cfg.tiles) ? cfg.tiles : []).map(normTile).filter((x) => x && !tids.has(x.id) && tids.add(x.id));
   const M = {
-    cfg, rooms, ents, door, vac, rot: 0,
+    cfg, rooms, ents, door, vac, tiles, rot: 0,
     windows: (cfg.windows || []).map(normSeg).filter(Boolean),
     passages: (cfg.doors || []).map(normSeg).filter(Boolean),
     entrance: normSeg(cfg.entrance),
@@ -213,7 +236,7 @@ function finishModel(M, hass, mobile) {
   M.indoor = ic === false ? [] : Array.isArray(ic) && ic.length ? ic : M.ents.filter((e) => e.kind === 'climate').map((e) => e.entity);
   M.layers = buildLayers(M);
   M.widgets = placeWidgets(M, mobile);
-  const all = [B, ...['card', 'weather', 'indoor', 'door', 'bar'].map((k) => M.widgets[k]).filter(Boolean)];
+  const all = [B, ...['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)].map((k) => M.widgets[k]).filter(Boolean)];
   const U = bboxOf(all), m = 6 * D;
   M.stage = { x: U[0] - m, y: U[1] - m, w: U[2] - U[0] + 2 * m, h: U[3] - U[1] + 2 * m };
 }
@@ -256,7 +279,10 @@ const inLayer = (L, e) => !!L && (L.kinds.has(e.kind) || L.ents.has(e.entity));
 function placeWidgets(M, mobile) {
   const B = M.bbox, D = M.D, cfgW = (!mobile && M.cfg.widgets) || {};
   const out = { card: null, weather: null, indoor: null, door: null, bar: null, side: null };
-  const tiles = ['weather', 'indoor', 'door'].filter((k) => (k === 'weather' ? M.weather : k === 'indoor' ? M.indoor.length : M.door) && cfgW[k] !== false);
+  const tiles = ['weather', 'indoor', 'door'].filter((k) => (k === 'weather' ? M.weather : k === 'indoor' ? M.indoor.length : M.door) && cfgW[k] !== false)
+    .concat(M.tiles.map((x) => x.id));
+  const size = Object.fromEntries(M.tiles.map((x) => [x.id, x.size]));
+  const tw = (k) => size[k]?.[0] || 1;
   const needBar = !mobile && M.layers.length > 1;
   if (!M.rooms.length) return out;
 
@@ -277,7 +303,7 @@ function placeWidgets(M, mobile) {
     && P[(j + h) * (nx + 1) + i + w] - P[j * (nx + 1) + i + w] - P[(j + h) * (nx + 1) + i] + P[j * (nx + 1) + i] === 0;
   const cells = (v, c) => Math.max(1, Math.ceil(v / c));
   const toRect = ({ i, j, w, h }) => [B[0] + i * cw, B[1] + j * ch, B[0] + (i + w) * cw, B[1] + (j + h) * ch];
-  const mark = ({ i, j, w, h }) => { for (let y = j; y < j + h; y++) for (let x = i; x < i + w; x++) occ[y * nx + x] = 1; sums(); };
+  const mark = ({ i, j, w, h }, v = 1) => { for (let y = j; y < j + h; y++) for (let x = i; x < i + w; x++) occ[y * nx + x] = v; sums(); };
   // best free spot for a minimum size, scored by preference
   const find = (wMin, hMin, score) => {
     const w = cells(wMin, cw), h = cells(hMin, ch);
@@ -318,23 +344,24 @@ function placeWidgets(M, mobile) {
   const CARD = du({ w: 446, h: 190, minW: 318, minH: 176, maxW: 560 });
   const BAR = du({ w: 76, h: Math.max(1, M.layers.length) * 64 + 12 });
 
-  for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
+  for (const k of ['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)]) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
 
   // layer card (desktop): prefers the bottom right
+  let cardC = null;
   if (!mobile && !out.card) {
     const c = find(CARD.minW, CARD.minH, (i, j, w, h) => (j + h / 2) / ny * 2 + (i + w / 2) / nx + (j + h === ny ? 2 : 0) + (i + w === nx ? 1 : 0));
     // wider fills the corner, taller would only add empty space inside the card
-    if (c) { grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c); }
+    if (c) { grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c); cardC = c; }
   }
   // info tiles: all together as a column (or a row); what does not fit together goes in smaller groups, then alone
   const colScore = mobile ? (i, j, w, h) => -(i + w / 2) / nx + (j + h / 2) / ny : (i, j, w, h) => (i + w / 2) / nx * 2 - (j / ny) * 0.5 + (i + w === nx ? 2 : 0) + (j === 0 ? 1 : 0);
-  const weight = (k) => (k === 'door' && !mobile ? 1.18 : 1);
+  const weight = (k) => (k === 'door' && !mobile ? 1.18 : size[k]?.[1] || 1);
   const placeGroup = (group) => {
-    const n = group.length, ws = group.map(weight), sum = ws.reduce((a, b) => a + b, 0);
-    let c = find(TILE.minW, sum * TILE.minH, colScore), dir = 'col';
+    const n = group.length, ws = group.map(weight), sum = ws.reduce((a, b) => a + b, 0), wide = Math.max(...group.map(tw));
+    let c = find(wide * TILE.minW, sum * TILE.minH, colScore), dir = 'col';
     if (!c && n > 1) { c = find(n * TILE.minW, Math.max(...ws) * TILE.minH, colScore); dir = 'row'; }
     if (!c) return false;
-    grow(c, dir === 'col' ? TILE.maxW : n * TILE.maxW, dir === 'col' ? sum * TILE.maxH : Math.max(...ws) * TILE.maxH);
+    grow(c, dir === 'col' ? wide * TILE.maxW : n * TILE.maxW, dir === 'col' ? sum * TILE.maxH : Math.max(...ws) * TILE.maxH);
     const R = snap(toRect(c));
     mark(c);
     let pos = dir === 'col' ? R[1] : R[0];
@@ -345,12 +372,43 @@ function placeWidgets(M, mobile) {
     });
     return true;
   };
-  let rest = tiles.filter((k) => !out[k]);
-  while (rest.length) {
-    let done = 0;
-    for (let n = rest.length; n >= 1 && !done; n--) if (placeGroup(rest.slice(0, n))) done = n;
-    if (!done) break;
-    rest = rest.slice(done);
+  const placeAll = (list) => {
+    let rest = list.filter((k) => !out[k]);
+    while (rest.length) {
+      let done = 0;
+      // a wide tile goes alone (a column of different widths would leave gaps)
+      for (let n = rest.length; n >= 1 && !done; n--) if ((n === 1 || rest.slice(0, n).every((k) => tw(k) === 1)) && placeGroup(rest.slice(0, n))) done = n;
+      // what does not fit goes next to the plan – the tiles after it may still find a corner
+      rest = rest.slice(done || 1);
+    }
+  };
+  const own = M.tiles.map((x) => x.id);
+  placeAll(tiles.filter((k) => !own.includes(k)));
+  placeAll(own);
+  // own tiles without a corner: the layer card gives up its extra width (keeping the edge at the plan's side) –
+  // better than a column next to the plan
+  const minW = cells(CARD.minW, cw);
+  if (cardC && cardC.w > minW && own.some((k) => !out[k])) {
+    const before = { occ: occ.slice(), out: { ...out } }, edgeL = cardC.i === 0;
+    for (const keepLeft of edgeL ? [true, false] : [false, true]) {
+      mark(cardC, 0);
+      const c = { ...cardC, w: minW, i: keepLeft ? cardC.i : cardC.i + cardC.w - minW };
+      mark(c);
+      placeAll(own);
+      if (own.filter((k) => out[k]).length > own.filter((k) => before.out[k]).length) {
+        mark(c, 0); grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c);
+        // the tiles beside the card take its top and bottom edge
+        const R = out.card, near = own.filter((k) => out[k] && !before.out[k] && Math.min(Math.abs(out[k][0] - R[2]), Math.abs(out[k][2] - R[0])) < 2 * cw);
+        const T = bboxOf(near.map((k) => out[k]));
+        if (T && T[1] < R[3] && T[3] > R[1]) {
+          const y = (v) => R[1] + ((v - T[1]) / (T[3] - T[1])) * (R[3] - R[1]);
+          for (const k of near) out[k] = [out[k][0], y(out[k][1]), out[k][2], y(out[k][3])];
+        }
+        break;
+      }
+      occ.set(before.occ); sums();
+      for (const k of Object.keys(out)) out[k] = before.out[k] ?? null;
+    }
   }
   // layer bar (desktop): a free strip on the left
   if (needBar && !out.bar) {

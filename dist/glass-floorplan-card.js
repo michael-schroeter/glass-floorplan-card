@@ -122,6 +122,8 @@ const STR = {
     playing: 'Playing', paused: 'Paused', approx: 'approx.', min: 'min', all: 'All', none: 'None', now: 'Now', today: 'Today', never: 'Never', last: 'Last',
     error: (m) => `Error: ${m}`, notReachable: (n) => `${n} is not reachable`, notReachableShort: 'Not reachable', offOrUnreachable: 'Off or not reachable',
     activated: (n) => `“${n}” activated`, started: (n) => `“${n}” started`,
+    confirmAction: (n) => `Run “${n}”?`, confirmOn: (n) => `Turn on “${n}”?`, confirmOff: (n) => `Turn off “${n}”?`, confirmUnlock: (n) => `Unlock “${n}”?`, confirmLock: (n) => `Lock “${n}”?`,
+    turnOn: 'Turn on', turnOff: 'Turn off', action: 'Action', cancel: 'Cancel', tile: 'Tile', haCardHint: 'Shown in Home Assistant',
     emptyTitle: 'No floor plan yet', emptyText: 'Open the card editor and draw your home: rooms, furniture, lamps and devices – or let a photo of your floor plan guide you.',
     nOn: (n) => `${n} on`, nActive: (n) => `${n} active`, lightsOn: (n) => `${n} ${pl(n, 'light', 'lights')} on`, allOffState: 'All off',
     modes: 'Mode', mode: 'Mode', allOff: 'All off', switchedOff: (n, lights) => `${n} ${lights ? pl(n, 'light', 'lights') : pl(n, 'device', 'devices')} switched off`,
@@ -183,6 +185,8 @@ const STR = {
     playing: 'Spielt', paused: 'Pausiert', approx: 'ca.', min: 'Min.', all: 'Alle', none: 'Keine', now: 'Jetzt', today: 'Heute', never: 'Noch nie', last: 'Zuletzt',
     error: (m) => `Fehler: ${m}`, notReachable: (n) => `${n} ist nicht erreichbar`, notReachableShort: 'Nicht erreichbar', offOrUnreachable: 'Aus oder nicht erreichbar',
     activated: (n) => `„${n}“ aktiviert`, started: (n) => `„${n}“ gestartet`,
+    confirmAction: (n) => `„${n}“ ausführen?`, confirmOn: (n) => `„${n}“ einschalten?`, confirmOff: (n) => `„${n}“ ausschalten?`, confirmUnlock: (n) => `„${n}“ aufsperren?`, confirmLock: (n) => `„${n}“ absperren?`,
+    turnOn: 'Einschalten', turnOff: 'Ausschalten', action: 'Aktion', cancel: 'Abbrechen', tile: 'Kachel', haCardHint: 'Wird in Home Assistant angezeigt',
     emptyTitle: 'Noch kein Grundriss', emptyText: 'Öffne den Karten-Editor und zeichne deine Wohnung: Räume, Möbel, Lampen und Geräte – gern mit einem Foto deines Grundrisses als Vorlage.',
     nOn: (n) => `${n} an`, nActive: (n) => `${n} aktiv`, lightsOn: (n) => `${n} ${pl(n, 'Licht', 'Lichter')} an`, allOffState: 'Alles aus',
     modes: 'Mode', mode: 'Mode', allOff: 'Alle aus', switchedOff: (n, lights) => `${n} ${lights ? pl(n, 'Licht', 'Lichter') : pl(n, 'Gerät', 'Geräte')} ausgeschaltet`,
@@ -515,14 +519,35 @@ function normFurn(f) {
   if (def.c) circle = true;
   return { r: rect, kind, rad: rad ?? def.r ?? 8, circle };
 }
+/* Home Assistant's action schema (tap_action / hold_action / double_tap_action): { action: toggle | more-info | navigate | url |
+ * perform-action | assist | fire-dom-event | none, … } – a plain string is the action alone; missing or "default" = the card's own */
+function normAction(a) {
+  if (typeof a === 'string') a = { action: a };
+  return a && typeof a === 'object' && a.action && a.action !== 'default' ? a : null;
+}
+const actionsOf = (o) => ({ tap: normAction(o.tap_action), hold: normAction(o.hold_action), dbl: normAction(o.double_tap_action) });
 function normEntity(e) {
   if (typeof e === 'string') e = { entity: e };
   if (!e || typeof e.entity !== 'string' || !e.entity.includes('.')) return null;
   return {
     entity: e.entity, at: normPt(e.at), room: e.room != null ? String(e.room) : null, name: e.name || null, icon: e.icon || null,
     watt: +e.watt || null, power: e.power || null, kelvin: +e.kelvin || null, beams: Math.max(0, Math.min(6, e.beams | 0)),
-    plan: e.plan !== false, reach: +e.reach || null, color: Array.isArray(e.color) ? e.color.map(Number) : null,
+    plan: e.plan !== false, reach: +e.reach || null, color: Array.isArray(e.color) ? e.color.map(Number) : null, ...actionsOf(e),
   };
+}
+/* Own tiles: a few values (the first one large) or any Home Assistant card in a glass frame. `size` = [width, height]
+ * in tiles – a Home Assistant card gets two tiles of height unless it says otherwise. */
+const BUILTIN_TILES = ['card', 'weather', 'indoor', 'door', 'bar', 'side'];
+function normTile(x, i) {
+  if (!x || typeof x !== 'object') return null;
+  let id = String(x.id || `tile_${i + 1}`);
+  if (BUILTIN_TILES.includes(id)) id = `tile_${id}`;
+  const card = x.card && typeof x.card === 'object' && x.card.type ? x.card : null;
+  const sz = [].concat(x.size ?? []).map(Number);
+  const size = [clamp(Math.round(sz.length > 1 ? sz[0] : 1) || 1, 1, 3), clamp(Math.round(sz.length > 1 ? sz[1] : sz[0] || (card ? 2 : 1)) || 1, 1, 4)];
+  const ents = [].concat(x.entities || x.entity || []).map((e) => (typeof e === 'string' ? { entity: e } : e))
+    .filter((e) => e && typeof e.entity === 'string' && e.entity.includes('.')).map((e) => ({ entity: e.entity, name: e.name || null }));
+  return { id, name: x.name ?? null, icon: x.icon || null, ents, card, size, ...actionsOf(x) };
 }
 
 const rectArea = (r) => (r[2] - r[0]) * (r[3] - r[1]);
@@ -577,8 +602,10 @@ function buildModel(cfg, hass, { mobile = false } = {}) {
   const door = d && (d.open || d.doorbell) ? { open: d.open || null, bell: d.doorbell || null, at: normPt(d.at), room: d.room || null, name: d.name || null } : null;
   const v = cfg.vacuum;
   const vac = v && v.entity ? { ...v, dock: normPt(v.dock) } : null;
+  const tids = new Set();
+  const tiles = (Array.isArray(cfg.tiles) ? cfg.tiles : []).map(normTile).filter((x) => x && !tids.has(x.id) && tids.add(x.id));
   const M = {
-    cfg, rooms, ents, door, vac, rot: 0,
+    cfg, rooms, ents, door, vac, tiles, rot: 0,
     windows: (cfg.windows || []).map(normSeg).filter(Boolean),
     passages: (cfg.doors || []).map(normSeg).filter(Boolean),
     entrance: normSeg(cfg.entrance),
@@ -633,7 +660,7 @@ function finishModel(M, hass, mobile) {
   M.indoor = ic === false ? [] : Array.isArray(ic) && ic.length ? ic : M.ents.filter((e) => e.kind === 'climate').map((e) => e.entity);
   M.layers = buildLayers(M);
   M.widgets = placeWidgets(M, mobile);
-  const all = [B, ...['card', 'weather', 'indoor', 'door', 'bar'].map((k) => M.widgets[k]).filter(Boolean)];
+  const all = [B, ...['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)].map((k) => M.widgets[k]).filter(Boolean)];
   const U = bboxOf(all), m = 6 * D;
   M.stage = { x: U[0] - m, y: U[1] - m, w: U[2] - U[0] + 2 * m, h: U[3] - U[1] + 2 * m };
 }
@@ -676,7 +703,10 @@ const inLayer = (L, e) => !!L && (L.kinds.has(e.kind) || L.ents.has(e.entity));
 function placeWidgets(M, mobile) {
   const B = M.bbox, D = M.D, cfgW = (!mobile && M.cfg.widgets) || {};
   const out = { card: null, weather: null, indoor: null, door: null, bar: null, side: null };
-  const tiles = ['weather', 'indoor', 'door'].filter((k) => (k === 'weather' ? M.weather : k === 'indoor' ? M.indoor.length : M.door) && cfgW[k] !== false);
+  const tiles = ['weather', 'indoor', 'door'].filter((k) => (k === 'weather' ? M.weather : k === 'indoor' ? M.indoor.length : M.door) && cfgW[k] !== false)
+    .concat(M.tiles.map((x) => x.id));
+  const size = Object.fromEntries(M.tiles.map((x) => [x.id, x.size]));
+  const tw = (k) => size[k]?.[0] || 1;
   const needBar = !mobile && M.layers.length > 1;
   if (!M.rooms.length) return out;
 
@@ -697,7 +727,7 @@ function placeWidgets(M, mobile) {
     && P[(j + h) * (nx + 1) + i + w] - P[j * (nx + 1) + i + w] - P[(j + h) * (nx + 1) + i] + P[j * (nx + 1) + i] === 0;
   const cells = (v, c) => Math.max(1, Math.ceil(v / c));
   const toRect = ({ i, j, w, h }) => [B[0] + i * cw, B[1] + j * ch, B[0] + (i + w) * cw, B[1] + (j + h) * ch];
-  const mark = ({ i, j, w, h }) => { for (let y = j; y < j + h; y++) for (let x = i; x < i + w; x++) occ[y * nx + x] = 1; sums(); };
+  const mark = ({ i, j, w, h }, v = 1) => { for (let y = j; y < j + h; y++) for (let x = i; x < i + w; x++) occ[y * nx + x] = v; sums(); };
   // best free spot for a minimum size, scored by preference
   const find = (wMin, hMin, score) => {
     const w = cells(wMin, cw), h = cells(hMin, ch);
@@ -738,23 +768,24 @@ function placeWidgets(M, mobile) {
   const CARD = du({ w: 446, h: 190, minW: 318, minH: 176, maxW: 560 });
   const BAR = du({ w: 76, h: Math.max(1, M.layers.length) * 64 + 12 });
 
-  for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
+  for (const k of ['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)]) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
 
   // layer card (desktop): prefers the bottom right
+  let cardC = null;
   if (!mobile && !out.card) {
     const c = find(CARD.minW, CARD.minH, (i, j, w, h) => (j + h / 2) / ny * 2 + (i + w / 2) / nx + (j + h === ny ? 2 : 0) + (i + w === nx ? 1 : 0));
     // wider fills the corner, taller would only add empty space inside the card
-    if (c) { grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c); }
+    if (c) { grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c); cardC = c; }
   }
   // info tiles: all together as a column (or a row); what does not fit together goes in smaller groups, then alone
   const colScore = mobile ? (i, j, w, h) => -(i + w / 2) / nx + (j + h / 2) / ny : (i, j, w, h) => (i + w / 2) / nx * 2 - (j / ny) * 0.5 + (i + w === nx ? 2 : 0) + (j === 0 ? 1 : 0);
-  const weight = (k) => (k === 'door' && !mobile ? 1.18 : 1);
+  const weight = (k) => (k === 'door' && !mobile ? 1.18 : size[k]?.[1] || 1);
   const placeGroup = (group) => {
-    const n = group.length, ws = group.map(weight), sum = ws.reduce((a, b) => a + b, 0);
-    let c = find(TILE.minW, sum * TILE.minH, colScore), dir = 'col';
+    const n = group.length, ws = group.map(weight), sum = ws.reduce((a, b) => a + b, 0), wide = Math.max(...group.map(tw));
+    let c = find(wide * TILE.minW, sum * TILE.minH, colScore), dir = 'col';
     if (!c && n > 1) { c = find(n * TILE.minW, Math.max(...ws) * TILE.minH, colScore); dir = 'row'; }
     if (!c) return false;
-    grow(c, dir === 'col' ? TILE.maxW : n * TILE.maxW, dir === 'col' ? sum * TILE.maxH : Math.max(...ws) * TILE.maxH);
+    grow(c, dir === 'col' ? wide * TILE.maxW : n * TILE.maxW, dir === 'col' ? sum * TILE.maxH : Math.max(...ws) * TILE.maxH);
     const R = snap(toRect(c));
     mark(c);
     let pos = dir === 'col' ? R[1] : R[0];
@@ -765,12 +796,43 @@ function placeWidgets(M, mobile) {
     });
     return true;
   };
-  let rest = tiles.filter((k) => !out[k]);
-  while (rest.length) {
-    let done = 0;
-    for (let n = rest.length; n >= 1 && !done; n--) if (placeGroup(rest.slice(0, n))) done = n;
-    if (!done) break;
-    rest = rest.slice(done);
+  const placeAll = (list) => {
+    let rest = list.filter((k) => !out[k]);
+    while (rest.length) {
+      let done = 0;
+      // a wide tile goes alone (a column of different widths would leave gaps)
+      for (let n = rest.length; n >= 1 && !done; n--) if ((n === 1 || rest.slice(0, n).every((k) => tw(k) === 1)) && placeGroup(rest.slice(0, n))) done = n;
+      // what does not fit goes next to the plan – the tiles after it may still find a corner
+      rest = rest.slice(done || 1);
+    }
+  };
+  const own = M.tiles.map((x) => x.id);
+  placeAll(tiles.filter((k) => !own.includes(k)));
+  placeAll(own);
+  // own tiles without a corner: the layer card gives up its extra width (keeping the edge at the plan's side) –
+  // better than a column next to the plan
+  const minW = cells(CARD.minW, cw);
+  if (cardC && cardC.w > minW && own.some((k) => !out[k])) {
+    const before = { occ: occ.slice(), out: { ...out } }, edgeL = cardC.i === 0;
+    for (const keepLeft of edgeL ? [true, false] : [false, true]) {
+      mark(cardC, 0);
+      const c = { ...cardC, w: minW, i: keepLeft ? cardC.i : cardC.i + cardC.w - minW };
+      mark(c);
+      placeAll(own);
+      if (own.filter((k) => out[k]).length > own.filter((k) => before.out[k]).length) {
+        mark(c, 0); grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c);
+        // the tiles beside the card take its top and bottom edge
+        const R = out.card, near = own.filter((k) => out[k] && !before.out[k] && Math.min(Math.abs(out[k][0] - R[2]), Math.abs(out[k][2] - R[0])) < 2 * cw);
+        const T = bboxOf(near.map((k) => out[k]));
+        if (T && T[1] < R[3] && T[3] > R[1]) {
+          const y = (v) => R[1] + ((v - T[1]) / (T[3] - T[1])) * (R[3] - R[1]);
+          for (const k of near) out[k] = [out[k][0], y(out[k][1]), out[k][2], y(out[k][3])];
+        }
+        break;
+      }
+      occ.set(before.occ); sums();
+      for (const k of Object.keys(out)) out[k] = before.out[k] ?? null;
+    }
   }
   // layer bar (desktop): a free strip on the left
   if (needBar && !out.bar) {
@@ -1191,6 +1253,23 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .side .card { position: relative; flex: 1 1 0; min-height: 0; max-height: calc(150 * var(--u)); }
 .side .card.dr { flex-grow: 1.18; max-height: calc(176 * var(--u)); }
 .side .gcard { position: relative; flex: none; height: calc(218 * var(--u)); margin-top: auto; }
+.side .card.big { flex-grow: var(--h); max-height: calc(150 * var(--u) * var(--h)); }
+
+/* own tiles: values (the first one large) or a Home Assistant card in the glass frame */
+.card.ct .lbl { overflow: hidden; text-overflow: ellipsis; }
+.card.ct .ti { flex: none; display: grid; place-items: center; --mdc-icon-size: max(16px, calc(21 * var(--u))); color: var(--t2); transition: color .3s ease, filter .3s ease; }
+.card.ct.on .ti { color: var(--t1); filter: drop-shadow(0 0 calc(7 * var(--u)) rgba(255, 255, 255, .45)); }
+.card.ct .v small { margin-left: .06em; font-size: .56em; font-weight: 600; letter-spacing: 0; color: var(--t2); }
+.card.ct.na .v { color: var(--t3); }
+.card.hc { padding: 0; color: var(--t1); --ha-card-background: transparent; --card-background-color: transparent; --ha-card-box-shadow: none; --ha-card-border-width: 0;
+  --primary-text-color: #f5f5f7; --secondary-text-color: rgba(235, 235, 245, .6); --primary-background-color: transparent; --secondary-background-color: rgba(255, 255, 255, .06);
+  --divider-color: rgba(255, 255, 255, .1); --state-icon-color: rgba(235, 235, 245, .8); --paper-item-icon-color: rgba(235, 235, 245, .8); }
+.card.hc .hcw { position: absolute; inset: 0; overflow: auto; display: flex; flex-direction: column; justify-content: center; scrollbar-width: none; }
+.card.hc .hcw::-webkit-scrollbar { display: none; }
+.card.hc .hcw > * { flex: none; }
+.hph { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 100%; padding: 12px; text-align: center; font-size: max(11.5px, calc(13.5 * var(--u))); color: var(--t3); }
+.hph .ic { margin-bottom: 4px; font-size: max(20px, calc(28 * var(--u))); color: var(--t2); }
+.hph b { font-size: max(13px, calc(15.5 * var(--u))); font-weight: 600; color: var(--t1); }
 
 /* Empty plan */
 .empty-plan { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; z-index: 2; }
@@ -1461,6 +1540,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .mseg .knob { position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: 8px; background: rgba(255, 255, 255, .17);
   box-shadow: 0 2px 6px rgba(0, 0, 0, .25), inset 0 0 0 1px rgba(255, 255, 255, .08); transform: translateX(calc(100% * var(--i, 0))); transition: transform var(--sp-ms) var(--sp); }
 .mnote { padding: 8px 12px 6px; font-size: 12px; line-height: 1.4; color: var(--t3); }
+.mask { padding: 10px 12px 8px; max-width: 280px; font-size: 14.5px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; color: var(--t1); }
 
 /* ---------------------------------------------------------------- Toast */
 .toast { position: fixed; left: 50%; bottom: 26px; z-index: 70; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap;
@@ -1592,6 +1672,7 @@ class GlassFloorplanCard extends HTMLElement {
     if (!this._fcSub) this._subscribeForecast();
     this._loadLabels();
     this._update();
+    this._haCards?.forEach((c) => { c.hass = hass; });
   }
   get hass() { return this._hass; }
 
@@ -1844,6 +1925,7 @@ class GlassFloorplanCard extends HTMLElement {
     M.indoor.forEach((i) => ids.add(i));
     if (M.vac) Object.values(this._vacEnts()).forEach((i) => ids.add(i));
     for (const L of M.layers) L.ents.forEach((i) => ids.add(i));
+    for (const x of M.tiles) x.ents.forEach((e) => ids.add(e.entity));
     ids.delete(null); ids.delete(undefined);
     return [...ids];
   }
@@ -1963,8 +2045,14 @@ class GlassFloorplanCard extends HTMLElement {
   }
 
   /* ---------------------------------------------------------------- Interaction */
-  _press(el, onTap, onHold) {
-    let timer, held = false, sx = 0, sy = 0, moved = false, active = false;
+  _press(el, onTap, onHold, onDouble) {
+    let timer, held = false, sx = 0, sy = 0, moved = false, active = false, tapT = 0;
+    // with a double tap action a single tap waits a moment for the second one
+    const tap = () => {
+      if (!onDouble) { onTap(); return; }
+      if (tapT) { clearTimeout(tapT); tapT = 0; onDouble(); return; }
+      tapT = setTimeout(() => { tapT = 0; onTap(); }, 250);
+    };
     el.addEventListener('pointerdown', (e) => {
       if (e.button > 0) return;
       active = true; held = false; moved = false; sx = e.clientX; sy = e.clientY;
@@ -1973,7 +2061,7 @@ class GlassFloorplanCard extends HTMLElement {
     });
     el.addEventListener('pointermove', (e) => { if (active && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) { moved = true; clearTimeout(timer); el.classList.remove('pressed'); } });
     const cancel = () => { active = false; clearTimeout(timer); el.classList.remove('pressed'); };
-    el.addEventListener('pointerup', (e) => { if (!active) return; const go = !held && !moved; cancel(); if (go) { e.stopPropagation(); onTap(); } });
+    el.addEventListener('pointerup', (e) => { if (!active) return; const go = !held && !moved; cancel(); if (go) { e.stopPropagation(); tap(); } });
     el.addEventListener('pointercancel', cancel);
     el.addEventListener('pointerleave', cancel);
     el.addEventListener('click', (e) => e.stopPropagation());
@@ -1996,9 +2084,9 @@ class GlassFloorplanCard extends HTMLElement {
         el.addEventListener('pointerleave', () => this._hideTip());
         continue;
       }
-      const e = M.ents.find((x) => x.entity === eid);
-      const room = () => { this._hideTip(); this._openRoom(e.room, { from: this._roomEls[e.room], focus: e.entity }); };
-      this._press(el, () => this._markerTap(e, el), room);
+      const e = M.ents.find((x) => x.entity === eid), ctx = (own) => ({ entity: e.entity, el, name: this._name(e), own });
+      const room = () => this._openRoom(e.room, { from: this._roomEls[e.room], focus: e.entity });
+      this._press(el, () => this._markerTap(e, el), () => { this._hideTip(); this._act(e.hold, ctx(room)); }, e.dbl && (() => { this._hideTip(); this._act(e.dbl, ctx()); }));
       el.addEventListener('pointerenter', () => this._showTip(el, this._name(e), this._valueText(e)));
       el.addEventListener('pointerleave', () => this._hideTip());
     }
@@ -2020,8 +2108,11 @@ class GlassFloorplanCard extends HTMLElement {
     window.addEventListener('keydown', this._onKey);
   }
 
-  _markerTap(e, el) {
-    const d = domainOf(e.entity), st = this._hass.states[e.entity];
+  /* A tap on a device on the plan: its tap_action, else what fits the device – lamps and switches toggle, covers go up or
+   * down, scenes and buttons run, the rest opens its room (or Home Assistant's info dialog) */
+  _markerTap(e, el) { this._act(e.tap, { entity: e.entity, el, name: this._name(e), own: () => this._markerOwn(e, el) }); }
+  _markerOwn(e, el) {
+    const d = domainOf(e.entity);
     if (e.kind === 'light') { this._toggleLamp(e); return; }
     if (e.kind === 'cover') { this._hideTip(); this._coverToggle(e.entity); this._ripple(el); return; }
     if (e.kind === 'media' || e.kind === 'climate' || d === 'lock' || d === 'sensor' || d === 'binary_sensor' || d === 'camera' || d === 'alarm_control_panel') {
@@ -2030,22 +2121,67 @@ class GlassFloorplanCard extends HTMLElement {
       this._openRoom(e.room, { from: this._roomEls[e.room], focus: e.entity });
       return;
     }
+    if (TOGGLE_DOMAINS.includes(d) || PRESS_DOMAINS.includes(d)) { this._toggleAny(e.entity, el); return; }
+    this._openDevice(e.entity, el, true);
+  }
+
+  /* "toggle" for any entity – with the same instant feedback as a tap on the plan */
+  _toggleAny(eid, el) {
+    const st = this._hass.states[eid], d = domainOf(eid);
+    const e = this._M.ents.find((x) => x.entity === eid) || { entity: eid, kind: kindOf(eid, st) };
     if (unavailable(st)) { this._toast(t('notReachable', this._name(e))); return; }
-    if (TOGGLE_DOMAINS.includes(d)) {
-      const want = !isOn(st);
-      this._optimistic[e.entity] = { on: want, until: Date.now() + 2500 };
-      this._kickOptimistic();
-      if (want) this._ignite(el);
-      this._showTip(el, this._name(e), want ? t('on') : t('off'));
-      this._call('homeassistant', want ? 'turn_on' : 'turn_off', { entity_id: e.entity }).catch(() => { this._optimistic = {}; this._update(true); });
-      return;
-    }
+    if (d === 'light') { this._toggleLamp(e); if (!this._mk[eid]) this._ripple(el); return; }
+    if (d === 'cover') { this._hideTip(); this._coverToggle(eid); this._ripple(el); return; }
     if (PRESS_DOMAINS.includes(d)) {
       this._ripple(el);
-      this._pressEntity(e.entity).then(() => this._toast(t(d === 'scene' ? 'activated' : 'started', this._name(e)))).catch(() => {});
+      this._pressEntity(eid).then(() => this._toast(t(d === 'scene' ? 'activated' : 'started', this._name(e)))).catch(() => {});
       return;
     }
-    this._openDevice(e.entity, el, true);
+    if (d === 'lock') { this._ripple(el); this._call('lock', st.state === 'locked' ? 'unlock' : 'lock', { entity_id: eid }).catch(() => {}); return; }
+    if (!TOGGLE_DOMAINS.includes(d)) { this._ripple(el); this._call('homeassistant', 'toggle', { entity_id: eid }).catch(() => {}); return; }
+    const want = !isOn(st);
+    this._optimistic[eid] = { on: want, until: Date.now() + 2500 };
+    this._kickOptimistic();
+    if (want && el?.classList.contains('dev')) this._ignite(el); else this._ripple(el);
+    if (el && this._mk[eid] === el) this._showTip(el, this._name(e), want ? t('on') : t('off'));
+    this._call('homeassistant', want ? 'turn_on' : 'turn_off', { entity_id: eid }).catch(() => { this._optimistic = {}; this._update(true); });
+  }
+
+  /* An action in Home Assistant's schema. The card runs the usual ones itself (with its own feedback), anything else
+   * (assist …) goes to Home Assistant as `hass-action`. No action: the card's own behaviour (`own`). */
+  _act(a, { entity, el, name, own } = {}) {
+    if (!a) { own?.(); return; }
+    const eid = a.entity || entity, conf = a.confirmation;
+    if (conf && !a.confirmed && !(conf.exemptions || []).some((x) => x?.user && x.user === this._hass?.user?.id)) {
+      // asked in the card's own menu, next to what was tapped
+      const n = name || (eid ? this._nameOf(eid) : t('action')), st = this._hass.states[eid], lock = a.action === 'toggle' && domainOf(eid) === 'lock';
+      const text = conf.text || (lock ? t(st?.state === 'locked' ? 'confirmUnlock' : 'confirmLock', n) : a.action === 'toggle' ? t(isOn(st) ? 'confirmOff' : 'confirmOn', n) : t('confirmAction', n));
+      const go = lock ? t(st?.state === 'locked' ? 'unlock' : 'lock') : a.action === 'toggle' ? t(isOn(st) ? 'turnOff' : 'turnOn') : t('run');
+      this._hideTip();
+      this._openMenu(el?.isConnected ? el : this._root, [{ ask: text }, { label: go, icon: 'check', onClick: () => this._act({ ...a, confirmed: true }, { entity, el, name }) }, { label: t('cancel'), icon: 'close' }]);
+      return;
+    }
+    switch (a.action) {
+      case 'none': return;
+      case 'toggle': if (eid) this._toggleAny(eid, el); return;
+      case 'more-info': if (eid) this._openDevice(eid, el, true); return;
+      case 'navigate': if (a.navigation_path) this._navigate(a.navigation_path, a.navigation_replace); return;
+      case 'url': if (a.url_path) window.open(a.url_path, '_blank', 'noopener'); return;
+      case 'perform-action': case 'call-service': {
+        const [d, sv] = String(a.perform_action || a.service || '').split('.');
+        if (!d || !sv) return;
+        this._ripple(el);
+        this._call(d, sv, a.data || a.service_data || {}, a.target).catch(() => {});
+        return;
+      }
+      case 'fire-dom-event': fire(this, 'll-custom', a); return;
+      default: fire(this, 'hass-action', { config: { entity: eid, tap_action: a }, action: 'tap' });
+    }
+  }
+  _navigate(path, replace) {
+    const r = this._reduced; this._reduced = true; this._closePop(); this._reduced = r;
+    history[replace ? 'replaceState' : 'pushState'](null, '', path);
+    window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: !!replace } }));
   }
   _pressEntity(eid) {
     const d = domainOf(eid);
@@ -2110,7 +2246,8 @@ class GlassFloorplanCard extends HTMLElement {
   }
   _ripple(el) {
     if (this._reduced || !el) return;
-    el.querySelector('.disc')?.animate([{ transform: 'scale(.86)' }, { transform: 'scale(1)' }], { duration: SPRINGS.pop.ms, easing: ease('pop', 'ease-out') });
+    const disc = el.querySelector('.disc');
+    (disc || el).animate([{ transform: disc ? 'scale(.86)' : 'scale(.97)' }, { transform: 'scale(1)' }], { duration: SPRINGS.pop.ms, easing: ease('pop', 'ease-out') });
   }
 
   /* state with the optimistic switch applied */
@@ -2491,6 +2628,64 @@ class GlassFloorplanCard extends HTMLElement {
       if (this._M.door.open) dr.querySelector('.dslot').append(this._doorSlide(this._sideUpd, dr.querySelector('.when')));
       else this._sideUpd.push(() => { dr.querySelector('.when').textContent = this._bellText(); });
     }
+    this._haCards = [];
+    for (const x of this._M.tiles) {
+      if (!W[x.id] && !sideTiles.includes(x.id)) continue;
+      const el = add(`ct${x.card ? ' hc' : ''}${x.size[0] > 1 || x.card ? ' big' : ''}`, W[x.id], x.card ? '<div class="hcw"></div>' : '');
+      el.style.setProperty('--h', x.size[1]);
+      if (x.card) this._haCard(x.card, el.querySelector('.hcw'));
+      else this._ownTile(x, el);
+    }
+    if (this._m && this._sideEl) {
+      // phone: the tiles under the plan in rows of up to three, Home Assistant cards across the whole width
+      const big = this._M.tiles.filter((x) => sideTiles.includes(x.id) && (x.card || x.size[0] > 1));
+      const n = sideTiles.length - big.length, cols = n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3;
+      this._sideEl.style.setProperty('--mc', cols);
+      this._sideRows = Math.ceil(n / cols) + big.reduce((a, x) => a + x.size[1], 0);
+    }
+  }
+
+  /* An own tile: the first value large, the others below; tap → its tap_action, else the info dialog of the first value */
+  _ownTile(x, el) {
+    const first = x.ents[0]?.entity || null;
+    const name = x.name ?? (first ? this._nameOf(first) : t('tile'));
+    el.innerHTML = `<div class="k"><span class="lbl">${esc(name)}</span><span class="ti"></span></div><div class="bot-row"><div class="v"></div><div class="s"></div></div>`;
+    const ti = el.querySelector('.ti'), v = el.querySelector('.v'), sub = el.querySelector('.s');
+    if (first || x.tap) {
+      el.classList.add('tap');
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', name);
+      el.tabIndex = 0;
+      const ctx = (own) => ({ entity: first, el, name, own });
+      this._press(el, () => this._act(x.tap, ctx(() => first && this._openDevice(first, el, true))),
+        () => this._act(x.hold, ctx(() => first && this._openDevice(first, el))), x.dbl && (() => this._act(x.dbl, ctx())));
+    }
+    this._sideUpd.push(() => {
+      const st = first && this._st(first), ic = x.icon || (first ? this._autoIcon(first, st) : 'widget');
+      if (ti.dataset.ic !== ic) { ti.dataset.ic = ic; ti.innerHTML = this._iconHtml(ic); }
+      el.classList.toggle('on', !!st && (isOn(st) || ['open', 'playing', 'unlocked', 'heat', 'cool', 'heat_cool', 'cleaning'].includes(st.state)));
+      el.classList.toggle('na', !!first && unavailable(st));
+      // a number with its unit in smaller type
+      const val = first ? this._valueText({ entity: first, kind: kindOf(first, st) }) : '–', m = /^(-?[\d.,]+)(\s?)(.*)$/.exec(val);
+      v.innerHTML = m && m[3] && m[3] !== '°' ? `${esc(m[1])}<small>${m[2]}${esc(m[3])}</small>` : esc(val || '–');
+      const more = x.ents.slice(1).map((e) => `${e.name || this._name({ entity: e.entity })} ${this._valueText({ entity: e.entity, kind: kindOf(e.entity, this._st(e.entity)) })}`.trim());
+      sub.textContent = more.length ? more.join(' · ') : x.ents[0]?.name || (first && x.name != null && this._nameOf(first) !== x.name ? this._nameOf(first) : '');
+    });
+  }
+
+  /* A Home Assistant card in a glass frame (the card itself stays as it is, only its background goes) */
+  _haCard(cfg, box) {
+    const ph = () => { box.innerHTML = `<div class="hph">${icon('widget')}<b>${esc(String(cfg.type).replace(/^custom:/, ''))}</b><span>${esc(t('haCardHint'))}</span></div>`; };
+    if (!window.loadCardHelpers) { ph(); return; }
+    const make = () => window.loadCardHelpers().then((h) => h.createCardElement(cfg)).then((c) => {
+      if (box.getRootNode() !== this.shadowRoot) return;
+      c.hass = this._hass;
+      // a custom card that loads later replaces its error card
+      c.addEventListener('ll-rebuild', (ev) => { ev.stopPropagation(); this._haCards = this._haCards.filter((x) => x !== c); make(); }, { once: true });
+      box.replaceChildren(c);
+      this._haCards.push(c);
+    }).catch(ph);
+    make();
   }
 
   _tick() {
@@ -2975,8 +3170,8 @@ Object.assign(GlassFloorplanCard.prototype, {
     const st = () => this._st(l.entity);
     let down = false, moved = false, held = false, holdT = 0, sy = 0, start = 0, v = 0, sent = 0;
     const show = (val, on) => { tb.style.setProperty('--v', `${val}%`); tb.classList.toggle('on', on); tb.classList.toggle('lo', val < 22); };
-    // press and hold (without dragging) → device page in Home Assistant
-    const hold = () => { held = true; down = false; tb.classList.remove('pressed', 'drag'); this._openDevice(l.entity, tb); };
+    // press and hold (without dragging) → hold_action, else the device page in Home Assistant
+    const hold = () => { held = true; down = false; tb.classList.remove('pressed', 'drag'); this._holdDevice(l.entity, tb); };
     tb.addEventListener('contextmenu', (e) => { e.preventDefault(); if (!held) { clearTimeout(holdT); hold(); } });
     tb.addEventListener('pointerdown', (e) => {
       if (e.button > 0) return;
@@ -3282,17 +3477,19 @@ Object.assign(GlassFloorplanCard.prototype, {
     try { navigator.vibrate?.(10); } catch (e) { /* never mind */ }
     if (el && !this._reduced) el.animate([{ transform: 'scale(.93)' }, { transform: 'scale(1.02)', offset: 0.6 }, { transform: 'none' }], { duration: 260, easing: 'ease-out' });
     if (dev && h.user?.is_admin && !infoOnly) {
-      setTimeout(() => {
-        const r = this._reduced; this._reduced = true; this._closePop(); this._reduced = r;
-        history.pushState(null, '', `/config/devices/device/${dev}`);
-        window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
-      }, 140);
+      setTimeout(() => this._navigate(`/config/devices/device/${dev}`), 140);
       return;
     }
     fire(this, 'hass-more-info', { entityId: eid });
   },
+  /* holding a device: its hold_action if it has one, else its page in Home Assistant */
+  _holdDevice(eid, el) {
+    const e = this._M.ents.find((x) => x.entity === eid);
+    if (e?.hold) this._act(e.hold, { entity: eid, el, name: this._name(e) });
+    else this._openDevice(eid, el);
+  },
 
-  /* press and hold (≈ ½ s, without moving) or right-click on a row → _openDevice */
+  /* press and hold (≈ ½ s, without moving) or right-click on a row → _holdDevice */
   _hold(el, eid) {
     if (!el || !eid) return;
     el.classList.add('hold');
@@ -3302,11 +3499,11 @@ Object.assign(GlassFloorplanCard.prototype, {
       if (e.button > 0 || e.target.closest('button, .hs, .slide, .ks, .sws, .tgl, .dial, .hvac')) return;
       fired = false; sx = e.clientX; sy = e.clientY;
       el.classList.add('holding');
-      tm = setTimeout(() => { fired = true; el.classList.remove('holding'); this._openDevice(eid, el); }, 520);
+      tm = setTimeout(() => { fired = true; el.classList.remove('holding'); this._holdDevice(eid, el); }, 520);
     });
     el.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - sx, e.clientY - sy) > 8) cancel(); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((n) => el.addEventListener(n, cancel));
-    el.addEventListener('contextmenu', (e) => { e.preventDefault(); cancel(); if (!fired) { fired = true; this._openDevice(eid, el); } });
+    el.addEventListener('contextmenu', (e) => { e.preventDefault(); cancel(); if (!fired) { fired = true; this._holdDevice(eid, el); } });
   },
 
   /* ---------------------------------------------------------------- Menu */
@@ -3317,6 +3514,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       if (it.sep) { m.append(mk('div', 'msep')); continue; }
       if (it.head) { m.append(mk('div', 'mh', esc(it.head))); continue; }
       if (it.note) { m.append(mk('div', 'mnote', esc(it.note))); continue; }
+      if (it.ask) { m.append(mk('div', 'mask', esc(it.ask))); continue; }
       if (it.seg) {
         const s = mk('div', 'mseg', `<i class="knob"></i>${it.seg.options.map((o) => `<button data-v="${esc(o.v)}">${esc(o.t)}</button>`).join('')}`);
         s.style.setProperty('--n', it.seg.options.length);
@@ -3797,7 +3995,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const canPos = () => !!((st()?.attributes?.supported_features || 0) & 4);
     let down = false, moved = false, held = false, holdT = 0, sy = 0, start = 0, v = 0;
     const show = (p) => { tb.style.setProperty('--v', `${p}%`); tb.classList.toggle('lo', p < 30); };
-    const hold = () => { held = true; down = false; tb.classList.remove('pressed', 'drag'); this._openDevice(eid, tb); };
+    const hold = () => { held = true; down = false; tb.classList.remove('pressed', 'drag'); this._holdDevice(eid, tb); };
     tb.addEventListener('contextmenu', (ev) => { ev.preventDefault(); if (!held) { clearTimeout(holdT); hold(); } });
     tb.addEventListener('pointerdown', (ev) => {
       if (ev.button > 0) return;
@@ -3883,7 +4081,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       this._kickOptimistic();
       this._call('homeassistant', want ? 'turn_on' : 'turn_off', { entity_id: eid }).catch(() => { this._optimistic = {}; this._update(true); });
     };
-    this._press(tb, tap, () => this._openDevice(eid, tb));
+    this._press(tb, tap, () => this._holdDevice(eid, tb));
     upd.push(() => {
       const s = this._st(eid), on = isOn(s);
       tb.style.setProperty('--v', on ? '100%' : '0%');
@@ -4429,9 +4627,10 @@ const STYLES_M = `
 .m .badge { top: 7px; right: 7px; width: 20px; height: 20px; font-size: 11px; }
 .m .bot { --bs: 22px; }
 
-/* info tiles that did not fit into the plan: a row under it */
-.m .mside { position: absolute; z-index: 7; display: flex; gap: 8px; }
-.m .mside .card { position: relative; flex: 1 1 0; height: 100%; }
+/* info tiles that did not fit into the plan: rows under it (up to three side by side, Home Assistant cards across) */
+.m .mside { position: absolute; z-index: 7; display: grid; grid-template-columns: repeat(var(--mc, 3), minmax(0, 1fr)); grid-auto-rows: 96px; grid-auto-flow: row dense; gap: 8px; }
+.m .mside .card { position: relative; min-width: 0; }
+.m .mside .card.big { grid-column: 1 / -1; grid-row: span var(--h, 1); }
 /* info tiles inside the plan */
 .m .card { padding: 10px 11px 10px 12px; border-radius: 16px; }
 .m .card .k { font-size: 12px; gap: 4px; }
@@ -4546,12 +4745,13 @@ Object.assign(GlassFloorplanCard.prototype, {
     const preview = this._inPreview();
     const avail = this._ev ? this._ev.h : preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
     const gH = this._M.layers.length ? 156 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
+    // tiles that did not fit into the plan: rows under it
+    const rows = this._sideEl ? this._sideRows || 1 : 0, rowH = rows ? rows * 96 + (rows - 1) * 8 : 0;
     let pu = (W - 2 * pad) / S.w;
-    if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (this._sideEl ? 106 : 0)) / S.h));
+    if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (rowH ? rowH + 10 : 0)) / S.h));
     const u = Math.min(pu * D, 0.62);
     pu = u / D;
     const sw = S.w * pu, sh = S.h * pu, sx = Math.round((W - sw) / 2);
-    const rowH = this._sideEl ? 96 : 0;
     const gTop = Math.round(sy + sh + 8 + (rowH ? rowH + 10 : 0));
     const H = Math.max(avail, gTop + gH + tabsH);
     if (this._h !== H) { this._h = H; this.style.height = `${H}px`; }
@@ -4861,6 +5061,13 @@ dialog.ed[open] { display: block; }
 .erow .eadd.del { color: rgb(255, 128, 118); background: rgba(var(--red), .14); }
 .erow .eadd.del .ic { --ip: currentColor; }
 .erow .eadd.del:hover { background: rgba(var(--red), .26); }
+/* actions and own tiles; Home Assistant's own fields sit on a card in Home Assistant's colours */
+.eacts .eact + .eact { margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .06); }
+.eha { margin-top: 2px; padding: 10px; border-radius: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--card-background-color, #1c1c1e); color: var(--primary-text-color, #e1e1e1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.eha.code { padding: 4px 0; overflow: hidden; }
+.ecode { height: 170px; padding: 10px 12px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; resize: vertical; }
+.einp.bad, .einp.bad:focus { box-shadow: inset 0 0 0 1.5px rgba(var(--red), .9); }
+.erow .ego { flex: none; display: grid; place-items: center; font-size: 15px; opacity: .45; }
 .eempty { padding: 16px; border-radius: 14px; background: rgba(255, 255, 255, .04); font-size: 13px; line-height: 1.45; color: var(--t2); }
 .ecard { margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
 .ecard.drop { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .7); }
@@ -4999,6 +5206,10 @@ class GfcEditor extends HTMLElement {
     this._doneAreas = new Set();
     this._markDone();
     this._hints = [];
+    this._tilePick = null;
+    // inside Home Assistant: its own action and YAML editors
+    this._haUi = false;
+    this._haForms().then((ok) => { this._haUi = ok; if (ok && this._dlg?.open && ['ent', 'tile', 'wid'].includes(this._s?.t)) this._panel(); });
     this._recall();
     this._loadUnderlay();
     this._loadLabels();
@@ -5129,7 +5340,7 @@ class GfcEditor extends HTMLElement {
     this._liveEl.append(this._card);
     this._liveKey = null;
     // keys and clicks stay in the editor (Home Assistant's edit dialog must not react to them, e.g. close on Escape)
-    for (const type of ['keydown', 'keyup', 'click', 'pointerdown', 'wheel']) this._dlg.addEventListener(type, (e) => e.stopPropagation());
+    for (const type of ['keydown', 'keyup', 'click', 'pointerdown', 'wheel', 'value-changed', 'config-changed']) this._dlg.addEventListener(type, (e) => e.stopPropagation());
     this._dlg.addEventListener('cancel', (e) => {
       e.preventDefault();
       if (!this.$('.econfirm').hidden) this._confirmClose();
@@ -5214,6 +5425,7 @@ class GfcEditor extends HTMLElement {
     this._measure = null;
     this._editLayer = null;
     this._picker = null;
+    this._tilePick = null;
     // the plan is built: the devices of the linked areas come into their rooms
     if (!this._bare()) this._autoDevices();
     this._draw();
@@ -5490,11 +5702,11 @@ class GfcEditor extends HTMLElement {
     // tiles (auto or manual) – on a laptop
     const M = this._model();
     if (tool === 'tiles' && M && this._mode !== 'phone') {
-      for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) {
-        const R = M.widgets[k];
+      for (const k of ['card', 'weather', 'indoor', 'door', 'bar', ...this._tiles().map((x) => x.id)]) {
+        const R = M.widgets[k], own = this._tileById(k);
         if (!R) continue;
-        const manual = Array.isArray(c.widgets?.[k]), on = sel?.t === 'wid' && sel.k === k;
-        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${k}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(t(`ed_tile_${k}`))}</span></div>`;
+        const manual = Array.isArray(c.widgets?.[k]), on = (sel?.t === 'wid' && sel.k === k) || (sel?.t === 'tile' && sel.id === k);
+        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${esc(k)}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(own ? this._tileName(own) : t(`ed_tile_${k}`))}</span></div>`;
       }
     }
     // device markers: exactly over the buttons the live card shows in its current layer (tap → settings) –
@@ -5599,6 +5811,7 @@ class GfcEditor extends HTMLElement {
     if (s.t === 'door') return c.door || null;
     if (s.t === 'dock') return c.vacuum || null;
     if (s.t === 'wid') return this._model()?.widgets[s.k] || null;
+    if (s.t === 'tile') return this._tileById(s.id);
     if (s.t === 'ul') return c.underlay?.rect ? c.underlay : null;
     return null;
   }
@@ -5733,8 +5946,9 @@ class GfcEditor extends HTMLElement {
   _select(s, tool) {
     const changedTool = tool && this._tool !== tool;
     if (changedTool) this._tool = tool;
-    const same = JSON.stringify(s) === JSON.stringify(this._s) || (s?.t === 'room' && this._s?.t === 'room' && s.i === this._s.i);
+    const same = !this._tilePick && (JSON.stringify(s) === JSON.stringify(this._s) || (s?.t === 'room' && this._s?.t === 'room' && s.i === this._s.i));
     this._s = s;
+    this._tilePick = null;
     if (s?.t === 'ent') {
       const e = this._c.entities[s.i], st = this._hs()?.states?.[e.entity], kind = kindOf(e.entity, st);
       const cur = this._layerDef(this._layerSel);
@@ -5906,7 +6120,8 @@ class GfcEditor extends HTMLElement {
 
   _key(e) {
     if (!this._dlg?.open) return;
-    const typing = e.composedPath().some((n) => n.tagName === 'INPUT' || n.tagName === 'SELECT' || n.tagName === 'TEXTAREA');
+    // also inside Home Assistant's own fields (action editor, YAML editor)
+    const typing = e.composedPath().some((n) => n.tagName === 'INPUT' || n.tagName === 'SELECT' || n.tagName === 'TEXTAREA' || n.isContentEditable || /^HA-/.test(n.tagName || ''));
     if (e.key === ' ' && !typing) { this._space = e.type === 'keydown'; }
     if (typing) return;
     const mod = e.metaKey || e.ctrlKey;
@@ -5994,6 +6209,7 @@ class GfcEditor extends HTMLElement {
       } else if (s.t === 'door') delete c.door.at;
       else if (s.t === 'dock') delete c.vacuum.dock;
       else if (s.t === 'wid' && c.widgets) delete c.widgets[s.k];
+      else if (s.t === 'tile') { c.tiles = this._tiles().filter((x) => x.id !== s.id); if (c.widgets) delete c.widgets[s.id]; }
       else if (s.t === 'ul') { delete c.underlay; this._ulSrc = null; }
       this._s = null;
     });
@@ -6368,6 +6584,8 @@ function normEditorConfig(c) {
   c.doors = (c.doors || []).map(normSeg).filter(Boolean);
   if (c.entrance) c.entrance = normSeg(c.entrance);
   c.entities = (Array.isArray(c.entities) ? c.entities : []).map((e) => (typeof e === 'string' ? { entity: e } : e)).filter((e) => e?.entity);
+  // own tiles get the id the card gives them (their position is stored under it)
+  if (Array.isArray(c.tiles)) c.tiles = c.tiles.filter((x) => x && typeof x === 'object').map((x, i) => { const id = String(x.id || `tile_${i + 1}`); return { ...x, id: BUILTIN_TILES.includes(id) ? `tile_${id}` : id }; });
   return c;
 }
 
@@ -6379,10 +6597,11 @@ function cleanConfig(c0) {
   if (c.vacuum && !c.vacuum.entity) delete c.vacuum;
   if (c.widgets && !Object.keys(c.widgets).length) delete c.widgets;
   if (Array.isArray(c.layers) && !c.layers.length) delete c.layers;
+  if (Array.isArray(c.tiles) && !c.tiles.length) delete c.tiles;
   for (const r of c.rooms || []) { if (!r.furniture?.length) delete r.furniture; if (!r.area) delete r.area; if (!r.label || r.label === 'top') delete r.label; if (!r.helpers?.length) delete r.helpers; }
   if (c.underlay) { c.underlay = { ...c.underlay }; if (String(c.underlay.image || '').startsWith('data:')) delete c.underlay.image; }
   // key order like in the docs
-  const order = ['type', 'language', 'title', 'rooms', 'windows', 'doors', 'entrance', 'entities', 'layers', 'door', 'vacuum', 'weather', 'indoor', 'widgets', 'modes_label', 'layout', 'fit', 'mobile', 'scale', 'underlay'];
+  const order = ['type', 'language', 'title', 'rooms', 'windows', 'doors', 'entrance', 'entities', 'layers', 'door', 'vacuum', 'weather', 'indoor', 'tiles', 'widgets', 'modes_label', 'layout', 'fit', 'mobile', 'scale', 'underlay'];
   const out = {};
   for (const k of order) if (c[k] !== undefined) out[k] = c[k];
   for (const k of Object.keys(c)) if (!(k in out)) out[k] = c[k];
@@ -6500,20 +6719,23 @@ Object.assign(GfcEditor.prototype, {
   _panel() {
     if (!this._ins) return;
     const I = this._ins, s = this._s;
-    const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid' };
-    const detail = s && !s.quiet && this._selObj() ? map[s.t] : null;
+    const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid', tile: '_pTile' };
+    // choosing the values of a tile (opened from its settings)
+    const tileP = this._tool === 'tiles' && this._tilePick ? this._tileById(this._tilePick) : null;
+    const detail = !tileP && s && !s.quiet && this._selObj() ? map[s.t] : null;
     const layer = !detail && this._tool === 'layers' && this._editLayer ? this._layerDef(this._editLayer) : null;
     const picker = !detail && this._tool === 'devices' && this._picker ? this._layerDef(this._picker) : null;
-    const view = detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
+    const view = tileP ? `v:${tileP.id}` : detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
     if (this._view?.startsWith('t:')) this._scrollMem[this._view] = I.scrollTop;
     const keep = view === this._view ? I.scrollTop : null;
     I.innerHTML = '';
-    if (detail || layer || picker) {
-      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(t(`ed_tool_${this._tool}`))}</span>`);
+    if (detail || layer || picker || tileP) {
+      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(tileP ? this._tileName(tileP) : t(`ed_tool_${this._tool}`))}</span>`);
       back.addEventListener('click', () => this._back());
       I.append(back);
     }
-    if (detail) this[detail](I);
+    if (tileP) this._tilePickerView(I, tileP);
+    else if (detail) this[detail](I);
     else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
     else if (picker) this._pickerView(I, picker);
     else { this[`_p_${this._tool}`]?.(I); this._nextStep(I); }
@@ -6522,6 +6744,7 @@ Object.assign(GfcEditor.prototype, {
     this._syncTop();
   },
   _back() {
+    if (this._tilePick) { this._tilePick = null; this._draw(); this._panel(); return; }
     // from a device's settings back to the list it came from (the picker stays), else out of the picker
     if (this._s && !this._s.quiet) this._s = null;
     else { this._s = null; this._picker = null; }
@@ -7195,6 +7418,7 @@ Object.assign(GfcEditor.prototype, {
       }
       I.append(chips);
     }
+    this._actionsSection(I, e, e.entity, this._actDefault(e.entity));
     const row = mk('div', 'ebtns');
     row.append(this._delBtn(t('ed_removeFromLayers'), () => this._deleteSel()));
     I.append(row);
@@ -7317,11 +7541,13 @@ Object.assign(GfcEditor.prototype, {
     tg(t('ed_tile_weather'), c.weather !== false, (v) => { if (v) delete c.weather; else c.weather = false; });
     tg(t('ed_tile_indoor'), c.indoor !== false, (v) => { if (v) delete c.indoor; else c.indoor = false; });
     this._doorPanel(I);
+    this._ownTilesSection(I);
     const b = this._btn(`${icon('wand')}<span>${esc(t('ed_autoArrange'))}</span>`, 'wide', () => this._change(() => { delete c.widgets; }));
     b.style.marginTop = '16px';
     I.append(b);
   },
   _pWid(I) {
+    if (this._tileById(this._s.k)) { this._pTile(I); return; }
     const k = this._s.k, manual = Array.isArray(this._c.widgets?.[k]);
     I.append(this._el(`<h2>${esc(t(`ed_tile_${k}`))}</h2><p class="lead">${esc(t(manual ? 'ed_tileManual' : 'ed_tileAuto'))}</p>`));
     if (manual) {
@@ -7403,7 +7629,7 @@ function exampleConfig(lang = 'en') {
       { entity: 'cover.living_room_right', at: [290, 620] },
       { entity: 'cover.office', at: [720, 860] },
       { entity: 'cover.guest_room', at: [1020, 860] },
-      { entity: 'lock.front_door', at: [1140, 490] },
+      { entity: 'lock.front_door', at: [1140, 490], tap_action: { action: 'toggle', confirmation: true } },
       { entity: 'binary_sensor.living_room_window', at: [50, 600] },
       { entity: 'binary_sensor.kitchen_window', at: [50, 220] },
       { entity: 'binary_sensor.hallway_motion', at: [970, 490] },
@@ -7412,6 +7638,7 @@ function exampleConfig(lang = 'en') {
     door: { open: 'button.front_door_open', doorbell: 'event.front_door_doorbell', at: [1140, 490] },
     vacuum: { entity: 'vacuum.roborock_s8', dock: [960, 536] },
     weather: 'weather.home',
+    tiles: [{ id: 'energy', name: N('Energy', 'Energie'), icon: 'bolt', entities: ['sensor.home_power', { entity: 'sensor.energy_today', name: N('Today', 'Heute') }] }],
     layers: ['light', 'climate', 'cover', 'vacuum',
       { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }],
   };
@@ -8128,6 +8355,311 @@ Object.assign(GfcEditor.prototype, {
     box.addEventListener('drop', (e) => { e.preventDefault(); box.classList.remove('drop'); this._readPlanFile(e.dataTransfer.files[0]); });
     I.append(box);
   },
+});
+
+/* ================================================================== Floor plan editor: actions (tap / hold / double tap) and own tiles
+ * Actions use Home Assistant's schema. Inside Home Assistant its own action editor is shown – in Home Assistant's look,
+ * it knows every action, service and target. Without it (the demo) a short list of the common ones. */
+const ACTION_KEYS = [['tap_action', 'ed_tap'], ['hold_action', 'ed_hold'], ['double_tap_action', 'ed_dbl']];
+const TILE_ICONS = ['widget', 'bolt', 'gauge', 'sun', 'thermo', 'drop', 'humid', 'leaf', 'flame', 'plug', 'washer', 'coffee', 'camera', 'bell', 'shield', 'lock', 'home', 'sparkle', 'fan', 'tv', 'robot', 'battery', 'info', 'power'];
+const eidOf = (e) => (typeof e === 'string' ? e : e?.entity);
+
+Object.assign(GfcEditor.prototype, {
+  /* Home Assistant's form elements – they come with its card editors (loaded once if needed); never in the demo */
+  _haForms() {
+    if (this._haP) return this._haP;
+    const h = this._hs?.();
+    if (!h?.localize || !h.callWS) return (this._haP = Promise.resolve(false));
+    const load = async () => {
+      if (!customElements.get('ha-selector')) {
+        try {
+          const helpers = await window.loadCardHelpers?.();
+          const card = await helpers?.createCardElement({ type: 'tile', entity: Object.keys(h.states || {})[0] || 'sun.sun' });
+          await card?.constructor?.getConfigElement?.();
+        } catch (e) { /* not there */ }
+      }
+      await Promise.race([customElements.whenDefined('ha-selector'), new Promise((r) => setTimeout(r, 3000))]);
+      return !!customElements.get('ha-selector');
+    };
+    return (this._haP = load());
+  },
+  /* one undo step per field while typing in it */
+  _snapOnce(key) {
+    if (this._typKey !== key || Date.now() - (this._typT || 0) > 1500) this._snap();
+    this._typKey = key;
+    this._typT = Date.now();
+  },
+
+  /* ---------------------------------------------------------------- actions */
+  /* what tapping, holding and double tapping do; `dflt` says what happens without an action */
+  _actionsSection(I, o, entity, dflt) {
+    I.append(this._el(`<h3>${esc(t('ed_actions'))}</h3>`));
+    const box = mk('div', this._haUi ? 'eacts eha' : 'eacts');
+    for (const [key, label] of ACTION_KEYS) box.append(this._haUi ? this._haAction(o, key, t(label), entity) : this._ownAction(o, key, t(label), entity));
+    I.append(box);
+    I.append(this._el(`<p class="small">${esc(dflt)}</p>`));
+  },
+  _haAction(o, key, label, entity) {
+    const sel = document.createElement('ha-selector');
+    sel.hass = this._hs();
+    sel.selector = { ui_action: {} };
+    sel.label = label;
+    sel.value = typeof o[key] === 'string' ? { action: o[key] } : o[key];
+    if (entity) sel.context = { entity_id: entity };
+    sel.addEventListener('value-changed', (ev) => {
+      ev.stopPropagation();
+      const v = ev.detail?.value;
+      this._snapOnce(key);
+      if (v?.action) o[key] = v; else delete o[key];
+      sel.value = v;
+      this._draw();
+    });
+    return sel;
+  },
+  _ownAction(o, key, label, entity) {
+    const cur = (typeof o[key] === 'string' ? { action: o[key] } : o[key]) || {}, act = cur.action || '';
+    const w = mk('div', 'eact');
+    const opts = [['', t('ed_act_default')], ['toggle', t('ed_act_toggle')], ['more-info', t('ed_act_more')], ['navigate', t('ed_act_navigate')],
+      ['url', t('ed_act_url')], ['perform-action', t('ed_act_perform')], ['none', t('ed_act_none')]];
+    if (act && !opts.some(([v]) => v === act)) opts.push([act, act]);
+    w.append(this._fieldEl(label, this._drop(opts, act, (v) => { if (v) o[key] = { action: v }; else delete o[key]; })));
+    const field = (k, ph, then) => w.append(this._fieldEl(null, this._inp(cur[k] ?? '', (v) => {
+      o[key] = { ...o[key] };
+      if (v) o[key][k] = v.trim(); else delete o[key][k];
+      then?.(v.trim());
+    }, { placeholder: ph })));
+    if (act === 'navigate') field('navigation_path', '/lovelace/energy');
+    if (act === 'url') field('url_path', 'https://…');
+    if (act === 'perform-action') {
+      // an action of the device's own domain (light.turn_on for a lamp) is meant for this device
+      field('perform_action', 'script.movie_time', (v) => { if (entity && domainOf(v) === domainOf(entity)) o[key].target = { entity_id: entity }; else delete o[key].target; });
+      const di = this._inp(cur.data ? JSON.stringify(cur.data) : '', (v) => {
+        let d;
+        try { d = v.trim() ? JSON.parse(v) : null; } catch (e) { d = undefined; }
+        const ok = d === null || (d && typeof d === 'object' && !Array.isArray(d));
+        di.classList.toggle('bad', !ok);
+        if (!ok) return;
+        o[key] = { ...o[key] };
+        if (d) o[key].data = d; else delete o[key].data;
+      }, { placeholder: '{"brightness_pct": 40}' });
+      w.append(this._fieldEl(t('ed_act_data'), di));
+    }
+    if (act && act !== 'none') {
+      w.append(this._fieldEl(t('ed_act_confirm'), this._tglEl(!!cur.confirmation, (on) => this._change(() => {
+        o[key] = { ...o[key] };
+        if (on) o[key].confirmation = true; else delete o[key].confirmation;
+      }, { keepSel: true })), true));
+    }
+    return w;
+  },
+  /* the card's own behaviour for a device, in words */
+  _actDefault(eid) {
+    const st = this._hs()?.states?.[eid], d = domainOf(eid), kind = kindOf(eid, st);
+    const tap = kind === 'light' || TOGGLE_DOMAINS.includes(d) ? 'ed_dt_toggle' : kind === 'cover' ? 'ed_dt_cover' : PRESS_DOMAINS.includes(d) ? 'ed_dt_press'
+      : ['media', 'climate'].includes(kind) || ['lock', 'sensor', 'binary_sensor', 'alarm_control_panel'].includes(d) ? 'ed_dt_room' : 'ed_dt_info';
+    return t('ed_actDefault', t(tap));
+  },
+
+  /* ---------------------------------------------------------------- own tiles */
+  _tiles() { return Array.isArray(this._c.tiles) ? this._c.tiles : []; },
+  _tileById(id) { return this._tiles().find((x) => x.id === id) || null; },
+  _tileName(x) { const f = eidOf([].concat(x.entities || [])[0]); return x.name || (x.card ? t('ed_tileCard') : f ? this._fname(f) : t('tile')); },
+  _tileIcon(x) {
+    const f = eidOf([].concat(x.entities || [])[0]);
+    return x.icon || (!x.card && f ? GlassFloorplanCard.prototype._autoIcon(f, this._hs()?.states?.[f]) : 'widget');
+  },
+  _ownTilesSection(I) {
+    I.append(this._el(`<h3>${esc(t('ed_ownTiles'))}</h3>`));
+    const list = mk('div', 'elist');
+    list.style.marginTop = '0';
+    const s = this._s;
+    for (const x of this._tiles()) {
+      const n = [].concat(x.entities || []).length;
+      const sub = x.card ? t('ed_tileCardOf', String(x.card.type || '').replace(/^custom:/, '')) : t('ed_nValues', n);
+      const row = this._el(`<span class="ei">${this._iconHtml(this._tileIcon(x))}</span><div><b>${esc(this._tileName(x))}</b><small>${esc(sub)}</small></div><span class="ego">${icon('chevR')}</span>`, 'erow');
+      row.style.cursor = 'pointer';
+      row.classList.toggle('on', (s?.t === 'tile' && s.id === x.id) || (s?.t === 'wid' && s.k === x.id));
+      row.addEventListener('click', () => this._select({ t: 'tile', id: x.id }, 'tiles'));
+      list.append(row);
+    }
+    if (!this._tiles().length) list.append(this._el(`<p class="small" style="margin:0 4px">${esc(t('ed_ownTilesNone'))}</p>`));
+    I.append(list);
+    const b = this._btn(`${icon('plus')}<span>${esc(t('ed_newTile'))}</span>`, 'wide blue', () => this._change(() => {
+      const id = `tile_${uid()}`;
+      this._c.tiles = [...this._tiles(), { id }];
+      this._s = { t: 'tile', id };
+    }));
+    b.style.marginTop = '10px';
+    I.append(b);
+  },
+
+  /* a tile's settings: name, values or a Home Assistant card, icon, actions, size */
+  _pTile(I) {
+    const s = this._s, x = this._tileById(s.t === 'tile' ? s.id : s.k);
+    if (!x) return;
+    const h = this._hs() || {}, ents = [].concat(x.entities || []), isCard = !!x.card;
+    I.append(this._el(`<h2>${esc(this._tileName(x))}</h2>`));
+    I.append(this._fieldEl(t('ed_name'), this._inp(x.name || '', (v) => { if (v) x.name = v; else delete x.name; }, { placeholder: this._tileName({ ...x, name: '' }) })));
+    I.append(this._fieldEl(t('ed_tileShows'), this._segEl([['values', t('ed_tileValues'), 'gauge'], ['card', t('ed_tileCard'), 'widget']], isCard ? 'card' : 'values', (v) => {
+      if ((v === 'card') === isCard) return;
+      this._change(() => {
+        if (v === 'card') x.card = { type: 'markdown', content: t('ed_tileCardHello') }; else delete x.card;
+        delete x.size;
+      }, { keepSel: true });
+    })));
+    if (!isCard) {
+      // the values – the first one large
+      const list = mk('div', 'elist');
+      list.style.marginTop = '0';
+      ents.forEach((en, i) => {
+        const id = eidOf(en), st = h.states?.[id];
+        const row = this._el(`<span class="ei">${icon(GlassFloorplanCard.prototype._autoIcon(id, st))}</span><div><b>${esc(en?.name || this._fname(id))}</b><small>${esc(i ? id : `${t('ed_tileBig')} · ${id}`)}</small></div>`, 'erow');
+        row.style.cursor = 'default';
+        if (i) {
+          const up = mk('button', 'eadd', icon('chevU'));
+          up.title = t('ed_tileMakeBig');
+          up.addEventListener('click', () => this._change(() => { const a = [...ents]; a.unshift(a.splice(i, 1)[0]); x.entities = a; }, { keepSel: true }));
+          row.append(up);
+        }
+        const del = mk('button', 'eadd del', icon('minus'));
+        del.title = t('ed_delete');
+        del.addEventListener('click', () => this._change(() => { x.entities = ents.filter((_, j) => j !== i); if (!x.entities.length) delete x.entities; }, { keepSel: true }));
+        row.append(del);
+        list.append(row);
+      });
+      if (!ents.length) list.append(this._el(esc(t('ed_noValues')), 'eempty'));
+      I.append(this._fieldEl(t('ed_tileValuesHead'), list));
+      const add = this._btn(`${icon('plus')}<span>${esc(t('ed_addValue'))}</span>`, 'wide', () => { this._tilePick = x.id; this._pq = ''; this._panel(); });
+      add.style.marginTop = '10px';
+      I.append(add);
+      // icon (tap the chosen one again: from the first value)
+      const cur = this._tileIcon(x), grid = mk('div', 'eicons');
+      for (const n of TILE_ICONS.includes(cur) ? TILE_ICONS : [cur, ...TILE_ICONS.slice(0, -1)]) {
+        const b = mk('button', n === cur ? 'act' : '', this._iconHtml(n));
+        b.title = n;
+        b.addEventListener('click', () => this._change(() => { if (x.icon === n) delete x.icon; else x.icon = n; }, { keepSel: true }));
+        grid.append(b);
+      }
+      I.append(this._fieldEl(t('ed_icon'), grid));
+      this._actionsSection(I, x, eidOf(ents[0]), t('ed_tileActDefault'));
+    } else this._cardField(I, x);
+    // size in tiles
+    I.append(this._el(`<h3>${esc(t('ed_tileSize'))}</h3>`));
+    const sz = [].concat(x.size ?? []), w = sz.length > 1 ? sz[0] : 1, hh = sz.length > 1 ? sz[1] : sz[0] || (isCard ? 2 : 1);
+    const setSize = (nw, nh) => this._change(() => {
+      if (nw === 1 && nh === (isCard ? 2 : 1)) delete x.size; else x.size = [nw, nh];
+      if (this._c.widgets) delete this._c.widgets[x.id];
+    }, { keepSel: true });
+    const seg = (opts, v, fn) => { const e = this._segEl(opts.map((n) => [String(n), String(n)]), String(v), (val) => fn(+val)); e.style.width = `${opts.length * 46}px`; return e; };
+    I.append(this._fieldEl(t('ed_tileWidth'), seg([1, 2], w, (v) => setSize(v, hh)), true));
+    I.append(this._fieldEl(t('ed_tileHeight'), seg([1, 2, 3], hh, (v) => setSize(w, v)), true));
+    const manual = Array.isArray(this._c.widgets?.[x.id]);
+    I.append(this._el(`<p class="small">${esc(t(manual ? 'ed_tileManual' : this._model()?.widgets?.[x.id] ? 'ed_tileAuto' : 'ed_tileSide'))}</p>`));
+    const row = mk('div', 'ebtns');
+    if (manual) row.append(this._btn(`${icon('wand')}<span>${esc(t('ed_auto'))}</span>`, '', () => this._change(() => { delete this._c.widgets[x.id]; }, { keepSel: true })));
+    row.append(this._delBtn(t('ed_deleteTile'), () => this._change(() => {
+      this._c.tiles = this._tiles().filter((y) => y !== x);
+      if (this._c.widgets) delete this._c.widgets[x.id];
+      if (!this._c.tiles.length) delete this._c.tiles;
+      this._s = null;
+    })));
+    I.append(row);
+  },
+
+  /* the Home Assistant card of a tile: Home Assistant's YAML editor, else JSON (demo) */
+  _cardField(I, x) {
+    if (this._haUi && customElements.get('ha-yaml-editor')) {
+      const ed = document.createElement('ha-yaml-editor');
+      ed.hass = this._hs();
+      ed.defaultValue = x.card;
+      ed.addEventListener('value-changed', (ev) => {
+        ev.stopPropagation();
+        const v = ev.detail?.value;
+        if (ev.detail?.isValid === false || !v || typeof v !== 'object' || Array.isArray(v) || !v.type) return;
+        this._snapOnce('card');
+        x.card = v;
+        this._draw();
+      });
+      const w = mk('div', 'eha code');
+      w.append(ed);
+      I.append(this._fieldEl(t('ed_tileCardYaml'), w));
+    } else {
+      const ta = mk('textarea', 'einp ecode');
+      ta.value = JSON.stringify(x.card, null, 2);
+      ta.spellcheck = false;
+      ta.addEventListener('input', () => {
+        let v = null;
+        try { v = JSON.parse(ta.value); } catch (e) { /* not finished yet */ }
+        const ok = v && typeof v === 'object' && !Array.isArray(v) && v.type;
+        ta.classList.toggle('bad', !ok);
+        if (!ok) return;
+        this._snapOnce('card');
+        x.card = v;
+        this._draw();
+      });
+      I.append(this._fieldEl(t('ed_tileCardJson'), ta));
+    }
+    I.append(this._el(`<p class="small">${esc(t('ed_tileCardHelp'))}</p>`));
+  },
+
+  /* every entity to choose from as a value of the tile */
+  _tilePickerView(I, x) {
+    const h = this._hs() || {};
+    I.append(this._el(`<h2>${esc(t('ed_addValueTo', this._tileName(x)))}</h2><p class="lead">${esc(t('ed_tilePickLead'))}</p>`));
+    I.append(this._searchEl('_pq', t('ed_searchAll')));
+    const q = (this._pq || '').trim().toLowerCase();
+    const inT = new Set([].concat(x.entities || []).map(eidOf));
+    const ids = this._matchQ(Object.keys(h.states || {}).filter((id) => !h.entities?.[id]?.hidden && !['update', 'tts', 'stt', 'conversation', 'wake_word', 'ai_task', 'notify'].includes(domainOf(id))), q);
+    this._groupedList(I, ids, (id) => {
+      const on = inT.has(id);
+      const row = this._el(`<span class="ei">${icon(GlassFloorplanCard.prototype._autoIcon(id, h.states[id]))}</span><div><b>${esc(this._fname(id))}</b><small>${esc(id)}</small></div><button class="eadd">${icon(on ? 'check' : 'plus')}</button>`, `erow${on ? ' placed' : ''}`);
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', () => this._change(() => {
+        const a = [].concat(x.entities || []);
+        x.entities = on ? a.filter((e) => eidOf(e) !== id) : [...a, id];
+        if (!x.entities.length) delete x.entities;
+      }, { keepSel: true }));
+      return row;
+    }, { q, placed: inT, scope: 'tile', closed: true });
+    if (!ids.length) I.append(this._el(esc(t(q ? 'ed_noMatch' : 'ed_noEntities')), 'eempty'));
+  },
+});
+
+Object.assign(STR.en, {
+  ed_actions: 'Actions', ed_tap: 'Tap', ed_hold: 'Hold', ed_dbl: 'Double tap',
+  ed_act_default: 'Default', ed_act_toggle: 'Toggle', ed_act_more: 'More info', ed_act_navigate: 'Open a dashboard page', ed_act_url: 'Open a website',
+  ed_act_perform: 'Perform action', ed_act_none: 'Nothing', ed_act_data: 'Data (JSON, optional)', ed_act_confirm: 'Ask first',
+  ed_actDefault: (x) => `Default: a tap ${x}, holding opens the room, a double tap does nothing.`,
+  ed_dt_toggle: 'switches it on or off', ed_dt_cover: 'moves it up or down', ed_dt_press: 'runs it', ed_dt_room: 'opens the room', ed_dt_info: 'opens the info dialog',
+  ed_tileActDefault: 'Default: a tap opens the info of the first value, holding opens its device page.',
+  ed_ownTiles: 'Own tiles', ed_ownTilesNone: 'Values of your choice or any Home Assistant card – in the same glass look.', ed_newTile: 'Add a tile',
+  ed_nValues: (n) => (n ? `${n} ${pl(n, 'value', 'values')}` : 'No values yet'), ed_tileCardOf: (x) => `Home Assistant card · ${x}`,
+  ed_tileShows: 'Shows', ed_tileValues: 'Values', ed_tileCard: 'HA card', ed_tileValuesHead: 'Values – the first one large', ed_tileBig: 'large',
+  ed_tileMakeBig: 'Show large', ed_addValue: 'Add a value', ed_addValueTo: (n) => `Values for “${n}”`,
+  ed_tilePickLead: 'Sensors, switches, anything – the first one is shown large.', ed_noValues: 'No values yet – add one.',
+  ed_tileCardYaml: 'Card (YAML)', ed_tileCardJson: 'Card (JSON)',
+  ed_tileCardHelp: 'Any card of your dashboard, e.g. picture-entity, history-graph, thermostat or a card from HACS. It keeps its own look inside the glass frame.',
+  ed_tileCardHello: '**Hello!** Change the type to show any card.',
+  ed_tileSize: 'Size', ed_tileWidth: 'Width', ed_tileHeight: 'Height', ed_deleteTile: 'Remove tile',
+  ed_tileSide: 'No free corner in the plan – it stands next to it (on a phone below it).',
+});
+Object.assign(STR.de, {
+  ed_actions: 'Aktionen', ed_tap: 'Antippen', ed_hold: 'Gedrückt halten', ed_dbl: 'Doppelt tippen',
+  ed_act_default: 'Standard', ed_act_toggle: 'Umschalten', ed_act_more: 'Mehr Infos', ed_act_navigate: 'Dashboard-Seite öffnen', ed_act_url: 'Webseite öffnen',
+  ed_act_perform: 'Aktion ausführen', ed_act_none: 'Nichts', ed_act_data: 'Daten (JSON, optional)', ed_act_confirm: 'Vorher nachfragen',
+  ed_actDefault: (x) => `Standard: Antippen ${x}, Halten öffnet den Raum, Doppeltippen tut nichts.`,
+  ed_dt_toggle: 'schaltet ein oder aus', ed_dt_cover: 'fährt hoch oder runter', ed_dt_press: 'löst aus', ed_dt_room: 'öffnet den Raum', ed_dt_info: 'öffnet den Info-Dialog',
+  ed_tileActDefault: 'Standard: Antippen öffnet die Info des ersten Werts, Halten seine Geräteseite.',
+  ed_ownTiles: 'Eigene Kacheln', ed_ownTilesNone: 'Werte deiner Wahl oder eine beliebige Home-Assistant-Karte – im gleichen Glas-Look.', ed_newTile: 'Kachel hinzufügen',
+  ed_nValues: (n) => (n ? `${n} ${pl(n, 'Wert', 'Werte')}` : 'Noch keine Werte'), ed_tileCardOf: (x) => `Home-Assistant-Karte · ${x}`,
+  ed_tileShows: 'Zeigt', ed_tileValues: 'Werte', ed_tileCard: 'HA-Karte', ed_tileValuesHead: 'Werte – der erste groß', ed_tileBig: 'groß',
+  ed_tileMakeBig: 'Groß zeigen', ed_addValue: 'Wert hinzufügen', ed_addValueTo: (n) => `Werte für „${n}“`,
+  ed_tilePickLead: 'Sensoren, Schalter, alles – der erste wird groß gezeigt.', ed_noValues: 'Noch keine Werte – füge einen hinzu.',
+  ed_tileCardYaml: 'Karte (YAML)', ed_tileCardJson: 'Karte (JSON)',
+  ed_tileCardHelp: 'Jede Karte deines Dashboards, z. B. picture-entity, history-graph, thermostat oder eine Karte aus HACS. Sie behält im Glasrahmen ihr eigenes Aussehen.',
+  ed_tileCardHello: '**Hallo!** Ändere den Typ, um eine beliebige Karte zu zeigen.',
+  ed_tileSize: 'Größe', ed_tileWidth: 'Breite', ed_tileHeight: 'Höhe', ed_deleteTile: 'Kachel entfernen',
+  ed_tileSide: 'Keine freie Ecke im Plan – sie steht daneben (am Handy darunter).',
 });
 
 /* ================================================================== Registration */

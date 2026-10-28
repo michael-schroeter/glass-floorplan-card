@@ -36,7 +36,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       this._kickOptimistic();
       this._call('homeassistant', want ? 'turn_on' : 'turn_off', { entity_id: eid }).catch(() => { this._optimistic = {}; this._update(true); });
     };
-    this._press(tb, tap, () => this._openDevice(eid, tb));
+    this._press(tb, tap, () => this._holdDevice(eid, tb));
     upd.push(() => {
       const s = this._st(eid), on = isOn(s);
       tb.style.setProperty('--v', on ? '100%' : '0%');

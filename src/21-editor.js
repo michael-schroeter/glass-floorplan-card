@@ -74,6 +74,10 @@ class GfcEditor extends HTMLElement {
     this._doneAreas = new Set();
     this._markDone();
     this._hints = [];
+    this._tilePick = null;
+    // inside Home Assistant: its own action and YAML editors
+    this._haUi = false;
+    this._haForms().then((ok) => { this._haUi = ok; if (ok && this._dlg?.open && ['ent', 'tile', 'wid'].includes(this._s?.t)) this._panel(); });
     this._recall();
     this._loadUnderlay();
     this._loadLabels();
@@ -204,7 +208,7 @@ class GfcEditor extends HTMLElement {
     this._liveEl.append(this._card);
     this._liveKey = null;
     // keys and clicks stay in the editor (Home Assistant's edit dialog must not react to them, e.g. close on Escape)
-    for (const type of ['keydown', 'keyup', 'click', 'pointerdown', 'wheel']) this._dlg.addEventListener(type, (e) => e.stopPropagation());
+    for (const type of ['keydown', 'keyup', 'click', 'pointerdown', 'wheel', 'value-changed', 'config-changed']) this._dlg.addEventListener(type, (e) => e.stopPropagation());
     this._dlg.addEventListener('cancel', (e) => {
       e.preventDefault();
       if (!this.$('.econfirm').hidden) this._confirmClose();
@@ -289,6 +293,7 @@ class GfcEditor extends HTMLElement {
     this._measure = null;
     this._editLayer = null;
     this._picker = null;
+    this._tilePick = null;
     // the plan is built: the devices of the linked areas come into their rooms
     if (!this._bare()) this._autoDevices();
     this._draw();
@@ -565,11 +570,11 @@ class GfcEditor extends HTMLElement {
     // tiles (auto or manual) – on a laptop
     const M = this._model();
     if (tool === 'tiles' && M && this._mode !== 'phone') {
-      for (const k of ['card', 'weather', 'indoor', 'door', 'bar']) {
-        const R = M.widgets[k];
+      for (const k of ['card', 'weather', 'indoor', 'door', 'bar', ...this._tiles().map((x) => x.id)]) {
+        const R = M.widgets[k], own = this._tileById(k);
         if (!R) continue;
-        const manual = Array.isArray(c.widgets?.[k]), on = sel?.t === 'wid' && sel.k === k;
-        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${k}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(t(`ed_tile_${k}`))}</span></div>`;
+        const manual = Array.isArray(c.widgets?.[k]), on = (sel?.t === 'wid' && sel.k === k) || (sel?.t === 'tile' && sel.id === k);
+        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${esc(k)}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(own ? this._tileName(own) : t(`ed_tile_${k}`))}</span></div>`;
       }
     }
     // device markers: exactly over the buttons the live card shows in its current layer (tap → settings) –
@@ -674,6 +679,7 @@ class GfcEditor extends HTMLElement {
     if (s.t === 'door') return c.door || null;
     if (s.t === 'dock') return c.vacuum || null;
     if (s.t === 'wid') return this._model()?.widgets[s.k] || null;
+    if (s.t === 'tile') return this._tileById(s.id);
     if (s.t === 'ul') return c.underlay?.rect ? c.underlay : null;
     return null;
   }
@@ -808,8 +814,9 @@ class GfcEditor extends HTMLElement {
   _select(s, tool) {
     const changedTool = tool && this._tool !== tool;
     if (changedTool) this._tool = tool;
-    const same = JSON.stringify(s) === JSON.stringify(this._s) || (s?.t === 'room' && this._s?.t === 'room' && s.i === this._s.i);
+    const same = !this._tilePick && (JSON.stringify(s) === JSON.stringify(this._s) || (s?.t === 'room' && this._s?.t === 'room' && s.i === this._s.i));
     this._s = s;
+    this._tilePick = null;
     if (s?.t === 'ent') {
       const e = this._c.entities[s.i], st = this._hs()?.states?.[e.entity], kind = kindOf(e.entity, st);
       const cur = this._layerDef(this._layerSel);
@@ -981,7 +988,8 @@ class GfcEditor extends HTMLElement {
 
   _key(e) {
     if (!this._dlg?.open) return;
-    const typing = e.composedPath().some((n) => n.tagName === 'INPUT' || n.tagName === 'SELECT' || n.tagName === 'TEXTAREA');
+    // also inside Home Assistant's own fields (action editor, YAML editor)
+    const typing = e.composedPath().some((n) => n.tagName === 'INPUT' || n.tagName === 'SELECT' || n.tagName === 'TEXTAREA' || n.isContentEditable || /^HA-/.test(n.tagName || ''));
     if (e.key === ' ' && !typing) { this._space = e.type === 'keydown'; }
     if (typing) return;
     const mod = e.metaKey || e.ctrlKey;
@@ -1069,6 +1077,7 @@ class GfcEditor extends HTMLElement {
       } else if (s.t === 'door') delete c.door.at;
       else if (s.t === 'dock') delete c.vacuum.dock;
       else if (s.t === 'wid' && c.widgets) delete c.widgets[s.k];
+      else if (s.t === 'tile') { c.tiles = this._tiles().filter((x) => x.id !== s.id); if (c.widgets) delete c.widgets[s.id]; }
       else if (s.t === 'ul') { delete c.underlay; this._ulSrc = null; }
       this._s = null;
     });
@@ -1443,6 +1452,8 @@ function normEditorConfig(c) {
   c.doors = (c.doors || []).map(normSeg).filter(Boolean);
   if (c.entrance) c.entrance = normSeg(c.entrance);
   c.entities = (Array.isArray(c.entities) ? c.entities : []).map((e) => (typeof e === 'string' ? { entity: e } : e)).filter((e) => e?.entity);
+  // own tiles get the id the card gives them (their position is stored under it)
+  if (Array.isArray(c.tiles)) c.tiles = c.tiles.filter((x) => x && typeof x === 'object').map((x, i) => { const id = String(x.id || `tile_${i + 1}`); return { ...x, id: BUILTIN_TILES.includes(id) ? `tile_${id}` : id }; });
   return c;
 }
 
@@ -1454,10 +1465,11 @@ function cleanConfig(c0) {
   if (c.vacuum && !c.vacuum.entity) delete c.vacuum;
   if (c.widgets && !Object.keys(c.widgets).length) delete c.widgets;
   if (Array.isArray(c.layers) && !c.layers.length) delete c.layers;
+  if (Array.isArray(c.tiles) && !c.tiles.length) delete c.tiles;
   for (const r of c.rooms || []) { if (!r.furniture?.length) delete r.furniture; if (!r.area) delete r.area; if (!r.label || r.label === 'top') delete r.label; if (!r.helpers?.length) delete r.helpers; }
   if (c.underlay) { c.underlay = { ...c.underlay }; if (String(c.underlay.image || '').startsWith('data:')) delete c.underlay.image; }
   // key order like in the docs
-  const order = ['type', 'language', 'title', 'rooms', 'windows', 'doors', 'entrance', 'entities', 'layers', 'door', 'vacuum', 'weather', 'indoor', 'widgets', 'modes_label', 'layout', 'fit', 'mobile', 'scale', 'underlay'];
+  const order = ['type', 'language', 'title', 'rooms', 'windows', 'doors', 'entrance', 'entities', 'layers', 'door', 'vacuum', 'weather', 'indoor', 'tiles', 'widgets', 'modes_label', 'layout', 'fit', 'mobile', 'scale', 'underlay'];
   const out = {};
   for (const k of order) if (c[k] !== undefined) out[k] = c[k];
   for (const k of Object.keys(c)) if (!(k in out)) out[k] = c[k];

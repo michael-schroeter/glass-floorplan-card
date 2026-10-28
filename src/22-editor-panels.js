@@ -8,20 +8,23 @@ Object.assign(GfcEditor.prototype, {
   _panel() {
     if (!this._ins) return;
     const I = this._ins, s = this._s;
-    const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid' };
-    const detail = s && !s.quiet && this._selObj() ? map[s.t] : null;
+    const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid', tile: '_pTile' };
+    // choosing the values of a tile (opened from its settings)
+    const tileP = this._tool === 'tiles' && this._tilePick ? this._tileById(this._tilePick) : null;
+    const detail = !tileP && s && !s.quiet && this._selObj() ? map[s.t] : null;
     const layer = !detail && this._tool === 'layers' && this._editLayer ? this._layerDef(this._editLayer) : null;
     const picker = !detail && this._tool === 'devices' && this._picker ? this._layerDef(this._picker) : null;
-    const view = detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
+    const view = tileP ? `v:${tileP.id}` : detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
     if (this._view?.startsWith('t:')) this._scrollMem[this._view] = I.scrollTop;
     const keep = view === this._view ? I.scrollTop : null;
     I.innerHTML = '';
-    if (detail || layer || picker) {
-      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(t(`ed_tool_${this._tool}`))}</span>`);
+    if (detail || layer || picker || tileP) {
+      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(tileP ? this._tileName(tileP) : t(`ed_tool_${this._tool}`))}</span>`);
       back.addEventListener('click', () => this._back());
       I.append(back);
     }
-    if (detail) this[detail](I);
+    if (tileP) this._tilePickerView(I, tileP);
+    else if (detail) this[detail](I);
     else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
     else if (picker) this._pickerView(I, picker);
     else { this[`_p_${this._tool}`]?.(I); this._nextStep(I); }
@@ -30,6 +33,7 @@ Object.assign(GfcEditor.prototype, {
     this._syncTop();
   },
   _back() {
+    if (this._tilePick) { this._tilePick = null; this._draw(); this._panel(); return; }
     // from a device's settings back to the list it came from (the picker stays), else out of the picker
     if (this._s && !this._s.quiet) this._s = null;
     else { this._s = null; this._picker = null; }
@@ -703,6 +707,7 @@ Object.assign(GfcEditor.prototype, {
       }
       I.append(chips);
     }
+    this._actionsSection(I, e, e.entity, this._actDefault(e.entity));
     const row = mk('div', 'ebtns');
     row.append(this._delBtn(t('ed_removeFromLayers'), () => this._deleteSel()));
     I.append(row);
@@ -825,11 +830,13 @@ Object.assign(GfcEditor.prototype, {
     tg(t('ed_tile_weather'), c.weather !== false, (v) => { if (v) delete c.weather; else c.weather = false; });
     tg(t('ed_tile_indoor'), c.indoor !== false, (v) => { if (v) delete c.indoor; else c.indoor = false; });
     this._doorPanel(I);
+    this._ownTilesSection(I);
     const b = this._btn(`${icon('wand')}<span>${esc(t('ed_autoArrange'))}</span>`, 'wide', () => this._change(() => { delete c.widgets; }));
     b.style.marginTop = '16px';
     I.append(b);
   },
   _pWid(I) {
+    if (this._tileById(this._s.k)) { this._pTile(I); return; }
     const k = this._s.k, manual = Array.isArray(this._c.widgets?.[k]);
     I.append(this._el(`<h2>${esc(t(`ed_tile_${k}`))}</h2><p class="lead">${esc(t(manual ? 'ed_tileManual' : 'ed_tileAuto'))}</p>`));
     if (manual) {

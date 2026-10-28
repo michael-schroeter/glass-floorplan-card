@@ -116,6 +116,7 @@ class GlassFloorplanCard extends HTMLElement {
     if (!this._fcSub) this._subscribeForecast();
     this._loadLabels();
     this._update();
+    this._haCards?.forEach((c) => { c.hass = hass; });
   }
   get hass() { return this._hass; }
 
@@ -368,6 +369,7 @@ class GlassFloorplanCard extends HTMLElement {
     M.indoor.forEach((i) => ids.add(i));
     if (M.vac) Object.values(this._vacEnts()).forEach((i) => ids.add(i));
     for (const L of M.layers) L.ents.forEach((i) => ids.add(i));
+    for (const x of M.tiles) x.ents.forEach((e) => ids.add(e.entity));
     ids.delete(null); ids.delete(undefined);
     return [...ids];
   }
@@ -487,8 +489,14 @@ class GlassFloorplanCard extends HTMLElement {
   }
 
   /* ---------------------------------------------------------------- Interaction */
-  _press(el, onTap, onHold) {
-    let timer, held = false, sx = 0, sy = 0, moved = false, active = false;
+  _press(el, onTap, onHold, onDouble) {
+    let timer, held = false, sx = 0, sy = 0, moved = false, active = false, tapT = 0;
+    // with a double tap action a single tap waits a moment for the second one
+    const tap = () => {
+      if (!onDouble) { onTap(); return; }
+      if (tapT) { clearTimeout(tapT); tapT = 0; onDouble(); return; }
+      tapT = setTimeout(() => { tapT = 0; onTap(); }, 250);
+    };
     el.addEventListener('pointerdown', (e) => {
       if (e.button > 0) return;
       active = true; held = false; moved = false; sx = e.clientX; sy = e.clientY;
@@ -497,7 +505,7 @@ class GlassFloorplanCard extends HTMLElement {
     });
     el.addEventListener('pointermove', (e) => { if (active && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) { moved = true; clearTimeout(timer); el.classList.remove('pressed'); } });
     const cancel = () => { active = false; clearTimeout(timer); el.classList.remove('pressed'); };
-    el.addEventListener('pointerup', (e) => { if (!active) return; const go = !held && !moved; cancel(); if (go) { e.stopPropagation(); onTap(); } });
+    el.addEventListener('pointerup', (e) => { if (!active) return; const go = !held && !moved; cancel(); if (go) { e.stopPropagation(); tap(); } });
     el.addEventListener('pointercancel', cancel);
     el.addEventListener('pointerleave', cancel);
     el.addEventListener('click', (e) => e.stopPropagation());
@@ -520,9 +528,9 @@ class GlassFloorplanCard extends HTMLElement {
         el.addEventListener('pointerleave', () => this._hideTip());
         continue;
       }
-      const e = M.ents.find((x) => x.entity === eid);
-      const room = () => { this._hideTip(); this._openRoom(e.room, { from: this._roomEls[e.room], focus: e.entity }); };
-      this._press(el, () => this._markerTap(e, el), room);
+      const e = M.ents.find((x) => x.entity === eid), ctx = (own) => ({ entity: e.entity, el, name: this._name(e), own });
+      const room = () => this._openRoom(e.room, { from: this._roomEls[e.room], focus: e.entity });
+      this._press(el, () => this._markerTap(e, el), () => { this._hideTip(); this._act(e.hold, ctx(room)); }, e.dbl && (() => { this._hideTip(); this._act(e.dbl, ctx()); }));
       el.addEventListener('pointerenter', () => this._showTip(el, this._name(e), this._valueText(e)));
       el.addEventListener('pointerleave', () => this._hideTip());
     }
@@ -544,8 +552,11 @@ class GlassFloorplanCard extends HTMLElement {
     window.addEventListener('keydown', this._onKey);
   }
 
-  _markerTap(e, el) {
-    const d = domainOf(e.entity), st = this._hass.states[e.entity];
+  /* A tap on a device on the plan: its tap_action, else what fits the device – lamps and switches toggle, covers go up or
+   * down, scenes and buttons run, the rest opens its room (or Home Assistant's info dialog) */
+  _markerTap(e, el) { this._act(e.tap, { entity: e.entity, el, name: this._name(e), own: () => this._markerOwn(e, el) }); }
+  _markerOwn(e, el) {
+    const d = domainOf(e.entity);
     if (e.kind === 'light') { this._toggleLamp(e); return; }
     if (e.kind === 'cover') { this._hideTip(); this._coverToggle(e.entity); this._ripple(el); return; }
     if (e.kind === 'media' || e.kind === 'climate' || d === 'lock' || d === 'sensor' || d === 'binary_sensor' || d === 'camera' || d === 'alarm_control_panel') {
@@ -554,22 +565,67 @@ class GlassFloorplanCard extends HTMLElement {
       this._openRoom(e.room, { from: this._roomEls[e.room], focus: e.entity });
       return;
     }
+    if (TOGGLE_DOMAINS.includes(d) || PRESS_DOMAINS.includes(d)) { this._toggleAny(e.entity, el); return; }
+    this._openDevice(e.entity, el, true);
+  }
+
+  /* "toggle" for any entity – with the same instant feedback as a tap on the plan */
+  _toggleAny(eid, el) {
+    const st = this._hass.states[eid], d = domainOf(eid);
+    const e = this._M.ents.find((x) => x.entity === eid) || { entity: eid, kind: kindOf(eid, st) };
     if (unavailable(st)) { this._toast(t('notReachable', this._name(e))); return; }
-    if (TOGGLE_DOMAINS.includes(d)) {
-      const want = !isOn(st);
-      this._optimistic[e.entity] = { on: want, until: Date.now() + 2500 };
-      this._kickOptimistic();
-      if (want) this._ignite(el);
-      this._showTip(el, this._name(e), want ? t('on') : t('off'));
-      this._call('homeassistant', want ? 'turn_on' : 'turn_off', { entity_id: e.entity }).catch(() => { this._optimistic = {}; this._update(true); });
-      return;
-    }
+    if (d === 'light') { this._toggleLamp(e); if (!this._mk[eid]) this._ripple(el); return; }
+    if (d === 'cover') { this._hideTip(); this._coverToggle(eid); this._ripple(el); return; }
     if (PRESS_DOMAINS.includes(d)) {
       this._ripple(el);
-      this._pressEntity(e.entity).then(() => this._toast(t(d === 'scene' ? 'activated' : 'started', this._name(e)))).catch(() => {});
+      this._pressEntity(eid).then(() => this._toast(t(d === 'scene' ? 'activated' : 'started', this._name(e)))).catch(() => {});
       return;
     }
-    this._openDevice(e.entity, el, true);
+    if (d === 'lock') { this._ripple(el); this._call('lock', st.state === 'locked' ? 'unlock' : 'lock', { entity_id: eid }).catch(() => {}); return; }
+    if (!TOGGLE_DOMAINS.includes(d)) { this._ripple(el); this._call('homeassistant', 'toggle', { entity_id: eid }).catch(() => {}); return; }
+    const want = !isOn(st);
+    this._optimistic[eid] = { on: want, until: Date.now() + 2500 };
+    this._kickOptimistic();
+    if (want && el?.classList.contains('dev')) this._ignite(el); else this._ripple(el);
+    if (el && this._mk[eid] === el) this._showTip(el, this._name(e), want ? t('on') : t('off'));
+    this._call('homeassistant', want ? 'turn_on' : 'turn_off', { entity_id: eid }).catch(() => { this._optimistic = {}; this._update(true); });
+  }
+
+  /* An action in Home Assistant's schema. The card runs the usual ones itself (with its own feedback), anything else
+   * (assist …) goes to Home Assistant as `hass-action`. No action: the card's own behaviour (`own`). */
+  _act(a, { entity, el, name, own } = {}) {
+    if (!a) { own?.(); return; }
+    const eid = a.entity || entity, conf = a.confirmation;
+    if (conf && !a.confirmed && !(conf.exemptions || []).some((x) => x?.user && x.user === this._hass?.user?.id)) {
+      // asked in the card's own menu, next to what was tapped
+      const n = name || (eid ? this._nameOf(eid) : t('action')), st = this._hass.states[eid], lock = a.action === 'toggle' && domainOf(eid) === 'lock';
+      const text = conf.text || (lock ? t(st?.state === 'locked' ? 'confirmUnlock' : 'confirmLock', n) : a.action === 'toggle' ? t(isOn(st) ? 'confirmOff' : 'confirmOn', n) : t('confirmAction', n));
+      const go = lock ? t(st?.state === 'locked' ? 'unlock' : 'lock') : a.action === 'toggle' ? t(isOn(st) ? 'turnOff' : 'turnOn') : t('run');
+      this._hideTip();
+      this._openMenu(el?.isConnected ? el : this._root, [{ ask: text }, { label: go, icon: 'check', onClick: () => this._act({ ...a, confirmed: true }, { entity, el, name }) }, { label: t('cancel'), icon: 'close' }]);
+      return;
+    }
+    switch (a.action) {
+      case 'none': return;
+      case 'toggle': if (eid) this._toggleAny(eid, el); return;
+      case 'more-info': if (eid) this._openDevice(eid, el, true); return;
+      case 'navigate': if (a.navigation_path) this._navigate(a.navigation_path, a.navigation_replace); return;
+      case 'url': if (a.url_path) window.open(a.url_path, '_blank', 'noopener'); return;
+      case 'perform-action': case 'call-service': {
+        const [d, sv] = String(a.perform_action || a.service || '').split('.');
+        if (!d || !sv) return;
+        this._ripple(el);
+        this._call(d, sv, a.data || a.service_data || {}, a.target).catch(() => {});
+        return;
+      }
+      case 'fire-dom-event': fire(this, 'll-custom', a); return;
+      default: fire(this, 'hass-action', { config: { entity: eid, tap_action: a }, action: 'tap' });
+    }
+  }
+  _navigate(path, replace) {
+    const r = this._reduced; this._reduced = true; this._closePop(); this._reduced = r;
+    history[replace ? 'replaceState' : 'pushState'](null, '', path);
+    window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: !!replace } }));
   }
   _pressEntity(eid) {
     const d = domainOf(eid);
@@ -634,7 +690,8 @@ class GlassFloorplanCard extends HTMLElement {
   }
   _ripple(el) {
     if (this._reduced || !el) return;
-    el.querySelector('.disc')?.animate([{ transform: 'scale(.86)' }, { transform: 'scale(1)' }], { duration: SPRINGS.pop.ms, easing: ease('pop', 'ease-out') });
+    const disc = el.querySelector('.disc');
+    (disc || el).animate([{ transform: disc ? 'scale(.86)' : 'scale(.97)' }, { transform: 'scale(1)' }], { duration: SPRINGS.pop.ms, easing: ease('pop', 'ease-out') });
   }
 
   /* state with the optimistic switch applied */
@@ -1015,6 +1072,64 @@ class GlassFloorplanCard extends HTMLElement {
       if (this._M.door.open) dr.querySelector('.dslot').append(this._doorSlide(this._sideUpd, dr.querySelector('.when')));
       else this._sideUpd.push(() => { dr.querySelector('.when').textContent = this._bellText(); });
     }
+    this._haCards = [];
+    for (const x of this._M.tiles) {
+      if (!W[x.id] && !sideTiles.includes(x.id)) continue;
+      const el = add(`ct${x.card ? ' hc' : ''}${x.size[0] > 1 || x.card ? ' big' : ''}`, W[x.id], x.card ? '<div class="hcw"></div>' : '');
+      el.style.setProperty('--h', x.size[1]);
+      if (x.card) this._haCard(x.card, el.querySelector('.hcw'));
+      else this._ownTile(x, el);
+    }
+    if (this._m && this._sideEl) {
+      // phone: the tiles under the plan in rows of up to three, Home Assistant cards across the whole width
+      const big = this._M.tiles.filter((x) => sideTiles.includes(x.id) && (x.card || x.size[0] > 1));
+      const n = sideTiles.length - big.length, cols = n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3;
+      this._sideEl.style.setProperty('--mc', cols);
+      this._sideRows = Math.ceil(n / cols) + big.reduce((a, x) => a + x.size[1], 0);
+    }
+  }
+
+  /* An own tile: the first value large, the others below; tap → its tap_action, else the info dialog of the first value */
+  _ownTile(x, el) {
+    const first = x.ents[0]?.entity || null;
+    const name = x.name ?? (first ? this._nameOf(first) : t('tile'));
+    el.innerHTML = `<div class="k"><span class="lbl">${esc(name)}</span><span class="ti"></span></div><div class="bot-row"><div class="v"></div><div class="s"></div></div>`;
+    const ti = el.querySelector('.ti'), v = el.querySelector('.v'), sub = el.querySelector('.s');
+    if (first || x.tap) {
+      el.classList.add('tap');
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', name);
+      el.tabIndex = 0;
+      const ctx = (own) => ({ entity: first, el, name, own });
+      this._press(el, () => this._act(x.tap, ctx(() => first && this._openDevice(first, el, true))),
+        () => this._act(x.hold, ctx(() => first && this._openDevice(first, el))), x.dbl && (() => this._act(x.dbl, ctx())));
+    }
+    this._sideUpd.push(() => {
+      const st = first && this._st(first), ic = x.icon || (first ? this._autoIcon(first, st) : 'widget');
+      if (ti.dataset.ic !== ic) { ti.dataset.ic = ic; ti.innerHTML = this._iconHtml(ic); }
+      el.classList.toggle('on', !!st && (isOn(st) || ['open', 'playing', 'unlocked', 'heat', 'cool', 'heat_cool', 'cleaning'].includes(st.state)));
+      el.classList.toggle('na', !!first && unavailable(st));
+      // a number with its unit in smaller type
+      const val = first ? this._valueText({ entity: first, kind: kindOf(first, st) }) : '–', m = /^(-?[\d.,]+)(\s?)(.*)$/.exec(val);
+      v.innerHTML = m && m[3] && m[3] !== '°' ? `${esc(m[1])}<small>${m[2]}${esc(m[3])}</small>` : esc(val || '–');
+      const more = x.ents.slice(1).map((e) => `${e.name || this._name({ entity: e.entity })} ${this._valueText({ entity: e.entity, kind: kindOf(e.entity, this._st(e.entity)) })}`.trim());
+      sub.textContent = more.length ? more.join(' · ') : x.ents[0]?.name || (first && x.name != null && this._nameOf(first) !== x.name ? this._nameOf(first) : '');
+    });
+  }
+
+  /* A Home Assistant card in a glass frame (the card itself stays as it is, only its background goes) */
+  _haCard(cfg, box) {
+    const ph = () => { box.innerHTML = `<div class="hph">${icon('widget')}<b>${esc(String(cfg.type).replace(/^custom:/, ''))}</b><span>${esc(t('haCardHint'))}</span></div>`; };
+    if (!window.loadCardHelpers) { ph(); return; }
+    const make = () => window.loadCardHelpers().then((h) => h.createCardElement(cfg)).then((c) => {
+      if (box.getRootNode() !== this.shadowRoot) return;
+      c.hass = this._hass;
+      // a custom card that loads later replaces its error card
+      c.addEventListener('ll-rebuild', (ev) => { ev.stopPropagation(); this._haCards = this._haCards.filter((x) => x !== c); make(); }, { once: true });
+      box.replaceChildren(c);
+      this._haCards.push(c);
+    }).catch(ph);
+    make();
   }
 
   _tick() {

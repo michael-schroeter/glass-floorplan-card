@@ -24,9 +24,10 @@ const STYLES_M = `
 .m .badge { top: 7px; right: 7px; width: 20px; height: 20px; font-size: 11px; }
 .m .bot { --bs: 22px; }
 
-/* info tiles that did not fit into the plan: a row under it */
-.m .mside { position: absolute; z-index: 7; display: flex; gap: 8px; }
-.m .mside .card { position: relative; flex: 1 1 0; height: 100%; }
+/* info tiles that did not fit into the plan: rows under it (up to three side by side, Home Assistant cards across) */
+.m .mside { position: absolute; z-index: 7; display: grid; grid-template-columns: repeat(var(--mc, 3), minmax(0, 1fr)); grid-auto-rows: 96px; grid-auto-flow: row dense; gap: 8px; }
+.m .mside .card { position: relative; min-width: 0; }
+.m .mside .card.big { grid-column: 1 / -1; grid-row: span var(--h, 1); }
 /* info tiles inside the plan */
 .m .card { padding: 10px 11px 10px 12px; border-radius: 16px; }
 .m .card .k { font-size: 12px; gap: 4px; }
@@ -141,12 +142,13 @@ Object.assign(GlassFloorplanCard.prototype, {
     const preview = this._inPreview();
     const avail = this._ev ? this._ev.h : preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
     const gH = this._M.layers.length ? 156 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
+    // tiles that did not fit into the plan: rows under it
+    const rows = this._sideEl ? this._sideRows || 1 : 0, rowH = rows ? rows * 96 + (rows - 1) * 8 : 0;
     let pu = (W - 2 * pad) / S.w;
-    if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (this._sideEl ? 106 : 0)) / S.h));
+    if (avail) pu = Math.min(pu, Math.max(pu * 0.74, (avail - gH - 8 - tabsH - sy - 6 - (rowH ? rowH + 10 : 0)) / S.h));
     const u = Math.min(pu * D, 0.62);
     pu = u / D;
     const sw = S.w * pu, sh = S.h * pu, sx = Math.round((W - sw) / 2);
-    const rowH = this._sideEl ? 96 : 0;
     const gTop = Math.round(sy + sh + 8 + (rowH ? rowH + 10 : 0));
     const H = Math.max(avail, gTop + gH + tabsH);
     if (this._h !== H) { this._h = H; this.style.height = `${H}px`; }

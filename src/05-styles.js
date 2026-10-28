@@ -339,6 +339,23 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .side .card { position: relative; flex: 1 1 0; min-height: 0; max-height: calc(150 * var(--u)); }
 .side .card.dr { flex-grow: 1.18; max-height: calc(176 * var(--u)); }
 .side .gcard { position: relative; flex: none; height: calc(218 * var(--u)); margin-top: auto; }
+.side .card.big { flex-grow: var(--h); max-height: calc(150 * var(--u) * var(--h)); }
+
+/* own tiles: values (the first one large) or a Home Assistant card in the glass frame */
+.card.ct .lbl { overflow: hidden; text-overflow: ellipsis; }
+.card.ct .ti { flex: none; display: grid; place-items: center; --mdc-icon-size: max(16px, calc(21 * var(--u))); color: var(--t2); transition: color .3s ease, filter .3s ease; }
+.card.ct.on .ti { color: var(--t1); filter: drop-shadow(0 0 calc(7 * var(--u)) rgba(255, 255, 255, .45)); }
+.card.ct .v small { margin-left: .06em; font-size: .56em; font-weight: 600; letter-spacing: 0; color: var(--t2); }
+.card.ct.na .v { color: var(--t3); }
+.card.hc { padding: 0; color: var(--t1); --ha-card-background: transparent; --card-background-color: transparent; --ha-card-box-shadow: none; --ha-card-border-width: 0;
+  --primary-text-color: #f5f5f7; --secondary-text-color: rgba(235, 235, 245, .6); --primary-background-color: transparent; --secondary-background-color: rgba(255, 255, 255, .06);
+  --divider-color: rgba(255, 255, 255, .1); --state-icon-color: rgba(235, 235, 245, .8); --paper-item-icon-color: rgba(235, 235, 245, .8); }
+.card.hc .hcw { position: absolute; inset: 0; overflow: auto; display: flex; flex-direction: column; justify-content: center; scrollbar-width: none; }
+.card.hc .hcw::-webkit-scrollbar { display: none; }
+.card.hc .hcw > * { flex: none; }
+.hph { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 100%; padding: 12px; text-align: center; font-size: max(11.5px, calc(13.5 * var(--u))); color: var(--t3); }
+.hph .ic { margin-bottom: 4px; font-size: max(20px, calc(28 * var(--u))); color: var(--t2); }
+.hph b { font-size: max(13px, calc(15.5 * var(--u))); font-weight: 600; color: var(--t1); }
 
 /* Empty plan */
 .empty-plan { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; z-index: 2; }
@@ -609,6 +626,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .mseg .knob { position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: 8px; background: rgba(255, 255, 255, .17);
   box-shadow: 0 2px 6px rgba(0, 0, 0, .25), inset 0 0 0 1px rgba(255, 255, 255, .08); transform: translateX(calc(100% * var(--i, 0))); transition: transform var(--sp-ms) var(--sp); }
 .mnote { padding: 8px 12px 6px; font-size: 12px; line-height: 1.4; color: var(--t3); }
+.mask { padding: 10px 12px 8px; max-width: 280px; font-size: 14.5px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; color: var(--t1); }
 
 /* ---------------------------------------------------------------- Toast */
 .toast { position: fixed; left: 50%; bottom: 26px; z-index: 70; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap;

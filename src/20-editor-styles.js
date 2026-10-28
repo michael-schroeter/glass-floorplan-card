@@ -219,6 +219,13 @@ dialog.ed[open] { display: block; }
 .erow .eadd.del { color: rgb(255, 128, 118); background: rgba(var(--red), .14); }
 .erow .eadd.del .ic { --ip: currentColor; }
 .erow .eadd.del:hover { background: rgba(var(--red), .26); }
+/* actions and own tiles; Home Assistant's own fields sit on a card in Home Assistant's colours */
+.eacts .eact + .eact { margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .06); }
+.eha { margin-top: 2px; padding: 10px; border-radius: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--card-background-color, #1c1c1e); color: var(--primary-text-color, #e1e1e1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.eha.code { padding: 4px 0; overflow: hidden; }
+.ecode { height: 170px; padding: 10px 12px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; resize: vertical; }
+.einp.bad, .einp.bad:focus { box-shadow: inset 0 0 0 1.5px rgba(var(--red), .9); }
+.erow .ego { flex: none; display: grid; place-items: center; font-size: 15px; opacity: .45; }
 .eempty { padding: 16px; border-radius: 14px; background: rgba(255, 255, 255, .04); font-size: 13px; line-height: 1.45; color: var(--t2); }
 .ecard { margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
 .ecard.drop { box-shadow: inset 0 0 0 1.5px rgba(var(--blue), .7); }

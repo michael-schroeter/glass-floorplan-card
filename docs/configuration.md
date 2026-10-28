@@ -12,8 +12,10 @@ Everything can be set in the floor plan editor. This page walks through it and i
 4. **Rooms**: rooms named like an area are linked by themselves (on import and when you type a name, also across languages: *Living* ↔ *Wohnzimmer*); drag any other area onto its room. A linked room takes the area's name – rename it as you like, linking again names it again. Without a template, drag a room to move it and draw new ones on free space. While you build the plan (template, rooms, furniture, windows) devices stay hidden.
 5. **Furniture**, **Windows & doors**: optional, purely for the looks. *Add typical furniture* fills empty rooms by their kind (bed, sofa and TV, kitchen, bath …).
 6. **Devices**: every linked area's devices are in their room already (once – what you remove stays away; lamps and the TV where a floor plan file says). Drag to move, tap for settings, drag more from the list. Under *More entities* any other entity can join a built-in layer (search, by area or label). The front door opener and doorbell are set under **Tiles**.
+   In a device's settings, **Actions** sets what tapping, holding and double tapping do – the same choices as everywhere in Home Assistant (toggle, more info, open a dashboard page or website, perform any action …). Inside Home Assistant this is Home Assistant's own action editor. *Default* keeps the card's own behaviour.
 7. **Layers**: switch built-in layers on or off, or create your own, e.g. *Night = Light + Covers + front door lock + window contacts*.
-8. Click **Done**, then **Save**.
+8. **Tiles**: weather, inside climate, front door – and **your own tiles**: a few values of your choice (the first one large, e.g. power now + energy today) or **any Home Assistant card** (camera, graph, thermostat, a card from HACS …) in a glass frame. They find a free corner of the plan like the others; drag them to place them yourself.
+9. Click **Done**, then **Save**.
 
 ## Modes
 
@@ -57,7 +59,10 @@ entities:
   - { entity: media_player.living_room_tv, at: [210, 392] }
   - { entity: climate.living_room, at: [250, 630] }
   - { entity: cover.living_room_left, at: [50, 500] }
-  - { entity: lock.front_door, at: [1140, 490] }
+  - entity: lock.front_door
+    at: [1140, 490]
+    tap_action: { action: toggle, confirmation: true }   # Home Assistant's action schema
+    hold_action: { action: more-info }
 layers:
   - type: light                          # a built-in layer …
     entities: [media_player.living_room_tv]   # … plus any extra entities (TV, switch, sensor …)
@@ -75,12 +80,22 @@ vacuum:
   rooms: { "Wohnzimmer": living }        # optional: robot room name → room id
 weather: weather.home      # default: first weather entity; false hides the tile
 indoor: [sensor.kitchen_temperature]   # default: all placed climate entities; false hides the tile
+tiles:                     # own tiles
+  - id: energy
+    name: Energy
+    icon: bolt
+    entities: [sensor.home_power, { entity: sensor.energy_today, name: Today }]   # the first one large
+    tap_action: { action: navigate, navigation_path: /energy }
+  - id: camera
+    card: { type: picture-entity, entity: camera.front_door }   # any Home Assistant card
+    size: [1, 2]           # width, height in tiles (a card: 2 high by default)
 modes_label: Dashboard mode
 layout: auto               # auto | desktop | mobile
 fit: screen                # screen (fill the visible height) | width
 mobile: { rotate: auto }   # auto | 0 | 90 | -90
 widgets:                   # optional fixed positions of the tiles (normally automatic)
   card: [0, 660, 580, 900]
+  energy: [580, 660, 760, 900]   # own tiles by their id
 ```
 
 | Entity option | Meaning |
@@ -93,6 +108,16 @@ widgets:                   # optional fixed positions of the tiles (normally aut
 | `beams` | 1–6 light cones (spots) instead of a round glow |
 | `reach` | Glow radius in cm |
 | `plan: false` | No button on the plan (glow and pop-up tile only) |
+| `tap_action`, `hold_action`, `double_tap_action` | What tapping, holding and double tapping the button do, in [Home Assistant's action schema](https://www.home-assistant.io/dashboards/actions/): `toggle`, `more-info`, `navigate`, `url`, `perform-action`, `assist`, `fire-dom-event`, `none`, each with an optional `confirmation`. Without them: a tap switches lamps and switches, moves covers, runs scenes and opens the room for everything else; holding opens the room. A hold action also applies in the room pop-up (instead of the device page). |
+
+| Tile option | Meaning |
+|---|---|
+| `id` | Name for its position under `widgets` (the editor sets it) |
+| `name`, `icon` | Title and symbol. Default: the first value's name and symbol. |
+| `entities` | Values: entity ids or `{ entity, name }`. The first one is shown large. A tap opens its info dialog, holding its device page. |
+| `card` | Any Home Assistant card instead of values. It keeps its own look, without its background. |
+| `size` | `[width, height]` in tiles |
+| `tap_action`, `hold_action`, `double_tap_action` | As for entities |
 
 Furniture kinds: `sofa armchair bed bed_single table round_table chair desk wardrobe shelf sideboard tv counter fridge bath shower toilet sink washer plant rug stairs block`. A `tv` piece glows while a media player in the room is on.
 
