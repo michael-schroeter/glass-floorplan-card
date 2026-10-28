@@ -2268,6 +2268,12 @@ class GlassFloorplanCard extends HTMLElement {
     }
     return full;
   }
+  /* without the device's name in front, like Home Assistant's tiles ("Weather station Humidity" → "Humidity") */
+  _shortName(eid) {
+    const h = this._hass, full = this._nameOf(eid), dev = h?.devices?.[h?.entities?.[eid]?.device_id], dn = dev?.name_by_user || dev?.name;
+    if (dn && full.length > dn.length + 1 && full.toLowerCase().startsWith(`${String(dn).toLowerCase()} `)) { const rest = full.slice(dn.length + 1).trim(); return rest.charAt(0).toUpperCase() + rest.slice(1); }
+    return this._name({ entity: eid });
+  }
   _nameOf(eid) {
     const st = this._hass?.states?.[eid];
     return st?.attributes?.friendly_name || this._hass?.entities?.[eid]?.name || String(eid || '').split('.').pop().replace(/_/g, ' ');
@@ -2668,7 +2674,7 @@ class GlassFloorplanCard extends HTMLElement {
       // a number with its unit in smaller type
       const val = first ? this._valueText({ entity: first, kind: kindOf(first, st) }) : '–', m = /^(-?[\d.,]+)(\s?)(.*)$/.exec(val);
       v.innerHTML = m && m[3] && m[3] !== '°' ? `${esc(m[1])}<small>${m[2]}${esc(m[3])}</small>` : esc(val || '–');
-      const more = x.ents.slice(1).map((e) => `${e.name || this._name({ entity: e.entity })} ${this._valueText({ entity: e.entity, kind: kindOf(e.entity, this._st(e.entity)) })}`.trim());
+      const more = x.ents.slice(1).map((e) => `${e.name || this._shortName(e.entity)} ${this._valueText({ entity: e.entity, kind: kindOf(e.entity, this._st(e.entity)) })}`.trim());
       sub.textContent = more.length ? more.join(' · ') : x.ents[0]?.name || (first && x.name != null && this._nameOf(first) !== x.name ? this._nameOf(first) : '');
     });
   }
@@ -5368,9 +5374,15 @@ class GfcEditor extends HTMLElement {
     // a new canvas size only centres the screen again – the scale of a plan being drawn stays
     this._ro = new ResizeObserver(() => { if (!this._viewTouched) this._fit(true); this._draw(); });
     this._ro.observe(this._cv);
-    // new states from Home Assistant reach the live card
+    // new states from Home Assistant reach the live card – and Home Assistant's own fields in the panel
+    // (they need the newest hass, e.g. for translations Home Assistant loads later)
     clearInterval(this._liveT);
-    this._liveT = setInterval(() => { if (!this.isConnected) { clearInterval(this._liveT); return; } const h = this._liveHass(this._hs()); if (this._card && h && this._card.hass !== h) this._card.hass = h; }, 500);
+    this._liveT = setInterval(() => {
+      if (!this.isConnected) { clearInterval(this._liveT); return; }
+      const raw = this._hs(), h = this._liveHass(raw);
+      if (this._card && h && this._card.hass !== h) this._card.hass = h;
+      if (raw) this._ins?.querySelectorAll('ha-selector, ha-yaml-editor').forEach((el) => { if (el.hass !== raw) el.hass = raw; });
+    }, 500);
     this._syncTop();
   }
 
@@ -8403,6 +8415,8 @@ Object.assign(GfcEditor.prototype, {
     const sel = document.createElement('ha-selector');
     sel.hass = this._hs();
     sel.selector = { ui_action: {} };
+    // not required: only then does Home Assistant offer "Default action" (= the card's own behaviour)
+    sel.required = false;
     sel.label = label;
     sel.value = typeof o[key] === 'string' ? { action: o[key] } : o[key];
     if (entity) sel.context = { entity_id: entity };

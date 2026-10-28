@@ -712,6 +712,12 @@ class GlassFloorplanCard extends HTMLElement {
     }
     return full;
   }
+  /* without the device's name in front, like Home Assistant's tiles ("Weather station Humidity" → "Humidity") */
+  _shortName(eid) {
+    const h = this._hass, full = this._nameOf(eid), dev = h?.devices?.[h?.entities?.[eid]?.device_id], dn = dev?.name_by_user || dev?.name;
+    if (dn && full.length > dn.length + 1 && full.toLowerCase().startsWith(`${String(dn).toLowerCase()} `)) { const rest = full.slice(dn.length + 1).trim(); return rest.charAt(0).toUpperCase() + rest.slice(1); }
+    return this._name({ entity: eid });
+  }
   _nameOf(eid) {
     const st = this._hass?.states?.[eid];
     return st?.attributes?.friendly_name || this._hass?.entities?.[eid]?.name || String(eid || '').split('.').pop().replace(/_/g, ' ');
@@ -1112,7 +1118,7 @@ class GlassFloorplanCard extends HTMLElement {
       // a number with its unit in smaller type
       const val = first ? this._valueText({ entity: first, kind: kindOf(first, st) }) : '–', m = /^(-?[\d.,]+)(\s?)(.*)$/.exec(val);
       v.innerHTML = m && m[3] && m[3] !== '°' ? `${esc(m[1])}<small>${m[2]}${esc(m[3])}</small>` : esc(val || '–');
-      const more = x.ents.slice(1).map((e) => `${e.name || this._name({ entity: e.entity })} ${this._valueText({ entity: e.entity, kind: kindOf(e.entity, this._st(e.entity)) })}`.trim());
+      const more = x.ents.slice(1).map((e) => `${e.name || this._shortName(e.entity)} ${this._valueText({ entity: e.entity, kind: kindOf(e.entity, this._st(e.entity)) })}`.trim());
       sub.textContent = more.length ? more.join(' · ') : x.ents[0]?.name || (first && x.name != null && this._nameOf(first) !== x.name ? this._nameOf(first) : '');
     });
   }

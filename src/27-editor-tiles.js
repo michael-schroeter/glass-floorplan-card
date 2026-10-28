@@ -44,6 +44,8 @@ Object.assign(GfcEditor.prototype, {
     const sel = document.createElement('ha-selector');
     sel.hass = this._hs();
     sel.selector = { ui_action: {} };
+    // not required: only then does Home Assistant offer "Default action" (= the card's own behaviour)
+    sel.required = false;
     sel.label = label;
     sel.value = typeof o[key] === 'string' ? { action: o[key] } : o[key];
     if (entity) sel.context = { entity_id: entity };

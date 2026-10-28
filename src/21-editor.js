@@ -236,9 +236,15 @@ class GfcEditor extends HTMLElement {
     // a new canvas size only centres the screen again – the scale of a plan being drawn stays
     this._ro = new ResizeObserver(() => { if (!this._viewTouched) this._fit(true); this._draw(); });
     this._ro.observe(this._cv);
-    // new states from Home Assistant reach the live card
+    // new states from Home Assistant reach the live card – and Home Assistant's own fields in the panel
+    // (they need the newest hass, e.g. for translations Home Assistant loads later)
     clearInterval(this._liveT);
-    this._liveT = setInterval(() => { if (!this.isConnected) { clearInterval(this._liveT); return; } const h = this._liveHass(this._hs()); if (this._card && h && this._card.hass !== h) this._card.hass = h; }, 500);
+    this._liveT = setInterval(() => {
+      if (!this.isConnected) { clearInterval(this._liveT); return; }
+      const raw = this._hs(), h = this._liveHass(raw);
+      if (this._card && h && this._card.hass !== h) this._card.hass = h;
+      if (raw) this._ins?.querySelectorAll('ha-selector, ha-yaml-editor').forEach((el) => { if (el.hass !== raw) el.hass = raw; });
+    }, 500);
     this._syncTop();
   }
 
