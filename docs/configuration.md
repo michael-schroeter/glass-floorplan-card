@@ -14,7 +14,8 @@ Everything can be set in the floor plan editor. This page walks through it and i
 6. **Devices**: every linked area's devices are in their room already (once – what you remove stays away; lamps and the TV where a floor plan file says). Drag to move, tap for settings, drag more from the list. Under *More entities* any other entity can join a built-in layer (search, by area or label). The front door opener and doorbell are set under **Tiles**.
    In a device's settings, **Actions** sets what tapping, holding and double tapping do – the same choices as everywhere in Home Assistant (toggle, more info, open a dashboard page or website, perform any action …). Inside Home Assistant this is Home Assistant's own action editor. *Default* keeps the card's own behaviour.
 7. **Layers**: switch built-in layers on or off, or create your own, e.g. *Night = Light + Covers + front door lock + window contacts*.
-8. **Tiles**: weather, inside climate, front door – and **your own tiles**: a few values of your choice (the first one large, e.g. power now + energy today) or **any Home Assistant card** (camera, graph, thermostat, a card from HACS …) in a glass frame. They find a free corner of the plan like the others; drag them to place them yourself.
+8. **Tiles**: weather, inside climate, front door – and **your own tiles**: a few values of your choice (the first one large, e.g. power now + energy today), **buttons** like the ones on the plan (each switches a device of your choice or runs its own action, e.g. *open a dashboard page*; a larger tile holds more buttons) or **any Home Assistant card** (camera, graph, thermostat, a card from HACS …) in a glass frame. They find a free corner of the plan like the others; drag them to place them yourself.
+   The **layer card** (the overview with *Mode* and *All off*) can be *compact*, the **layer bar** *vertical* or *horizontal*. Laptop and phone are arranged separately (*Arranging for* at the top of the list): on a phone the layer card sits below the plan and the layer bar at the bottom of the screen until you put them into the plan.
 9. Click **Done**, then **Save**.
 
 ## Modes
@@ -89,13 +90,25 @@ tiles:                     # own tiles
   - id: camera
     card: { type: picture-entity, entity: camera.front_door }   # any Home Assistant card
     size: [1, 2]           # width, height in tiles (a card: 2 high by default)
+  - id: living
+    name: Living room      # optional heading
+    buttons:               # three per tile of width, one row per tile of height
+      - light.living_room_ceiling
+      - { entity: scene.movie_time, name: Movie, icon: tv }
+      - { name: Energy, icon: bolt, tap_action: { action: navigate, navigation_path: /energy } }
+    size: [1, 1]
 modes_label: Dashboard mode
 layout: auto               # auto | desktop | mobile
 fit: screen                # screen (fill the visible height) | width
-mobile: { rotate: auto }   # auto | 0 | 90 | -90
-widgets:                   # optional fixed positions of the tiles (normally automatic)
-  card: [0, 660, 580, 900]
-  energy: [580, 660, 760, 900]   # own tiles by their id
+widgets:                   # laptop: optional fixed positions of the tiles (normally automatic)
+  card: { rect: [0, 660, 580, 900], compact: true }   # the layer card; a bare [x1, y1, x2, y2] is fine too
+  bar: { direction: horizontal }                      # the layer bar: vertical (default) | horizontal
+  energy: [580, 660, 760, 900]                        # own tiles by their id
+mobile:
+  rotate: auto             # auto | 0 | 90 | -90
+  widgets:                 # phone: its own places, in the turned plan (the editor sets them)
+    card: { place: plan, compact: true }   # below (default) | plan – a rect puts it into the plan as well
+    bar: { place: plan, direction: vertical }   # bottom (default) | plan; horizontal by default
 ```
 
 | Entity option | Meaning |
@@ -115,6 +128,7 @@ widgets:                   # optional fixed positions of the tiles (normally aut
 | `id` | Name for its position under `widgets` (the editor sets it) |
 | `name`, `icon` | Title and symbol. Default: the first value's name and symbol. |
 | `entities` | Values: entity ids or `{ entity, name }`. The first one is shown large. A tap opens its info dialog, holding its device page. |
+| `buttons` | Buttons instead of values: entity ids or `{ entity, name, icon, tap_action, hold_action, double_tap_action }` – without an entity only the action. A tap switches the device like on the plan (lamps, switches, covers, scenes …, else its info), holding opens its device page. |
 | `card` | Any Home Assistant card instead of values. It keeps its own look, without its background. |
 | `size` | `[width, height]` in tiles |
 | `tap_action`, `hold_action`, `double_tap_action` | As for entities |

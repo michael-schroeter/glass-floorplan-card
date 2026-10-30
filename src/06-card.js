@@ -250,7 +250,9 @@ class GlassFloorplanCard extends HTMLElement {
       + (M.door?.at ? `<button class="dev door" data-e="__door" data-k="door" style="${G.at(M.door.at)}" aria-label="${esc(M.door.name || t('frontDoor'))}"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${icon('door')}</button>` : '');
     const vac = M.vac ? `<svg class="trail" viewBox="${S.x} ${S.y} ${S.w} ${S.h}" preserveAspectRatio="none"><polyline class="t1" points=""/><polyline class="t2" points=""/></svg>
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';
-    const bar = M.widgets.bar || this._m ? `<div class="tabs" role="tablist" aria-orientation="${this._m ? 'horizontal' : 'vertical'}" style="${M.widgets.bar && !this._m ? G.at(center(M.widgets.bar)) : ''}"><i class="knob"></i>
+    // layer bar: in the plan (upright or lying), on a phone else at the bottom of the screen like a tab bar
+    const Wd = M.widgets, dock = this._m && !Wd.bar, barH = dock || M.wopt.barH, cmp = M.wopt.compact ? ' cmp' : '';
+    const bar = Wd.bar || this._m ? `<div class="tabs${barH ? ' h' : ''}${dock ? ' dock' : ''}" role="tablist" aria-orientation="${barH ? 'horizontal' : 'vertical'}" style="${Wd.bar ? G.at(center(Wd.bar)) : ''}"><i class="knob"></i>
       ${M.layers.map((L) => `<button data-tab="${esc(L.id)}" role="tab" aria-label="${esc(this._layerName(L))}">${this._iconHtml(L.icon)}<span>${esc(this._layerName(L))}</span></button>`).join('')}</div>` : '';
     const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
@@ -264,15 +266,15 @@ class GlassFloorplanCard extends HTMLElement {
   <div class="lay">
     <div class="stage">
       <div class="glows">${glows}</div>
-      ${pas}${rooms}${wins}${vac}${markers}${this._m ? '' : bar}
-      ${M.widgets.card && !this._m ? `<div class="gcard" style="${G.tile(M.widgets.card)}"></div>` : ''}
+      ${pas}${rooms}${wins}${vac}${markers}${dock ? '' : bar}
+      ${Wd.card ? `<div class="gcard${cmp}" style="${G.tile(Wd.card)}"></div>` : ''}
       <div class="tip"></div>
     </div>
-    ${M.widgets.side ? `<div class="${this._m ? 'mside' : 'side'}">${M.widgets.side.card ? '<div class="gcard"></div>' : ''}</div>` : ''}
-    ${this._m && M.rooms.length ? '<div class="gcard"></div>' : ''}
+    ${Wd.side ? `<div class="${this._m ? 'mside' : 'side'}">${Wd.side.card ? `<div class="gcard${cmp}"></div>` : ''}</div>` : ''}
+    ${this._m && M.rooms.length && !Wd.card ? `<div class="gcard${cmp}"></div>` : ''}
     ${empty}
   </div>
-  ${this._m ? bar : ''}
+  ${dock ? bar : ''}
   <div class="pop-wrap"><div class="scrim"></div><div class="pshell"></div><div class="pop" role="dialog" aria-modal="true" tabindex="-1"></div></div>
   <div class="menu" role="menu"></div>
   <div class="toast" role="status"></div>
@@ -307,16 +309,17 @@ class GlassFloorplanCard extends HTMLElement {
     requestAnimationFrame(() => { this._layout(); requestAnimationFrame(() => this._root?.classList.remove('boot')); });
   }
 
-  _markerHtml(e) {
-    const at = this._G.at(e.at), id = esc(e.entity), name = esc(this._name(e));
-    if (e.kind === 'light') return `<button class="lamp" data-e="${id}" data-k="light" style="${at}" aria-label="${name}"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${RING}${this._iconHtml(e.icon || 'bulb')}</button>`;
+  /* a device's glass button on the plan – or (tile) the same button inside a button of an own tile */
+  _markerHtml(e, tile) {
+    const tag = tile ? 'span' : 'button', open = (cls, k) => `<${tag} class="${cls}${tile ? ' tk' : ''}" data-e="${esc(e.entity)}" data-k="${k}"${tile ? '' : ` style="${this._G.at(e.at)}" aria-label="${esc(this._name(e))}"`}>`;
+    if (e.kind === 'light') return `${open('lamp', 'light')}<i class="rip"></i><i class="halo"></i><i class="disc"></i>${RING}${this._iconHtml(e.icon || 'bulb')}</${tag}>`;
     const st = this._hass?.states?.[e.entity], d = domainOf(e.entity);
     if (e.kind === 'climate' && (d === 'climate' || d === 'sensor')) {
       const sens = d === 'sensor';
-      return `<button class="dev val${sens ? ' sens' : ' clim'}" data-e="${id}" data-k="climate" style="${at}" aria-label="${name}"><i class="halo"></i><i class="disc"></i><span class="vt"></span>${sens ? '' : `<i class="act">${icon('flame')}</i>`}</button>`;
+      return `${open(`dev val${sens ? ' sens' : ' clim'}`, 'climate')}<i class="halo"></i><i class="disc"></i><span class="vt"></span>${sens ? '' : `<i class="act">${icon('flame')}</i>`}</${tag}>`;
     }
     const ring = e.kind === 'cover' ? RING : '';
-    return `<button class="dev ${e.kind === 'media' ? 'tv' : e.kind === 'cover' ? 'cov' : 'oth'}" data-e="${id}" data-k="${e.kind}" style="${at}" aria-label="${name}"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${ring}${this._iconHtml(e.icon || this._autoIcon(e.entity, st))}</button>`;
+    return `${open(`dev ${e.kind === 'media' ? 'tv' : e.kind === 'cover' ? 'cov' : 'oth'}`, e.kind)}<i class="rip"></i><i class="halo"></i><i class="disc"></i>${ring}${this._iconHtml(e.icon || this._autoIcon(e.entity, st))}</${tag}>`;
   }
 
   /* Glass icon by name, or a Home Assistant icon (mdi:…) */
@@ -369,7 +372,7 @@ class GlassFloorplanCard extends HTMLElement {
     M.indoor.forEach((i) => ids.add(i));
     if (M.vac) Object.values(this._vacEnts()).forEach((i) => ids.add(i));
     for (const L of M.layers) L.ents.forEach((i) => ids.add(i));
-    for (const x of M.tiles) x.ents.forEach((e) => ids.add(e.entity));
+    for (const x of M.tiles) { x.ents.forEach((e) => ids.add(e.entity)); (x.btns || []).forEach((b) => ids.add(b.entity)); }
     ids.delete(null); ids.delete(undefined);
     return [...ids];
   }
@@ -424,11 +427,27 @@ class GlassFloorplanCard extends HTMLElement {
     this._lv = { S, pu, sx, sy, H };
     this._placeKnob(true);
     this._fitLabels();
+    this._fitBtnTiles();
     this._declutter();
   }
 
   /* a room name that is a little too long for its room gets slightly smaller before it is cut off */
   _fitLabels() { fitText(this.shadowRoot.querySelectorAll('.rl b')); }
+  /* the buttons of a tile in as many columns as give them the most room (a tall tile stacks them) */
+  _fitBtnTiles() {
+    const lab = Math.max(19, 24 * (this._u || 1));
+    for (const g of this.shadowRoot.querySelectorAll('.card.bt .bgrid')) {
+      const n = g.children.length, W = g.clientWidth, H = g.clientHeight;
+      if (!n || !W || !H) continue;
+      let best = null;
+      for (let c = 1; c <= n; c++) {
+        const r = Math.ceil(n / c), k = Math.min((0.8 * W) / c, H / r - lab);
+        if (!best || k > best.k + 0.5) best = { c, r, k };
+      }
+      g.parentElement.style.setProperty('--bc', best.c);
+      g.parentElement.style.setProperty('--br', best.r);
+    }
+  }
 
   /* Markers of one layer must not cover each other or a room name: overlapping ones are pushed apart
    * (a few relaxation steps, each marker stays in its room and close to its spot). Positions in the config stay. */
@@ -518,7 +537,7 @@ class GlassFloorplanCard extends HTMLElement {
     sr.querySelectorAll('.tabs button').forEach((b) => {
       const L = M.layers.find((x) => x.id === b.dataset.tab);
       b.addEventListener('click', () => { this._hideTip(); this._setTab(b.dataset.tab); });
-      b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && !this._m) this._showTip(b, this._layerName(L), null, true); });
+      b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && !this._m) this._showTip(b, this._layerName(L), null, !b.parentElement.classList.contains('h')); });
       b.addEventListener('pointerleave', () => this._hideTip());
     });
     for (const [eid, el] of Object.entries(this._mk)) {
@@ -574,7 +593,8 @@ class GlassFloorplanCard extends HTMLElement {
     const st = this._hass.states[eid], d = domainOf(eid);
     const e = this._M.ents.find((x) => x.entity === eid) || { entity: eid, kind: kindOf(eid, st) };
     if (unavailable(st)) { this._toast(t('notReachable', this._name(e))); return; }
-    if (d === 'light') { this._toggleLamp(e); if (!this._mk[eid]) this._ripple(el); return; }
+    // a lamp switched from somewhere else (a tile's button): the feedback there, not on the plan
+    if (d === 'light') { this._toggleLamp(e, el && el !== this._mk[eid] ? el : null); return; }
     if (d === 'cover') { this._hideTip(); this._coverToggle(eid); this._ripple(el); return; }
     if (PRESS_DOMAINS.includes(d)) {
       this._ripple(el);
@@ -670,15 +690,15 @@ class GlassFloorplanCard extends HTMLElement {
   }
 
   /* Tap a lamp on the plan: switches visibly at once, the real state follows from Home Assistant */
-  _toggleLamp(l) {
+  _toggleLamp(l, from) {
     const st = this._hass.states[l.entity];
     if (unavailable(st)) { this._toast(t('notReachable', this._name(l))); return; }
     const want = !isOn(st);
     this._optimistic[l.entity] = { on: want, until: Date.now() + 2500 };
     this._kickOptimistic();
-    const el = this._mk[l.entity];
-    if (want && el) this._ignite(el);
-    if (el) this._showTip(el, this._name(l), want ? (dimmable(st) && st.attributes.brightness ? `${Math.round(st.attributes.brightness / 2.55)} %` : t('on')) : t('off'));
+    const el = from || this._mk[l.entity];
+    if (want && el) this._ignite(el); else if (from) this._ripple(from);
+    if (el && !from) this._showTip(el, this._name(l), want ? (dimmable(st) && st.attributes.brightness ? `${Math.round(st.attributes.brightness / 2.55)} %` : t('on')) : t('off'));
     this._call('light', want ? 'turn_on' : 'turn_off', { entity_id: l.entity }).catch(() => { this._optimistic = {}; this._update(true); });
   }
 
@@ -805,8 +825,8 @@ class GlassFloorplanCard extends HTMLElement {
     const b = this.shadowRoot.querySelector(`.tabs button[data-tab="${CSS.escape(this._tab || '')}"]`), k = this.$('.tabs .knob');
     if (!b || !k) return;
     if (instant) k.style.transition = 'none';
-    if (this._m) { k.style.height = ''; k.style.width = `${b.offsetWidth}px`; k.style.transform = `translateX(${b.offsetLeft}px)`; }
-    else { k.style.height = `${b.offsetHeight}px`; k.style.transform = `translateY(${b.offsetTop}px)`; }
+    if (k.parentElement.classList.contains('h')) { k.style.height = ''; k.style.width = `${b.offsetWidth}px`; k.style.transform = `translateX(${b.offsetLeft}px)`; }
+    else { k.style.width = ''; k.style.height = `${b.offsetHeight}px`; k.style.transform = `translateY(${b.offsetTop}px)`; }
     if (instant) { void k.offsetWidth; k.style.transition = ''; }
   }
 
@@ -836,20 +856,7 @@ class GlassFloorplanCard extends HTMLElement {
       if (l.kind !== 'light') continue;
       const st = this._st(l.entity);
       const on = isOn(st), b = on ? briPct(st) : 0, rgb = lightRgb(l, st), dim = dimmable(st);
-      const el = this._mk[l.entity];
-      if (el) {
-        const wasOn = el.classList.contains('on');
-        el.classList.toggle('on', on);
-        el.classList.toggle('na', unavailable(st));
-        el.classList.toggle('dk', on && lum(rgb) < 0.5);
-        el.style.setProperty('--c', rgb.join(','));
-        el.style.setProperty('--cl', lighten(rgb, 0.42).join(','));
-        const c = el.querySelector('.ring circle');
-        c.setAttribute('stroke-dasharray', on && dim ? `${b} 100` : '0 100');
-        c.style.opacity = on && dim ? '1' : '0';
-        el.setAttribute('aria-pressed', on);
-        if (on && !wasOn && this._shown) this._ignite(el);
-      }
+      if (this._mk[l.entity]) this._updLampEl(l, this._mk[l.entity]);
       const o = (0.5 + 0.5 * (dim ? b / 100 : 1)).toFixed(2);
       for (const g of sr.querySelectorAll(`.rgl i[data-e="${CSS.escape(l.entity)}"], .glows i[data-e="${CSS.escape(l.entity)}"]`)) {
         g.style.setProperty('--c', rgb.join(','));
@@ -858,6 +865,21 @@ class GlassFloorplanCard extends HTMLElement {
       }
     }
     this._shown = true;
+  }
+  /* a lamp's glass button: in its colour when on, the ring shows the brightness */
+  _updLampEl(l, el) {
+    const st = this._st(l.entity), on = isOn(st), b = on ? briPct(st) : 0, rgb = lightRgb(l, st), dim = dimmable(st);
+    const wasOn = el.classList.contains('on');
+    el.classList.toggle('on', on);
+    el.classList.toggle('na', unavailable(st));
+    el.classList.toggle('dk', on && lum(rgb) < 0.5);
+    el.style.setProperty('--c', rgb.join(','));
+    el.style.setProperty('--cl', lighten(rgb, 0.42).join(','));
+    const c = el.querySelector('.ring circle');
+    c.setAttribute('stroke-dasharray', on && dim ? `${b} 100` : '0 100');
+    c.style.opacity = on && dim ? '1' : '0';
+    el.setAttribute('aria-pressed', on);
+    if (on && !wasOn && this._shown) this._ignite(el);
   }
 
   /* media, door, climate, covers and other devices on the plan */
@@ -878,9 +900,7 @@ class GlassFloorplanCard extends HTMLElement {
         continue;
       }
       if (!el) { if (e.kind === 'cover') this._updCoverWindows(e); continue; }
-      if (e.kind === 'climate') this._updClimMarker(e, el);
-      else if (e.kind === 'cover') this._updCoverMarker(e, el);
-      else this._updOtherMarker(e, el);
+      this._updDevEl(e, el);
     }
     // front door: shows as opened for a minute
     const door = this._mk.__door, M = this._M;
@@ -898,6 +918,19 @@ class GlassFloorplanCard extends HTMLElement {
       clearTimeout(this._doorT);
       if (open && age < 60000) this._doorT = setTimeout(() => this._update(true), 60000 - age + 250);
     }
+  }
+
+  /* a device's glass button (not a lamp): a reading for thermostats and sensors, position for covers, on / off for the rest */
+  _updDevEl(e, el) {
+    if (e.kind === 'media') {
+      const st = this._hass.states[e.entity];
+      el.classList.toggle('on', st?.state === 'playing' || st?.state === 'paused');
+      el.style.setProperty('--c', '150,185,255');
+      el.style.setProperty('--cl', '220,232,255');
+      el.classList.toggle('na', unavailable(st));
+    } else if (e.kind === 'climate' && el.classList.contains('val')) this._updClimMarker(e, el);
+    else if (e.kind === 'cover') this._updCoverMarker(e, el);
+    else this._updOtherMarker(e, el);
   }
 
   /* 'tv' | 'speaker' | null – from the device class, else from the name (an Apple TV has no device class) */
@@ -1002,6 +1035,8 @@ class GlassFloorplanCard extends HTMLElement {
       this._gcard.append(v);
     }
     this._gapUpd.forEach((f) => f());
+    // compact: the buttons show only their icon – the words as tooltip
+    if (this._gcard.classList.contains('cmp')) for (const b of this._gcard.querySelectorAll('.gbtn')) { const s = b.textContent.trim(); if (b.title !== s) { b.title = s; b.setAttribute('aria-label', s); } }
   }
 
   _lightGap(L, upd) {
@@ -1059,36 +1094,39 @@ class GlassFloorplanCard extends HTMLElement {
     const S = this._stage, W = this._M.widgets, G = this._G;
     this._sideUpd = [];
     const sideTiles = W.side?.tiles || [];
-    const add = (cls, rect, html) => {
+    // (data-w names the tile for the floor plan editor)
+    const add = (cls, rect, html, k) => {
       const el = mk('div', `card ${cls}`, html);
+      el.dataset.w = k;
       if (rect) { el.setAttribute('style', G.tile(rect)); S.insertBefore(el, this._tip); }
       else this._sideEl.insertBefore(el, this._sideEl.querySelector('.gcard'));
       return el;
     };
     if (W.weather || sideTiles.includes('weather')) {
-      const wx = add('wx tap', W.weather, `<div class="k"><span>${esc(t('outside'))}</span><span class="wi"></span></div><div class="bot-row"><div class="v"></div><div class="s"></div></div>`);
+      const wx = add('wx tap', W.weather, `<div class="k"><span>${esc(t('outside'))}</span><span class="wi"></span></div><div class="bot-row"><div class="v"></div><div class="s"></div></div>`, 'weather');
       wx.setAttribute('role', 'button');
       wx.setAttribute('aria-label', t('weatherForecast'));
       wx.tabIndex = 0;
       this._press(wx, () => this._openWeather(wx));
     }
-    if (W.indoor || sideTiles.includes('indoor')) add('in', W.indoor, `<div class="k"><span class="lbl">${esc(t('inside'))}</span>${icon('thermo')}</div><div class="bot-row"><div class="v"></div><div class="s"></div></div>`);
+    if (W.indoor || sideTiles.includes('indoor')) add('in', W.indoor, `<div class="k"><span class="lbl">${esc(t('inside'))}</span>${icon('thermo')}</div><div class="bot-row"><div class="v"></div><div class="s"></div></div>`, 'indoor');
     if (W.door || sideTiles.includes('door')) {
-      const dr = add('dr', W.door, `<div class="k"><span>${esc(this._M.door.name || t('frontDoor'))}</span><span class="when"></span></div><div class="dslot"></div>`);
+      const dr = add('dr', W.door, `<div class="k"><span>${esc(this._M.door.name || t('frontDoor'))}</span><span class="when"></span></div><div class="dslot"></div>`, 'door');
       if (this._M.door.open) dr.querySelector('.dslot').append(this._doorSlide(this._sideUpd, dr.querySelector('.when')));
       else this._sideUpd.push(() => { dr.querySelector('.when').textContent = this._bellText(); });
     }
     this._haCards = [];
     for (const x of this._M.tiles) {
       if (!W[x.id] && !sideTiles.includes(x.id)) continue;
-      const el = add(`ct${x.card ? ' hc' : ''}${x.size[0] > 1 || x.card ? ' big' : ''}`, W[x.id], x.card ? '<div class="hcw"></div>' : '');
+      const el = add(`ct${x.card ? ' hc' : x.btns ? ' bt' : ''}${tileBig(x) ? ' big' : ''}`, W[x.id], x.card ? '<div class="hcw"></div>' : '', x.id);
       el.style.setProperty('--h', x.size[1]);
       if (x.card) this._haCard(x.card, el.querySelector('.hcw'));
+      else if (x.btns) this._btnTile(x, el);
       else this._ownTile(x, el);
     }
     if (this._m && this._sideEl) {
       // phone: the tiles under the plan in rows of up to three, Home Assistant cards across the whole width
-      const big = this._M.tiles.filter((x) => sideTiles.includes(x.id) && (x.card || x.size[0] > 1));
+      const big = this._M.tiles.filter((x) => sideTiles.includes(x.id) && tileBig(x));
       const n = sideTiles.length - big.length, cols = n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3;
       this._sideEl.style.setProperty('--mc', cols);
       this._sideRows = Math.ceil(n / cols) + big.reduce((a, x) => a + x.size[1], 0);
@@ -1121,6 +1159,43 @@ class GlassFloorplanCard extends HTMLElement {
       const more = x.ents.slice(1).map((e) => `${e.name || this._shortName(e.entity)} ${this._valueText({ entity: e.entity, kind: kindOf(e.entity, this._st(e.entity)) })}`.trim());
       sub.textContent = more.length ? more.join(' · ') : x.ents[0]?.name || (first && x.name != null && this._nameOf(first) !== x.name ? this._nameOf(first) : '');
     });
+  }
+
+  /* An own tile with buttons: the glass buttons of the plan in a grid, as many as the tile's size allows. Each switches its
+   * device like on the plan or runs its own action (navigate …); holding opens the device. */
+  _btnTile(x, el) {
+    const bs = x.btns.slice(0, tileBtnCap(x.size)), cols = Math.max(1, Math.min(bs.length, 3 * x.size[0]));
+    el.style.setProperty('--bc', cols);
+    el.style.setProperty('--br', Math.max(1, Math.ceil(bs.length / cols)));
+    el.innerHTML = `${x.name ? `<div class="k"><span class="lbl">${esc(x.name)}</span>${x.icon ? `<span class="ti">${this._iconHtml(x.icon)}</span>` : ''}</div>` : ''}<div class="bgrid"></div>`;
+    const grid = el.querySelector('.bgrid');
+    if (!bs.length) { grid.outerHTML = `<div class="hph">${icon('press')}<span>${esc(t('noButtons'))}</span></div>`; return; }
+    const items = bs.map((b) => {
+      // a device that is on the plan as well keeps its icon and colour temperature from there
+      const pe = b.entity && this._M.ents.find((e) => e.entity === b.entity);
+      const e = b.entity ? { ...(pe || {}), entity: b.entity, kind: pe?.kind || kindOf(b.entity, this._hass?.states?.[b.entity]), icon: b.icon || pe?.icon || null } : null;
+      const name = b.name || (b.entity ? this._shortName(b.entity) : t('button'));
+      const btn = mk('button', 'tbtn', `${e ? this._markerHtml(e, true) : `<span class="dev oth tk"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${this._iconHtml(b.icon || 'press')}</span>`}<span class="tbl">${esc(name)}</span>`);
+      btn.setAttribute('aria-label', name);
+      const knob = btn.firstElementChild, ctx = (own) => ({ entity: b.entity, el: knob, name, own });
+      this._press(btn, () => this._act(b.tap, ctx(() => this._tileBtnOwn(b.entity, knob))),
+        () => { this._hideTip(); this._act(b.hold, ctx(() => b.entity && this._openDevice(b.entity, knob))); }, b.dbl && (() => this._act(b.dbl, ctx())));
+      if (e) {
+        btn.addEventListener('pointerenter', (ev) => { if (ev.pointerType === 'mouse') this._showTip(knob, name, this._valueText(e)); });
+        btn.addEventListener('pointerleave', () => this._hideTip());
+      }
+      grid.append(btn);
+      return { e, knob };
+    });
+    this._sideUpd.push(() => { for (const { e, knob } of items) if (e) { if (e.kind === 'light') this._updLampEl(e, knob); else this._updDevEl(e, knob); } });
+  }
+  /* a tile's button without an action of its own: switches what can be switched, else shows the device's info */
+  _tileBtnOwn(eid, el) {
+    if (!eid) return;
+    const d = domainOf(eid);
+    this._hideTip();
+    if (TOGGLE_DOMAINS.includes(d) || PRESS_DOMAINS.includes(d) || d === 'cover') this._toggleAny(eid, el);
+    else this._openDevice(eid, el, true);
   }
 
   /* A Home Assistant card in a glass frame (the card itself stays as it is, only its background goes) */

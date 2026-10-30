@@ -29,6 +29,7 @@ const UL_STORE = `${CARD_TAG}:template:`;
 /* how the editor was left (tool, size check, an import waiting …) – per floor plan, found again by its contents */
 const ED_STATE = `${CARD_TAG}:editor`;
 const r0 = (v) => Math.round(v);
+const pxBox = (q) => `left:${q[0].toFixed(1)}px;top:${q[1].toFixed(1)}px;width:${(q[2] - q[0]).toFixed(1)}px;height:${(q[3] - q[1]).toFixed(1)}px`;
 const deep = (o) => JSON.parse(JSON.stringify(o ?? null));
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
@@ -300,6 +301,7 @@ class GfcEditor extends HTMLElement {
     this._editLayer = null;
     this._picker = null;
     this._tilePick = null;
+    this._tb = null;
     // the plan is built: the devices of the linked areas come into their rooms
     if (!this._bare()) this._autoDevices();
     this._draw();
@@ -311,7 +313,7 @@ class GfcEditor extends HTMLElement {
     if (this._mode === m) return;
     this._mode = m;
     this._fix = null;
-    this._s = this._s?.t === 'ul' || this._s?.t === 'wid' ? null : this._s;
+    this._s = this._s?.t === 'ul' ? null : this._s;
     this._measure = null;
     this._viewTouched = false;
     this._liveKey = null;
@@ -473,29 +475,30 @@ class GfcEditor extends HTMLElement {
     F.k = k;
     this._draw();
   }
-  /* plan (centimetres) → canvas pixels, through the live card's own layout (also on a turned phone plan) */
-  P(x, y) {
+  /* plan (centimetres) → canvas pixels, through the live card's own layout (also on a turned phone plan);
+   * raw: a point of the card's own (turned) plan – where the tiles of a phone are stored */
+  P(x, y, raw) {
     const m = this._map || { S: { x: 0, y: 0 }, pu: 0.5, sx: 0, sy: 0 }, F = this._f || { k: 1, ox: 0, oy: 0 };
-    const [a, b] = m.rot ? m.rot([x, y]) : [x, y];
+    const [a, b] = m.rot && !raw ? m.rot([x, y]) : [x, y];
     return [F.ox + F.k * ((m.offX || 0) + m.sx + (a - m.S.x) * m.pu), F.oy + F.k * ((m.offY || 0) + m.sy + (b - m.S.y) * m.pu)];
   }
-  _unP(X, Y) {
+  _unP(X, Y, raw) {
     const m = this._map || { S: { x: 0, y: 0 }, pu: 0.5, sx: 0, sy: 0 }, F = this._f || { k: 1, ox: 0, oy: 0 };
     const cx = (X - F.ox) / F.k - (m.offX || 0), cy = (Y - F.oy) / F.k - (m.offY || 0);
     const p = [m.S.x + (cx - m.sx) / m.pu, m.S.y + (cy - m.sy) / m.pu];
-    return m.inv ? m.inv(p) : p;
+    return m.inv && !raw ? m.inv(p) : p;
   }
   /* canvas pixels per centimetre */
   _z() { return (this._f?.k || 1) * (this._map?.pu || 0.5); }
-  _pt(e) {
+  _pt(e, raw) {
     const r = this._cv.getBoundingClientRect();
-    return this._unP(e.clientX - r.left, e.clientY - r.top);
+    return this._unP(e.clientX - r.left, e.clientY - r.top, raw);
   }
-  _rectS(R) {
-    const a = this.P(R[0], R[1]), b = this.P(R[2], R[3]);
+  _rectS(R, raw) {
+    const a = this.P(R[0], R[1], raw), b = this.P(R[2], R[3], raw);
     return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
   }
-  _boxPx(R) { const q = this._rectS(R); return `left:${q[0].toFixed(1)}px;top:${q[1].toFixed(1)}px;width:${(q[2] - q[0]).toFixed(1)}px;height:${(q[3] - q[1]).toFixed(1)}px`; }
+  _boxPx(R, raw) { return pxBox(this._rectS(R, raw)); }
   /* a line along a plan wall, drawn as a bar of thickness th */
   _segPx(s, th) {
     const a = this.P(s[0], s[1]), b = this.P(s[2], s[3]), l = Math.min(a[0], b[0]), tp = Math.min(a[1], b[1]);
@@ -573,14 +576,14 @@ class GfcEditor extends HTMLElement {
       });
     }
     if (this._hover && tool === 'openings') html += `<div class="eopen ghost ${this._openKind === 'window' ? 'win' : this._openKind === 'door' ? 'pas' : 'ent'}" style="${this._segPx(this._hover.seg, th)}"></div>`;
-    // tiles (auto or manual) – on a laptop
-    const M = this._model();
-    if (tool === 'tiles' && M && this._mode !== 'phone') {
-      for (const k of ['card', 'weather', 'indoor', 'door', 'bar', ...this._tiles().map((x) => x.id)]) {
-        const R = M.widgets[k], own = this._tileById(k);
-        if (!R) continue;
-        const manual = Array.isArray(c.widgets?.[k]), on = (sel?.t === 'wid' && sel.k === k) || (sel?.t === 'tile' && sel.id === k);
-        html += `<div class="ewid${manual ? '' : ' auto'}${on ? ' sel' : ''}" data-k="wid" data-w="${esc(k)}" style="${this._boxPx([R[0] + 6 * M.D, R[1] + 6 * M.D, R[2] - 6 * M.D, R[3] - 6 * M.D])}"><span>${esc(own ? this._tileName(own) : t(`ed_tile_${k}`))}</span></div>`;
+    // tiles, the layer card and the layer bar of the view shown (laptop and phone each have their own places);
+    // those next to / below the plan or at the bottom of the screen can be dragged into the plan
+    if (tool === 'tiles' && card?._M) {
+      for (const k of WID_KEYS.concat(this._tiles().map((x) => x.id))) {
+        const q = this._widBox(k), own = this._tileById(k);
+        if (!q) continue;
+        const manual = !!this._widGet(k).rect, on = (sel?.t === 'wid' && sel.k === k) || (sel?.t === 'tile' && sel.id === k);
+        html += `<div class="ewid${manual ? '' : ' auto'}${card._M.widgets[k] ? '' : ' out'}${on ? ' sel' : ''}" data-k="wid" data-w="${esc(k)}" style="${pxBox(q)}"><span>${esc(own ? this._tileName(own) : t(`ed_tile_${k}`))}</span></div>`;
       }
     }
     // device markers: exactly over the buttons the live card shows in its current layer (tap → settings) –
@@ -611,20 +614,21 @@ class GfcEditor extends HTMLElement {
     }
     // selection handles (named after the plan's sides – on a turned phone plan they sit where that side is)
     const so = this._selObj();
-    const hd = (pt, name, cx, cy, extra = '') => {
-      const [x, y] = this.P(pt[0], pt[1]), dx = x - cx, dy = y - cy;
+    const hd = (pt, name, cx, cy, extra = '', raw) => {
+      const [x, y] = this.P(pt[0], pt[1], raw), dx = x - cx, dy = y - cy;
       const cur = Math.abs(dx) < 2 ? 'ns' : Math.abs(dy) < 2 ? 'ew' : dx * dy > 0 ? 'nwse' : 'nesw';
       return `<i class="ehd ${cur}" data-k="hd" data-h="${name}"${extra} style="left:${x}px;top:${y}px"></i>`;
     };
-    const rectHandles = (R, list = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se']) => {
-      const q = this._rectS(R), cx = (q[0] + q[2]) / 2, cy = (q[1] + q[3]) / 2, mx = (R[0] + R[2]) / 2, my = (R[1] + R[3]) / 2;
+    const rectHandles = (R, list = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'], raw) => {
+      const q = this._rectS(R, raw), cx = (q[0] + q[2]) / 2, cy = (q[1] + q[3]) / 2, mx = (R[0] + R[2]) / 2, my = (R[1] + R[3]) / 2;
       const Pp = { n: [mx, R[1]], s: [mx, R[3]], e: [R[2], my], w: [R[0], my], nw: [R[0], R[1]], ne: [R[2], R[1]], sw: [R[0], R[3]], se: [R[2], R[3]] };
-      return `<i class="esel" style="${this._boxPx(R)}"></i>${list.map((k) => hd(Pp[k], k, cx, cy)).join('')}`;
+      return `<i class="esel" style="${this._boxPx(R, raw)}"></i>${list.map((k) => hd(Pp[k], k, cx, cy, '', raw)).join('')}`;
     };
     if (so && !sel.quiet) {
       if (sel.t === 'room') html += sel.fresh ? `<i class="esel" style="${this._boxPx(so.rect)};opacity:.55"></i>` : rectHandles(so.rect);
       else if (sel.t === 'furn') html += rectHandles(normFurn(so).r);
-      else if (sel.t === 'wid') html += rectHandles(so);
+      // a tile in the plan can be resized; the layer bar has its own size, outside the plan only the place counts
+      else if (sel.t === 'wid') html += sel.k !== 'bar' && card?._M?.widgets[sel.k] ? rectHandles(so, undefined, true) : `<i class="esel" style="${pxBox(this._widBox(sel.k))}"></i>`;
       else if (sel.t === 'ul') html += rectHandles(so.rect, ['nw', 'ne', 'sw', 'se']);
       else if (sel.t === 'open') {
         const s = normSeg(so), q = this._rectS(s), cx = (q[0] + q[2]) / 2, cy = (q[1] + q[3]) / 2;
@@ -669,7 +673,7 @@ class GfcEditor extends HTMLElement {
     if (tool === 'openings') return t(`ed_hint_open_${this._openKind}`);
     if (tool === 'furniture') return t('ed_hint_furniture');
     if (tool === 'devices') return t('ed_hint_devices');
-    if (tool === 'tiles') return this._mode === 'phone' ? t('ed_tiles_phone') : t('ed_hint_tiles');
+    if (tool === 'tiles') return t(this._mode === 'phone' ? 'ed_hint_tiles_phone' : 'ed_hint_tiles');
     if (tool === 'layers') return t('ed_hint_layers');
     if (tool === 'sketch') return this._ulSrc ? t('ed_hint_sketch') : '';
     return '';
@@ -684,7 +688,7 @@ class GfcEditor extends HTMLElement {
     if (s.t === 'ent') return c.entities[s.i] || null;
     if (s.t === 'door') return c.door || null;
     if (s.t === 'dock') return c.vacuum || null;
-    if (s.t === 'wid') return this._model()?.widgets[s.k] || null;
+    if (s.t === 'wid') return this._widRect(s.k);
     if (s.t === 'tile') return this._tileById(s.id);
     if (s.t === 'ul') return c.underlay?.rect ? c.underlay : null;
     return null;
@@ -802,7 +806,7 @@ class GfcEditor extends HTMLElement {
     }
     if (k === 'wid') {
       this._select({ t: 'wid', k: el.dataset.w }, 'tiles');
-      this._d = { ...base, mode: 'move-wid', orig: deep(this._selObj()) };
+      this._d = { ...base, mode: 'move-wid', orig: deep(this._selObj()), rp: this._pt(e, true) };
       return;
     }
     // empty space
@@ -823,6 +827,7 @@ class GfcEditor extends HTMLElement {
     const same = !this._tilePick && (JSON.stringify(s) === JSON.stringify(this._s) || (s?.t === 'room' && this._s?.t === 'room' && s.i === this._s.i));
     this._s = s;
     this._tilePick = null;
+    this._tb = null;
     if (s?.t === 'ent') {
       const e = this._c.entities[s.i], st = this._hs()?.states?.[e.entity], kind = kindOf(e.entity, st);
       const cur = this._layerDef(this._layerSel);
@@ -904,12 +909,15 @@ class GfcEditor extends HTMLElement {
       const n = [r0(d.orig[0] + dx), r0(d.orig[1] + dy)];
       if (this._s.t === 'door') c.door.at = n; else if (this._s.t === 'dock') c.vacuum.dock = n; else c.entities[this._s.i].at = n;
     } else if (d.mode === 'move-wid') {
-      const o = d.orig, w = o[2] - o[0], h = o[3] - o[1], rd = (v) => Math.round(v / ED_GRID) * ED_GRID;
-      c.widgets = { ...(c.widgets || {}), [this._s.k]: [rd(o[0] + dx), rd(o[1] + dy), rd(o[0] + dx) + w, rd(o[1] + dy) + h].map(r0) };
+      // in the view's own plan (a phone's may be turned)
+      const q = this._pt(e, true), o = d.orig, w = o[2] - o[0], h = o[3] - o[1], rd = (v) => Math.round(v / ED_GRID) * ED_GRID;
+      const x = rd(o[0] + q[0] - d.rp[0]), y = rd(o[1] + q[1] - d.rp[1]), k = this._s.k;
+      // on a phone the layer card / bar dragged into the plan stays there (automatic then means: a free spot in the plan)
+      this._widSet(k, { rect: [x, y, x + w, y + h], ...(this._mode === 'phone' && (k === 'card' || k === 'bar') ? { place: 'plan' } : {}) });
     } else if (d.mode === 'move-ul') {
       const o = d.orig;
       c.underlay.rect = [o[0] + dx, o[1] + dy, o[2] + dx, o[3] + dy].map(r0);
-    } else if (d.mode === 'resize') this._resize(d, p);
+    } else if (d.mode === 'resize') this._resize(d, this._s?.t === 'wid' ? this._pt(e, true) : p);
     else if (d.mode === 'measure') return;
     this._draw();
   }
@@ -946,7 +954,7 @@ class GfcEditor extends HTMLElement {
     const R = [a, b, cc, dd].map(r0);
     if (s.t === 'room') { c.rooms[s.i].rect = R; this._guides = { x: sx.guide ? [sx.v] : [], y: sy.guide ? [sy.v] : [] }; }
     else if (s.t === 'furn') setFurnRect(this._selObj(), R);
-    else if (s.t === 'wid') c.widgets = { ...(c.widgets || {}), [s.k]: R };
+    else if (s.t === 'wid') this._widSet(s.k, { rect: R });
   }
 
   _up(e, cancel) {
@@ -1020,6 +1028,7 @@ class GfcEditor extends HTMLElement {
       else if (s.t === 'ent') o.at = [o.at[0] + dx, o.at[1] + dy];
       else if (s.t === 'door') o.at = [o.at[0] + dx, o.at[1] + dy];
       else if (s.t === 'dock') o.dock = [o.dock[0] + dx, o.dock[1] + dy];
+      else if (s.t === 'wid') this._widSet(s.k, { rect: [o[0] + dx, o[1] + dy, o[2] + dx, o[3] + dy] });
     }, { keepSel: true, panel: false });
   }
 
@@ -1082,8 +1091,8 @@ class GfcEditor extends HTMLElement {
         for (const L of c.layers || []) if (L && typeof L === 'object' && Array.isArray(L.entities)) L.entities = L.entities.filter((x) => x !== eid);
       } else if (s.t === 'door') delete c.door.at;
       else if (s.t === 'dock') delete c.vacuum.dock;
-      else if (s.t === 'wid' && c.widgets) delete c.widgets[s.k];
-      else if (s.t === 'tile') { c.tiles = this._tiles().filter((x) => x.id !== s.id); if (c.widgets) delete c.widgets[s.id]; }
+      else if (s.t === 'wid') this._widSet(s.k, { rect: null });
+      else if (s.t === 'tile') { c.tiles = this._tiles().filter((x) => x.id !== s.id); this._widForget(s.id, true); }
       else if (s.t === 'ul') { delete c.underlay; this._ulSrc = null; }
       this._s = null;
     });
@@ -1470,6 +1479,8 @@ function cleanConfig(c0) {
   if (c.door && !c.door.open && !c.door.doorbell) delete c.door;
   if (c.vacuum && !c.vacuum.entity) delete c.vacuum;
   if (c.widgets && !Object.keys(c.widgets).length) delete c.widgets;
+  if (c.mobile?.widgets && !Object.keys(c.mobile.widgets).length) delete c.mobile.widgets;
+  if (c.mobile && !Object.keys(c.mobile).length) delete c.mobile;
   if (Array.isArray(c.layers) && !c.layers.length) delete c.layers;
   if (Array.isArray(c.tiles) && !c.tiles.length) delete c.tiles;
   for (const r of c.rooms || []) { if (!r.furniture?.length) delete r.furniture; if (!r.area) delete r.area; if (!r.label || r.label === 'top') delete r.label; if (!r.helpers?.length) delete r.helpers; }
@@ -1504,6 +1515,12 @@ function setFurnRect(f, R) {
   if (Array.isArray(f)) { f[0] = r0(R[0]); f[1] = r0(R[1]); f[2] = r0(R[2]); f[3] = r0(R[3]); } else f.rect = R.map(r0);
 }
 const shiftSeg = (s, dx, dy) => [r0(s[0] + dx), r0(s[1] + dy), r0(s[2] + dx), r0(s[3] + dy)];
+/* a new plan: the phone's own places of the tiles go too */
+function dropPhoneWidgets(c) {
+  if (!c.mobile) return;
+  delete c.mobile.widgets;
+  if (!Object.keys(c.mobile).length) delete c.mobile;
+}
 
 /* What kind of room a name means, in English or German – "Bedroom" and "Schlafzimmer" are both "bed", "Wohnküche" is
  * living + kitchen. A sorted key, '' when the name says nothing (e.g. "Room 3"). Short stems only count at the start or

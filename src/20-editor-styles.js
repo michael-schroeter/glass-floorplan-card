@@ -94,6 +94,8 @@ dialog.ed[open] { display: block; }
 .ewid span { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 650; color: #0c0c0e; background: rgba(255, 255, 255, .85); pointer-events: none; }
 .ewid.auto { outline-color: rgba(255, 255, 255, .25); }
 .ewid.sel { box-shadow: inset 0 0 0 2px rgb(var(--blue)); outline-color: rgba(var(--blue), .7); }
+/* next to / below the plan or at the bottom of a phone: dragging puts it into the plan */
+.ewid.out { outline-style: dotted; }
 .ehl { position: absolute; z-index: 4; pointer-events: none; border-radius: 34px; box-shadow: 0 0 0 2.5px rgb(var(--blue)), 0 0 0 9px rgba(var(--blue), .22), 0 0 46px rgba(var(--blue), .5); animation: ehl 2.4s ease-in-out infinite; }
 @keyframes ehl { 50% { box-shadow: 0 0 0 2.5px rgb(var(--blue)), 0 0 0 14px rgba(var(--blue), .12), 0 0 60px rgba(var(--blue), .35); } }
 .ehd { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgb(var(--blue)), 0 2px 6px rgba(0, 0, 0, .4); z-index: 20; touch-action: none; }
@@ -215,6 +217,8 @@ dialog.ed[open] { display: block; }
 .erow.placed .ei { background: rgba(var(--green), .22); }
 .erow.placed .eadd { background: none; color: rgb(var(--green)); cursor: pointer; }
 .erow.placed .eadd .ic { --ip: currentColor; }
+.erow.dim { opacity: .5; }
+.small.ewarn { color: rgb(var(--orange)); }
 .erow.on { background: rgba(var(--blue), .16); }
 .erow .eadd.del { color: rgb(255, 128, 118); background: rgba(var(--red), .14); }
 .erow .eadd.del .ic { --ip: currentColor; }

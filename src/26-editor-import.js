@@ -112,6 +112,7 @@ Object.assign(GfcEditor.prototype, {
           c.underlay = this._ulSrc ? { ...c.underlay, rect: d.imageRect } : { opacity: 0.6, rect: d.imageRect };
         }
         delete c.widgets;
+        dropPhoneWidgets(c);
         linked = this._nameMatches();
         linked.forEach(([i, a]) => this._linkArea(c.rooms[i], a));
         this._hints = d.hints || [];
@@ -138,7 +139,10 @@ Object.assign(GfcEditor.prototype, {
       if (c.door?.at) c.door.at = P(c.door.at);
       if (c.vacuum?.dock) c.vacuum.dock = P(c.vacuum.dock);
       if (c.underlay?.rect) c.underlay.rect = R(c.underlay.rect);
-      if (c.widgets) for (const w of Object.keys(c.widgets)) if (Array.isArray(c.widgets[w])) c.widgets[w] = R(c.widgets[w]);
+      // (a phone's turned plan grows the same way)
+      for (const W of [c.widgets, c.mobile?.widgets]) for (const w of Object.keys(W || {})) {
+        if (Array.isArray(W[w])) W[w] = R(W[w]); else if (Array.isArray(W[w]?.rect)) W[w].rect = R(W[w].rect);
+      }
     });
     this._hints = this._hints.map((x) => ({ ...x, at: P(x.at) }));
     this._fit();

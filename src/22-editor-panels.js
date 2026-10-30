@@ -9,21 +9,25 @@ Object.assign(GfcEditor.prototype, {
     if (!this._ins) return;
     const I = this._ins, s = this._s;
     const map = { room: '_pRoom', furn: '_pFurn', open: '_pOpen', ent: '_pEnt', door: '_pDoor', dock: '_pDock', wid: '_pWid', tile: '_pTile' };
-    // choosing the values of a tile (opened from its settings)
+    // choosing the values / buttons of a tile, one button of a tile (opened from its settings)
     const tileP = this._tool === 'tiles' && this._tilePick ? this._tileById(this._tilePick) : null;
-    const detail = !tileP && s && !s.quiet && this._selObj() ? map[s.t] : null;
+    const tb = !tileP && this._tool === 'tiles' && this._tb ? this._tileById(this._tb.id) : null;
+    const tileB = tb?.buttons?.[this._tb.i] ? tb : null;
+    const pickB = tileP && this._tb?.id === tileP.id ? tileP.buttons?.[this._tb.i] : null;
+    const detail = !tileP && !tileB && s && !s.quiet && this._selObj() ? map[s.t] : null;
     const layer = !detail && this._tool === 'layers' && this._editLayer ? this._layerDef(this._editLayer) : null;
     const picker = !detail && this._tool === 'devices' && this._picker ? this._layerDef(this._picker) : null;
-    const view = tileP ? `v:${tileP.id}` : detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
+    const view = tileP ? `v:${tileP.id}` : tileB ? `b:${tileB.id}:${this._tb.i}` : detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
     if (this._view?.startsWith('t:')) this._scrollMem[this._view] = I.scrollTop;
     const keep = view === this._view ? I.scrollTop : null;
     I.innerHTML = '';
-    if (detail || layer || picker || tileP) {
-      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(tileP ? this._tileName(tileP) : t(`ed_tool_${this._tool}`))}</span>`);
+    if (detail || layer || picker || tileP || tileB) {
+      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(pickB ? this._btnName(pickB) : tileP || tileB ? this._tileName(tileP || tileB) : t(`ed_tool_${this._tool}`))}</span>`);
       back.addEventListener('click', () => this._back());
       I.append(back);
     }
     if (tileP) this._tilePickerView(I, tileP);
+    else if (tileB) this._tileBtnView(I, tileB, this._tb.i);
     else if (detail) this[detail](I);
     else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
     else if (picker) this._pickerView(I, picker);
@@ -34,6 +38,7 @@ Object.assign(GfcEditor.prototype, {
   },
   _back() {
     if (this._tilePick) { this._tilePick = null; this._draw(); this._panel(); return; }
+    if (this._tb) { this._tb = null; this._draw(); this._panel(); return; }
     // from a device's settings back to the list it came from (the picker stays), else out of the picker
     if (this._s && !this._s.quiet) this._s = null;
     else { this._s = null; this._picker = null; }
@@ -146,6 +151,7 @@ Object.assign(GfcEditor.prototype, {
         // in a real home the example devices do not exist – then only the floor plan is used
         if (!ex.entities.every((e) => h.states?.[e.entity])) { delete ex.entities; delete ex.door; delete ex.vacuum; delete ex.layers; delete ex.weather; }
         for (const k of ['rooms', 'windows', 'doors', 'entrance', 'entities', 'door', 'vacuum', 'layers', 'widgets']) delete this._c[k];
+        dropPhoneWidgets(this._c);
         Object.assign(this._c, normEditorConfig({ ...this._c, ...ex, language: this._c.language }));
         if (!this._c.language) delete this._c.language;
         this._markDone();
@@ -153,7 +159,7 @@ Object.assign(GfcEditor.prototype, {
       this._fit(); this._draw(); this._toast(t('ed_exampleLoaded'));
     }));
     if (c.rooms.length) q.append(this._btn(`${icon('down')}<span>${esc(t('ed_export'))}</span>`, 'wide sm', () => this._exportPlan()));
-    if (c.rooms.length) q.append(this._delBtn(t('ed_clear'), () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; }), 'all', 'wide sm'));
+    if (c.rooms.length) q.append(this._delBtn(t('ed_clear'), () => this._change(() => { Object.assign(this._c, { rooms: [], windows: [], doors: [], entities: [] }); delete this._c.entrance; delete this._c.widgets; dropPhoneWidgets(this._c); }), 'all', 'wide sm'));
     I.append(q);
     I.append(this._el(`<p class="small">${esc(t('ed_claudeTip'))}</p>`));
   },
@@ -826,23 +832,32 @@ Object.assign(GfcEditor.prototype, {
   _p_tiles(I) {
     const c = this._c;
     I.append(this._el(`<h2>${esc(t('ed_tool_tiles'))}</h2><p class="lead">${esc(t(this._mode === 'phone' ? 'ed_tiles_phone' : 'ed_tiles_lead'))}</p>`));
+    this._viewSwitch(I);
+    this._cardBarSection(I);
+    I.append(this._el(`<h3>${esc(t('ed_infoTiles'))}</h3>`));
     const tg = (label, on, fn) => I.append(this._fieldEl(label, this._tglEl(on, (v) => this._change(() => fn(v))), true));
     tg(t('ed_tile_weather'), c.weather !== false, (v) => { if (v) delete c.weather; else c.weather = false; });
     tg(t('ed_tile_indoor'), c.indoor !== false, (v) => { if (v) delete c.indoor; else c.indoor = false; });
     this._doorPanel(I);
     this._ownTilesSection(I);
-    const b = this._btn(`${icon('wand')}<span>${esc(t('ed_autoArrange'))}</span>`, 'wide', () => this._change(() => { delete c.widgets; }));
+    // only the places of the view shown (the options stay)
+    const b = this._btn(`${icon('wand')}<span>${esc(t('ed_autoArrange'))}</span>`, 'wide', () => this._change(() => {
+      for (const k of Object.keys(this._wids())) this._widSet(k, { rect: null });
+    }));
     b.style.marginTop = '16px';
     I.append(b);
   },
   _pWid(I) {
-    if (this._tileById(this._s.k)) { this._pTile(I); return; }
-    const k = this._s.k, manual = Array.isArray(this._c.widgets?.[k]);
-    I.append(this._el(`<h2>${esc(t(`ed_tile_${k}`))}</h2><p class="lead">${esc(t(manual ? 'ed_tileManual' : 'ed_tileAuto'))}</p>`));
-    if (manual) {
-      const b = this._btn(`${icon('wand')}<span>${esc(t('ed_auto'))}</span>`, 'wide', () => this._change(() => { delete this._c.widgets[k]; }));
+    const k = this._s.k;
+    if (this._tileById(k)) { this._pTile(I); return; }
+    if (k === 'card' || k === 'bar') { this._cardBarPanel(I, k); return; }
+    const o = this._widGet(k), inPlan = !!this._card?._M?.widgets?.[k];
+    I.append(this._el(`<h2>${esc(t(`ed_tile_${k}`))}</h2><p class="lead">${esc(t(o.rect ? 'ed_tileManual' : inPlan ? 'ed_tileAuto' : 'ed_tileSide'))}</p>`));
+    if (o.rect) {
+      const b = this._btn(`${icon('wand')}<span>${esc(t('ed_auto'))}</span>`, 'wide', () => this._change(() => this._widSet(k, { rect: null }), { keepSel: true }));
       I.append(b);
     }
+    I.append(this._el(`<p class="small">${esc(t('ed_viewsApart'))}</p>`));
   },
 
   /* ---------------------------------------------------------------- settings */
@@ -855,7 +870,13 @@ Object.assign(GfcEditor.prototype, {
     I.append(this._fieldEl(t('ed_layout'), this._segEl([['auto', t('ed_auto')], ['desktop', t('ed_prev_laptop')], ['mobile', t('ed_prev_phone')]], c.layout || 'auto', (v) => this._change(() => set('layout', v, 'auto')))));
     I.append(this._el(`<p class="small">${esc(t('ed_layout_help'))}</p>`));
     const rot = String(c.mobile?.rotate ?? 'auto');
-    I.append(this._fieldEl(t('ed_rotate_phone'), this._segEl([['auto', t('ed_auto')], ['0', '0°'], ['90', '90°'], ['-90', '−90°']], rot, (v) => this._change(() => { if (v === 'auto') delete c.mobile; else c.mobile = { ...(c.mobile || {}), rotate: +v }; }))));
+    I.append(this._fieldEl(t('ed_rotate_phone'), this._segEl([['auto', t('ed_auto')], ['0', '0°'], ['90', '90°'], ['-90', '−90°']], rot, (v) => this._change(() => {
+      const m = c.mobile || {};
+      if (v === 'auto') delete m.rotate; else m.rotate = +v;
+      // the phone's places of the tiles belong to the plan as it was turned
+      for (const [k, w] of Object.entries(m.widgets || {})) { if (Array.isArray(w)) delete m.widgets[k]; else if (w && typeof w === 'object') delete w.rect; }
+      c.mobile = m;
+    }))));
     I.append(this._fieldEl(t('ed_height'), this._segEl([['screen', t('ed_fit_screen')], ['width', t('ed_fit_width')]], c.fit || 'screen', (v) => this._change(() => set('fit', v, 'screen')))));
     I.append(this._fieldEl(t('ed_modesLabel'), this._inp(c.modes_label || '', (v) => set('modes_label', v.trim(), ''), { placeholder: 'Dashboard mode' })));
     I.append(this._el(`<p class="small">${esc(t('ed_modes_help'))}</p>`));

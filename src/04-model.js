@@ -111,8 +111,8 @@ function normEntity(e) {
     plan: e.plan !== false, reach: +e.reach || null, color: Array.isArray(e.color) ? e.color.map(Number) : null, ...actionsOf(e),
   };
 }
-/* Own tiles: a few values (the first one large) or any Home Assistant card in a glass frame. `size` = [width, height]
- * in tiles – a Home Assistant card gets two tiles of height unless it says otherwise. */
+/* Own tiles: a few values (the first one large), buttons like the devices on the plan, or any Home Assistant card in a
+ * glass frame. `size` = [width, height] in tiles – a Home Assistant card gets two tiles of height unless it says otherwise. */
 const BUILTIN_TILES = ['card', 'weather', 'indoor', 'door', 'bar', 'side'];
 function normTile(x, i) {
   if (!x || typeof x !== 'object') return null;
@@ -123,7 +123,25 @@ function normTile(x, i) {
   const size = [clamp(Math.round(sz.length > 1 ? sz[0] : 1) || 1, 1, 3), clamp(Math.round(sz.length > 1 ? sz[1] : sz[0] || (card ? 2 : 1)) || 1, 1, 4)];
   const ents = [].concat(x.entities || x.entity || []).map((e) => (typeof e === 'string' ? { entity: e } : e))
     .filter((e) => e && typeof e.entity === 'string' && e.entity.includes('.')).map((e) => ({ entity: e.entity, name: e.name || null }));
-  return { id, name: x.name ?? null, icon: x.icon || null, ents, card, size, ...actionsOf(x) };
+  // buttons: a device each (switched like on the plan) and / or an action of their own (navigate …)
+  const btns = card || !Array.isArray(x.buttons) ? null : x.buttons.map((b) => (typeof b === 'string' ? { entity: b } : b)).filter((b) => b && typeof b === 'object')
+    .map((b) => ({ entity: typeof b.entity === 'string' && b.entity.includes('.') ? b.entity : null, name: b.name || null, icon: b.icon || null, ...actionsOf(b) }));
+  return { id, name: x.name ?? null, icon: x.icon || null, ents, btns, card, size, ...actionsOf(x) };
+}
+/* buttons on a tile: three side by side per tile of width, one row per tile of height */
+const tileBtnCap = (size) => 3 * size[0] * size[1];
+/* a tile that takes a whole row of the phone's tiles under the plan */
+const tileBig = (x) => !!x.card || x.size[0] > 1 || (!!x.btns && x.size[1] > 1);
+
+/* Where a tile goes in one view (laptop: `widgets`, phone: `mobile.widgets`): a rectangle [x1, y1, x2, y2], false (hidden)
+ * or { rect, …options } – the layer card: compact, place (phone: below | plan); the layer bar: direction (vertical |
+ * horizontal), place (phone: bottom | plan). Positions on a phone are in its own (turned) plan. */
+function widgetOpt(W, k) {
+  const v = W?.[k];
+  if (v === false) return { off: true, rect: null };
+  if (Array.isArray(v)) return { rect: normRect(v) };
+  if (v && typeof v === 'object') return { ...v, rect: normRect(v.rect) };
+  return { rect: null };
 }
 
 const rectArea = (r) => (r[2] - r[0]) * (r[3] - r[1]);
@@ -277,13 +295,18 @@ const inLayer = (L, e) => !!L && (L.kinds.has(e.kind) || L.ents.has(e.entity));
  * like the hand-made original. A coarse grid marks the rooms; every widget takes the best free spot,
  * grows into the space around it and snaps its edges to the walls. What does not fit goes next to the plan. */
 function placeWidgets(M, mobile) {
-  const B = M.bbox, D = M.D, cfgW = (!mobile && M.cfg.widgets) || {};
+  const B = M.bbox, D = M.D, cfgW = (mobile ? M.cfg.mobile?.widgets : M.cfg.widgets) || {};
+  const opt = (k) => widgetOpt(cfgW, k), oc = opt('card'), ob = opt('bar');
+  // the layer card and the layer bar of this view: on a phone they sit below the plan / at the bottom of the screen
+  // unless they are put into the plan; the bar stands upright on a laptop and lies on a phone unless told otherwise
+  M.wopt = { compact: !!oc.compact, barH: mobile ? ob.direction !== 'vertical' : ob.direction === 'horizontal' };
   const out = { card: null, weather: null, indoor: null, door: null, bar: null, side: null };
-  const tiles = ['weather', 'indoor', 'door'].filter((k) => (k === 'weather' ? M.weather : k === 'indoor' ? M.indoor.length : M.door) && cfgW[k] !== false)
+  const tiles = ['weather', 'indoor', 'door'].filter((k) => (k === 'weather' ? M.weather : k === 'indoor' ? M.indoor.length : M.door) && !opt(k).off)
     .concat(M.tiles.map((x) => x.id));
   const size = Object.fromEntries(M.tiles.map((x) => [x.id, x.size]));
   const tw = (k) => size[k]?.[0] || 1;
-  const needBar = !mobile && M.layers.length > 1;
+  const needBar = M.layers.length > 1 && (!mobile || !!ob.rect || ob.place === 'plan');
+  const needCard = !mobile || !!oc.rect || oc.place === 'plan';
   if (!M.rooms.length) return out;
 
   const nx = clamp(Math.round((B[2] - B[0]) / (7 * D)), 8, 260), ny = clamp(Math.round((B[3] - B[1]) / (7 * D)), 8, 260);
@@ -341,14 +364,19 @@ function placeWidgets(M, mobile) {
   // phones draw the tiles with fixed pixel fonts: they need more room in design units
   const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 186, maxW: 380, maxH: 280 }
     : { w: 209, h: 118, minW: 158, minH: 92, maxW: 300, maxH: 150 });
-  const CARD = du({ w: 446, h: 190, minW: 318, minH: 176, maxW: 560 });
-  const BAR = du({ w: 76, h: Math.max(1, M.layers.length) * 64 + 12 });
+  const cmp = M.wopt.compact;
+  const CARD = du(mobile ? (cmp ? { w: 520, h: 215, minW: 440, minH: 205, maxW: 640 } : { w: 760, h: 370, minW: 640, minH: 350, maxW: 900 })
+    : cmp ? { w: 360, h: 132, minW: 305, minH: 126, maxW: 440 } : { w: 446, h: 190, minW: 318, minH: 176, maxW: 560 });
+  // the bar's buttons have a minimum size in pixels: on a phone that is more design units
+  const nL = Math.max(1, M.layers.length), bu = mobile ? 86 : 64, bt = mobile ? 100 : 76;
+  const BAR = du(M.wopt.barH ? { w: nL * bu + 12, h: bt } : { w: bt, h: nL * bu + 12 });
 
-  for (const k of ['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)]) if (Array.isArray(cfgW[k])) out[k] = normRect(cfgW[k]);
+  for (const k of ['card', 'weather', 'indoor', 'door', ...M.tiles.map((x) => x.id)]) if (opt(k).rect) out[k] = opt(k).rect;
+  if (ob.rect && M.layers.length > 1) out.bar = ob.rect;
 
-  // layer card (desktop): prefers the bottom right
+  // layer card: prefers the bottom right
   let cardC = null;
-  if (!mobile && !out.card) {
+  if (needCard && !out.card) {
     const c = find(CARD.minW, CARD.minH, (i, j, w, h) => (j + h / 2) / ny * 2 + (i + w / 2) / nx + (j + h === ny ? 2 : 0) + (i + w === nx ? 1 : 0));
     // wider fills the corner, taller would only add empty space inside the card
     if (c) { grow(c, CARD.maxW, CARD.h); out.card = snap(toRect(c)); mark(c); cardC = c; }
@@ -410,8 +438,8 @@ function placeWidgets(M, mobile) {
       for (const k of Object.keys(out)) out[k] = before.out[k] ?? null;
     }
   }
-  // layer bar (desktop): a free strip on the left
-  if (needBar && !out.bar) {
+  // layer bar: upright in a free strip on the left, lying in one at the bottom
+  if (needBar && !out.bar && !M.wopt.barH) {
     const c = find(BAR.w, BAR.h, (i, j, w, h) => -(i + w / 2) / nx * 3 + (i === 0 ? 2 : 0) - Math.abs((j + h / 2) / ny - 0.36));
     if (c) {
       // centred in its free strip, a little above the middle
@@ -422,12 +450,26 @@ function placeWidgets(M, mobile) {
       const y1 = clamp(cy - BAR.h / 2, R[1], R[3] - BAR.h), x1 = (R[0] + R[2] - BAR.w) / 2;
       out.bar = [x1, y1, x1 + BAR.w, y1 + BAR.h];
     }
+  } else if (needBar && !out.bar) {
+    const c = find(BAR.w, BAR.h, (i, j, w, h) => (j + h / 2) / ny * 3 - Math.abs((i + w / 2) / nx - 0.4) + (j + h === ny ? 2 : 0));
+    if (c) {
+      // centred in its free strip
+      let i1 = c.i, i2 = c.i + c.w;
+      while (i1 > 0 && free(i1 - 1, c.j, 1, c.h)) i1--;
+      while (i2 < nx && free(i2, c.j, 1, c.h)) i2++;
+      const R = toRect({ i: i1, j: c.j, w: i2 - i1, h: c.h }), x1 = (R[0] + R[2] - BAR.w) / 2, y1 = (R[1] + R[3] - BAR.h) / 2;
+      out.bar = [x1, y1, x1 + BAR.w, y1 + BAR.h];
+    }
   }
 
-  // what did not fit goes into a column next to the plan (desktop) or a row under it (phone), drawn at a readable size
+  // what did not fit goes into a column next to the plan (desktop) or a row under it (phone), drawn at a readable size;
+  // the layer bar next to the plan (desktop) or back at the bottom of the screen (phone)
   const left = tiles.filter((k) => !out[k]);
   if (left.length || (!mobile && !out.card)) out.side = { tiles: left, card: !mobile && !out.card };
-  if (needBar && !out.bar) { const cy = B[1] + (B[3] - B[1]) * 0.36; out.bar = [B[0] - BAR.w, cy - BAR.h / 2, B[0], cy + BAR.h / 2]; }
+  if (needBar && !out.bar && !mobile) {
+    if (M.wopt.barH) { const cx = (B[0] + B[2]) / 2; out.bar = [cx - BAR.w / 2, B[3], cx + BAR.w / 2, B[3] + BAR.h]; }
+    else { const cy = B[1] + (B[3] - B[1]) * 0.36; out.bar = [B[0] - BAR.w, cy - BAR.h / 2, B[0], cy + BAR.h / 2]; }
+  }
   return out;
 }
 

@@ -30,6 +30,9 @@ const STYLES_M = `
 .m .mside .card.big { grid-column: 1 / -1; grid-row: span var(--h, 1); }
 /* info tiles inside the plan */
 .m .card { padding: 10px 11px 10px 12px; border-radius: 16px; }
+.m .card.bt { padding: 8px 5px 7px; }
+.m .card.bt > .k { padding: 0 6px 0 7px; }
+.m .tbtn .tbl { font-size: 10px; }
 .m .card .k { font-size: 12px; gap: 4px; }
 .m .card .k .ic { font-size: 15px; }
 .m .card .v { font-size: 25px; }
@@ -55,21 +58,23 @@ const STYLES_M = `
 .m .gv.sub .segs { padding-top: 8px; }
 .m .gv.cv .prog:not([hidden]) + .gbtns { margin-top: 13px; }
 .m .gbtn { height: 46px; border-radius: 15px; font-size: 15px; }
+.m .gcard.cmp .gbtn { width: 42px; height: 42px; border-radius: 50%; }
+.m .gcard.cmp .gbtns { gap: 8px; }
 /* switching layers: the card fades in without a blur filter (cheaper on phones) */
 .m .gcard > .gv { animation-name: fadeinm; }
 @keyframes fadeinm { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
 
-/* layers: floating glass bar at the bottom, like the iPhone tab bar */
-.m .tabs { position: fixed; z-index: 40; left: 50%; top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+/* layers: floating glass bar at the bottom, like the iPhone tab bar (unless it was put into the plan) */
+.m .tabs.dock { position: fixed; z-index: 40; left: 50%; top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   flex-direction: row; gap: 4px; padding: 5px; max-width: calc(100vw - 20px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .1), 0 14px 40px rgba(0, 0, 0, .45);
   background: linear-gradient(165deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .06)), rgba(22, 22, 28, .5); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
-.m .tabs button { width: var(--tw, 86px); height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 4px; }
-.m .tabs button .ic, .m .tabs button ha-icon { font-size: 21px; --mdc-icon-size: 21px; }
-.m .tabs button span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; letter-spacing: 0; }
-.m .tabs .knob { top: 5px; bottom: 5px; left: 0; right: auto; height: auto; width: 0; transition: transform var(--sp-ms) var(--sp), width var(--sp-ms) var(--sp); }
+.m .tabs.dock button { width: var(--tw, 86px); height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 4px; }
+.m .tabs.dock button .ic, .m .tabs.dock button ha-icon { font-size: 21px; --mdc-icon-size: 21px; }
+.m .tabs.dock button span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; letter-spacing: 0; }
+.m .tabs.dock .knob { top: 5px; bottom: 5px; left: 0; right: auto; height: auto; width: 0; transition: transform var(--sp-ms) var(--sp), width var(--sp-ms) var(--sp); }
 
 /* in Home Assistant's card preview the bar stays inside the card */
-.m.pv .tabs { position: absolute; bottom: 12px; }
+.m.pv .tabs.dock { position: absolute; bottom: 12px; }
 /* pop-ups as a floating glass sheet from below (slightly smaller blur radii: just as soft on a phone screen, but cheaper) */
 .m .scrim { -webkit-backdrop-filter: blur(18px) saturate(140%) brightness(.78); backdrop-filter: blur(18px) saturate(140%) brightness(.78); }
 .m .pshell { -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(1.06); backdrop-filter: blur(28px) saturate(200%) brightness(1.06); }
@@ -141,7 +146,9 @@ Object.assign(GlassFloorplanCard.prototype, {
     const top = this.getBoundingClientRect().top + (window.scrollY || 0);
     const preview = this._inPreview();
     const avail = this._ev ? this._ev.h : preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
-    const gH = this._M.layers.length ? 156 : 0, tabsH = M.layers.length > 1 ? 78 + this._safeB : 16, sy = 4;
+    // the layer card below the plan and the tab bar at the bottom – unless they were put into the plan
+    const below = !!this._gcard && !M.widgets.card, dock = M.layers.length > 1 && !M.widgets.bar;
+    const gH = below ? (M.wopt.compact ? 92 : 156) : 0, tabsH = dock ? 78 + this._safeB : 16, sy = 4;
     // tiles that did not fit into the plan: rows under it
     const rows = this._sideEl ? this._sideRows || 1 : 0, rowH = rows ? rows * 96 + (rows - 1) * 8 : 0;
     let pu = (W - 2 * pad) / S.w;
@@ -161,13 +168,14 @@ Object.assign(GlassFloorplanCard.prototype, {
     s.setProperty('--dx', `${(sx + (B[0] - S.x) * pu).toFixed(1)}px`);
     s.setProperty('--dy', `${(sy + (B[1] - S.y) * pu).toFixed(1)}px`);
     const g = 13 * u, l = sx + (B[0] - S.x) * pu + g / 2, w = (B[2] - B[0]) * pu - g;
-    if (this._gcard) Object.assign(this._gcard.style, { left: `${l.toFixed(1)}px`, top: `${gTop}px`, width: `${w.toFixed(1)}px`, height: `${gH}px` });
+    if (below) Object.assign(this._gcard.style, { left: `${l.toFixed(1)}px`, top: `${gTop}px`, width: `${w.toFixed(1)}px`, height: `${gH}px` });
     if (this._sideEl) Object.assign(this._sideEl.style, { left: `${l.toFixed(1)}px`, top: `${Math.round(sy + sh + 8)}px`, width: `${w.toFixed(1)}px`, height: `${rowH}px` });
     this._u = u;
     this._pu = pu;
     this._lv = { S, pu, sx, sy, H };
     this._placeKnob(true);
     this._fitLabels();
+    this._fitBtnTiles();
     this._declutter();
   },
 

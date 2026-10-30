@@ -207,6 +207,10 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .tabs .knob { position: absolute; z-index: 0; top: 0; left: max(4px, calc(6 * var(--u))); right: max(4px, calc(6 * var(--u))); height: 0; border-radius: 999px;
   background: linear-gradient(180deg, #fff, #ececf0); box-shadow: 0 2px 10px rgba(0, 0, 0, .25), inset 0 -1px 0 rgba(0, 0, 0, .06);
   transition: transform var(--sp-ms) var(--sp), height var(--sp-ms) var(--sp); }
+/* lying in the plan: the knob springs sideways */
+.tabs.h { flex-direction: row; }
+.tabs.h .knob { top: max(4px, calc(6 * var(--u))); bottom: max(4px, calc(6 * var(--u))); left: 0; right: auto; height: auto; width: 0;
+  transition: transform var(--sp-ms) var(--sp), width var(--sp-ms) var(--sp); }
 
 /* Layer card in the gap */
 .gcard { position: absolute; z-index: 7; display: flex; flex-direction: column; border-radius: calc(26 * var(--u)); overflow: hidden;
@@ -220,6 +224,20 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .root.bare .lamp, .root.bare .dev, .root.bare .glows, .root.bare .rgl > i[data-e], .root.bare .bot, .root.bare .dockm, .root.bare .trail,
 .root.bare .tabs, .root.bare .badge, .root.bare .ctint { visibility: hidden !important; }
 @keyframes fadein { from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
+/* compact layer card: name and state on the left, the buttons as round icons on the right, the strip below */
+.gcard.cmp { padding: max(11px, calc(17 * var(--u))) calc(17 * var(--u)) max(11px, calc(18 * var(--u))) calc(20 * var(--u)); border-radius: calc(24 * var(--u)); }
+.gcard.cmp > .gv { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto 1fr; column-gap: calc(12 * var(--u)); }
+.gcard.cmp .gk, .gcard.cmp .gt { grid-column: 1; }
+.gcard.cmp .gt { justify-content: flex-start; margin-top: calc(2 * var(--u)) !important; }
+/* the state keeps its words; the extra (watts, humidity …) only shows when it fits – else it wraps into the hidden second line */
+.gcard.cmp .gt { flex-wrap: wrap; row-gap: 0; overflow: hidden; max-height: max(20px, calc(30 * var(--u))); }
+.gcard.cmp .gt b { flex: none; max-width: 100%; font-size: max(16px, calc(24 * var(--u))); }
+.gcard.cmp .gs { display: none; }
+.gcard.cmp .gbtns { grid-column: 2; grid-row: 1 / 3; align-self: center; margin: 0 !important; gap: calc(7 * var(--u)); }
+.gcard.cmp .segs, .gcard.cmp .prog { grid-column: 1 / -1; grid-row: 3; align-self: end; }
+.gcard.cmp .gbtn { flex: none; width: max(34px, calc(42 * var(--u))); height: max(34px, calc(42 * var(--u))); padding: 0; border-radius: 50%; gap: 0; }
+.gcard.cmp .gbtn > span, .gcard.cmp .gbtn .ic.sm { display: none; }
+.gcard.cmp .gbtn .ic { font-size: max(16px, calc(22 * var(--u))); }
 .gk { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: max(11px, calc(14 * var(--u))); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t2); }
 .gk > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gk .bat { display: flex; align-items: center; gap: 5px; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
@@ -340,6 +358,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .side .card.dr { flex-grow: 1.18; max-height: calc(176 * var(--u)); }
 .side .gcard { position: relative; flex: none; height: calc(218 * var(--u)); margin-top: auto; }
 .side .card.big { flex-grow: var(--h); max-height: calc(150 * var(--u) * var(--h)); }
+.side .gcard.cmp { height: calc(140 * var(--u)); }
 
 /* own tiles: values (the first one large) or a Home Assistant card in the glass frame */
 .card.ct .lbl { overflow: hidden; text-overflow: ellipsis; }
@@ -356,6 +375,21 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .hph { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 100%; padding: 12px; text-align: center; font-size: max(11.5px, calc(13.5 * var(--u))); color: var(--t3); }
 .hph .ic { margin-bottom: 4px; font-size: max(20px, calc(28 * var(--u))); color: var(--t2); }
 .hph b { font-size: max(13px, calc(15.5 * var(--u))); font-weight: 600; color: var(--t1); }
+/* own tiles with buttons: the glass buttons of the plan in a grid, each as large as its cell allows (cell = size container) */
+.card.bt { padding: calc(14 * var(--u)) calc(12 * var(--u)) calc(11 * var(--u)); }
+.card.bt > .k { padding: 0 calc(6 * var(--u)) 0 calc(7 * var(--u)); }
+.card.bt .bgrid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--bc, 3), minmax(0, 1fr)); grid-template-rows: repeat(var(--br, 1), minmax(0, 1fr));
+  gap: calc(4 * var(--u)) calc(6 * var(--u)); }
+.card.bt > .k + .bgrid { margin-top: calc(6 * var(--u)); }
+.tbtn { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: max(3px, calc(5 * var(--u)));
+  container-type: size; color: inherit; -webkit-tap-highlight-color: transparent; }
+.card.bt .tbtn .tk { position: relative; flex: none; margin: 0; --ls: clamp(24px, min(80cqw, 100cqh - max(19px, calc(24 * var(--u)))), max(34px, calc(54 * var(--u)))); }
+.tbtn .tbl { max-width: 100%; font-size: max(10.5px, calc(13 * var(--u))); font-weight: 500; line-height: 1.2; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .3s; }
+.tbtn .tk.on + .tbl { color: var(--t1); }
+.tbtn.pressed .tk { transform: scale(.9); transition-duration: .12s; }
+@media (hover: hover) { .tbtn:hover .tk { transform: scale(1.08); } }
+/* too little room for the names: the buttons alone */
+@container (max-height: 52px) { .tbtn .tbl { display: none; } .card.bt .tbtn .tk { --ls: clamp(22px, min(80cqw, 92cqh), max(34px, calc(54 * var(--u)))); } }
 
 /* Empty plan */
 .empty-plan { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; z-index: 2; }
