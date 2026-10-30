@@ -91,7 +91,7 @@ dialog.ed[open] { display: block; }
 .emk.dock { border-radius: 30%; }
 .emk.warn::after { content: '!'; position: absolute; right: -4px; top: -4px; width: 15px; height: 15px; border-radius: 50%; background: rgb(var(--orange)); color: #1a0e00; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
 .ewid { position: absolute; border-radius: 14px; cursor: move; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .5); outline: 1.5px dashed rgba(255, 255, 255, .45); outline-offset: 3px; }
-.ewid span { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 650; color: #0c0c0e; background: rgba(255, 255, 255, .85); pointer-events: none; }
+.ewid span { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 650; white-space: nowrap; color: #0c0c0e; background: rgba(255, 255, 255, .85); pointer-events: none; }
 .ewid.auto { outline-color: rgba(255, 255, 255, .25); }
 .ewid.sel { box-shadow: inset 0 0 0 2px rgb(var(--blue)); outline-color: rgba(var(--blue), .7); }
 /* next to / below the plan or at the bottom of a phone: dragging puts it into the plan */

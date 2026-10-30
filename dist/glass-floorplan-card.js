@@ -2905,13 +2905,14 @@ class GlassFloorplanCard extends HTMLElement {
     this._fcSub = [];
     const sub = (type) => h.connection.subscribeMessage((msg) => { this._fc[type] = msg?.forecast || []; this._updSide(); },
       { type: 'weather/subscribe_forecast', forecast_type: type, entity_id: this._M.weather })
-      .then((un) => { if (this._fcSub) this._fcSub.push(un); else un(); })
+      .then((un) => { if (this._fcSub) this._fcSub.push(un); else Promise.resolve(un()).catch(() => {}); })
       .catch(() => {});
     if (feat & 1) sub('daily');
     if (feat & 2) sub('hourly');
   }
   _unsubscribeForecast() {
-    (this._fcSub || []).forEach((un) => { try { un(); } catch (e) { /* never mind */ } });
+    // (unsubscribing answers with a promise – it fails when Home Assistant ended the subscription already)
+    (this._fcSub || []).forEach((un) => { try { Promise.resolve(un()).catch(() => {}); } catch (e) { /* never mind */ } });
     this._fcSub = null;
   }
 }
@@ -5098,7 +5099,7 @@ dialog.ed[open] { display: block; }
 .emk.dock { border-radius: 30%; }
 .emk.warn::after { content: '!'; position: absolute; right: -4px; top: -4px; width: 15px; height: 15px; border-radius: 50%; background: rgb(var(--orange)); color: #1a0e00; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
 .ewid { position: absolute; border-radius: 14px; cursor: move; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .5); outline: 1.5px dashed rgba(255, 255, 255, .45); outline-offset: 3px; }
-.ewid span { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 650; color: #0c0c0e; background: rgba(255, 255, 255, .85); pointer-events: none; }
+.ewid span { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 650; white-space: nowrap; color: #0c0c0e; background: rgba(255, 255, 255, .85); pointer-events: none; }
 .ewid.auto { outline-color: rgba(255, 255, 255, .25); }
 .ewid.sel { box-shadow: inset 0 0 0 2px rgb(var(--blue)); outline-color: rgba(var(--blue), .7); }
 /* next to / below the plan or at the bottom of a phone: dragging puts it into the plan */
@@ -9113,7 +9114,7 @@ Object.assign(STR.en, {
   ed_actDefault: (x) => `Default: a tap ${x}, holding opens the room, a double tap does nothing.`,
   ed_dt_toggle: 'switches it on or off', ed_dt_cover: 'moves it up or down', ed_dt_press: 'runs it', ed_dt_room: 'opens the room', ed_dt_info: 'opens the info dialog',
   ed_tileActDefault: 'Default: a tap opens the info of the first value, holding opens its device page.',
-  ed_ownTiles: 'Own tiles', ed_ownTilesNone: 'Values of your choice or any Home Assistant card – in the same glass look.', ed_newTile: 'Add a tile',
+  ed_ownTiles: 'Own tiles', ed_ownTilesNone: 'Values of your choice, buttons or any Home Assistant card – in the same glass look.', ed_newTile: 'Add a tile',
   ed_nValues: (n) => (n ? `${n} ${pl(n, 'value', 'values')}` : 'No values yet'), ed_tileCardOf: (x) => `Home Assistant card · ${x}`,
   ed_tileShows: 'Shows', ed_tileValues: 'Values', ed_tileCard: 'HA card', ed_tileValuesHead: 'Values – the first one large', ed_tileBig: 'large',
   ed_tileMakeBig: 'Show large', ed_addValue: 'Add a value', ed_addValueTo: (n) => `Values for “${n}”`,
@@ -9154,7 +9155,7 @@ Object.assign(STR.de, {
   ed_actDefault: (x) => `Standard: Antippen ${x}, Halten öffnet den Raum, Doppeltippen tut nichts.`,
   ed_dt_toggle: 'schaltet ein oder aus', ed_dt_cover: 'fährt hoch oder runter', ed_dt_press: 'löst aus', ed_dt_room: 'öffnet den Raum', ed_dt_info: 'öffnet den Info-Dialog',
   ed_tileActDefault: 'Standard: Antippen öffnet die Info des ersten Werts, Halten seine Geräteseite.',
-  ed_ownTiles: 'Eigene Kacheln', ed_ownTilesNone: 'Werte deiner Wahl oder eine beliebige Home-Assistant-Karte – im gleichen Glas-Look.', ed_newTile: 'Kachel hinzufügen',
+  ed_ownTiles: 'Eigene Kacheln', ed_ownTilesNone: 'Werte deiner Wahl, Buttons oder eine beliebige Home-Assistant-Karte – im gleichen Glas-Look.', ed_newTile: 'Kachel hinzufügen',
   ed_nValues: (n) => (n ? `${n} ${pl(n, 'Wert', 'Werte')}` : 'Noch keine Werte'), ed_tileCardOf: (x) => `Home-Assistant-Karte · ${x}`,
   ed_tileShows: 'Zeigt', ed_tileValues: 'Werte', ed_tileCard: 'HA-Karte', ed_tileValuesHead: 'Werte – der erste groß', ed_tileBig: 'groß',
   ed_tileMakeBig: 'Groß zeigen', ed_addValue: 'Wert hinzufügen', ed_addValueTo: (n) => `Werte für „${n}“`,

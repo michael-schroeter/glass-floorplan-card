@@ -1273,13 +1273,14 @@ class GlassFloorplanCard extends HTMLElement {
     this._fcSub = [];
     const sub = (type) => h.connection.subscribeMessage((msg) => { this._fc[type] = msg?.forecast || []; this._updSide(); },
       { type: 'weather/subscribe_forecast', forecast_type: type, entity_id: this._M.weather })
-      .then((un) => { if (this._fcSub) this._fcSub.push(un); else un(); })
+      .then((un) => { if (this._fcSub) this._fcSub.push(un); else Promise.resolve(un()).catch(() => {}); })
       .catch(() => {});
     if (feat & 1) sub('daily');
     if (feat & 2) sub('hourly');
   }
   _unsubscribeForecast() {
-    (this._fcSub || []).forEach((un) => { try { un(); } catch (e) { /* never mind */ } });
+    // (unsubscribing answers with a promise – it fails when Home Assistant ended the subscription already)
+    (this._fcSub || []).forEach((un) => { try { Promise.resolve(un()).catch(() => {}); } catch (e) { /* never mind */ } });
     this._fcSub = null;
   }
 }
