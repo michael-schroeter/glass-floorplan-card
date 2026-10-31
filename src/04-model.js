@@ -510,8 +510,8 @@ function freeOf(B, blocks) {
  * departures: { stops: [{ id | entity, name, lines, exclude, at }], api, per, map }
  * A stop by its id is fetched from the public VBB / BVG interface (transport.rest), a stop by its entity is read from a
  * sensor of the integration "Berlin (BVG) and Brandenburg (VBB) transport" (attribute `departures`).
- * map: true | { radius, overpass } adds the live map (stops by id; `at: [lat, lon]` instead of the stop's own position;
- * radius = metres of street around the stops that are always in view). */
+ * map: true | { radius, overpass, attribution } adds the live map (stops by id; `at: [lat, lon]` instead of the stop's own
+ * position; radius = metres of street around the stops that are always in view; attribution: another source than OpenStreetMap). */
 function normDepartures(d) {
   const stops = (Array.isArray(d?.stops) ? d.stops : []).filter((s) => s && (s.id || s.entity)).map((s, i) => ({
     i, id: s.id ? String(s.id) : null, entity: s.entity || null, name: s.name || null,
@@ -521,6 +521,7 @@ function normDepartures(d) {
   const m = d.map === true ? {} : d.map && typeof d.map === 'object' ? d.map : null;
   const map = m && stops.some((s) => s.id || s.at) ? {
     radius: clamp(+m.radius || 300, 120, 1500), overpass: String(m.overpass || 'https://overpass-api.de/api/interpreter'),
+    attribution: m.attribution ? String(m.attribution) : null,
   } : null;
   return { stops, api: String(d.api || 'https://v6.vbb.transport.rest').replace(/\/$/, ''), per: clamp(Math.round(+d.per || 3), 1, 5), map };
 }
