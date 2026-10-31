@@ -65,8 +65,12 @@ function exampleConfig(lang = 'en') {
     weather: 'weather.home',
     tiles: [{ id: 'energy', name: N('Energy', 'Energie'), icon: 'bolt', entities: ['sensor.home_power', { entity: 'sensor.energy_today', name: N('Today', 'Heute') }] }],
     layers: ['light', 'climate', 'cover', 'vacuum',
-      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }, 'departures'],
-    // two made-up stops nearby, from sensors of the transport integration (the demo simulates them)
-    departures: { stops: [{ entity: 'sensor.departures_linden_square', name: N('Linden Square', 'Lindenplatz') }, { entity: 'sensor.departures_town_hall', name: N('Town Hall', 'Rathaus') }] },
+      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }, 'departures', 'departures_map'],
+    // two made-up stops in a made-up town nearby: departures, vehicles and map come from the demo's simulator (demo/transit.js)
+    departures: {
+      api: 'https://transit.demo.invalid',
+      stops: [{ id: 'linden_square', name: N('Linden Square', 'Lindenplatz') }, { id: 'town_hall', name: N('Town Hall', 'Rathaus') }],
+      map: { overpass: 'https://overpass.demo.invalid/api/interpreter', attribution: N('Made-up town – no real map data', 'Erfundene Stadt – keine echten Kartendaten') },
+    },
   };
 }
