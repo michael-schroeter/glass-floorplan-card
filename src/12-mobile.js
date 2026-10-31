@@ -184,6 +184,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     this._fitBtnTiles();
     this._fitGcard();
     this._depLayout();
+    this._tmLayout();
     this._declutter();
   },
 

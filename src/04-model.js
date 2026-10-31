@@ -37,7 +37,10 @@ const LAYER_TYPES = {
   cover: { icon: 'blinds', kinds: ['cover'] },
   vacuum: { icon: 'robot', kinds: ['vacuum'] },
   departures: { icon: 'train', kinds: [] },
+  departures_map: { icon: 'map', kinds: [] },
 };
+/* layers that are a view of their own instead of the plan (the departures as a board and on a map) */
+const VIEW_TYPES = ['departures', 'departures_map'];
 const SHOW_KINDS = ['light', 'media', 'door', 'climate', 'cover'];
 /* A built-in layer in the configuration: 'light', or { type: 'light', entities: [...] } with extra devices of any kind */
 const builtinType = (l) => (typeof l === 'string' ? (LAYER_TYPES[l] ? l : null) : l && LAYER_TYPES[l.type] && !l.show ? l.type : null);
@@ -273,6 +276,7 @@ function buildLayers(M) {
     // the plan always comes first, the departures after it
     if (!list.length) list.push('light');
     if (M.dep) list.push('departures');
+    if (M.dep?.map) list.push('departures_map');
   }
   const out = [], used = new Set();
   list.forEach((l, i) => {
@@ -286,7 +290,7 @@ function buildLayers(M) {
         kinds: new Set([].concat(l.show || []).filter((k) => SHOW_KINDS.includes(k))), ents: new Set([].concat(l.entities || [])),
       };
     }
-    if (!L || used.has(L.id) || (L.type === 'vacuum' && !M.vac) || (L.type === 'departures' && !M.dep)) return;
+    if (!L || used.has(L.id) || (L.type === 'vacuum' && !M.vac) || (L.type === 'departures' && !M.dep) || (L.type === 'departures_map' && !M.dep?.map)) return;
     used.add(L.id);
     out.push(L);
   });
@@ -503,15 +507,22 @@ function freeOf(B, blocks) {
 }
 
 /* ---------------------------------------------------------------- Departures (configuration)
- * departures: { stops: [{ id | entity, name, lines, exclude }], api, per }
+ * departures: { stops: [{ id | entity, name, lines, exclude, at }], api, per, map }
  * A stop by its id is fetched from the public VBB / BVG interface (transport.rest), a stop by its entity is read from a
- * sensor of the integration "Berlin (BVG) and Brandenburg (VBB) transport" (attribute `departures`). */
+ * sensor of the integration "Berlin (BVG) and Brandenburg (VBB) transport" (attribute `departures`).
+ * map: true | { radius, overpass } adds the live map (stops by id; `at: [lat, lon]` instead of the stop's own position;
+ * radius = metres of street around the stops that are always in view). */
 function normDepartures(d) {
   const stops = (Array.isArray(d?.stops) ? d.stops : []).filter((s) => s && (s.id || s.entity)).map((s, i) => ({
     i, id: s.id ? String(s.id) : null, entity: s.entity || null, name: s.name || null,
-    lines: [].concat(s.lines || []).map(String), exclude: [].concat(s.exclude || []).map(String),
+    lines: [].concat(s.lines || []).map(String), exclude: [].concat(s.exclude || []).map(String), at: normPt(s.at),
   }));
-  return stops.length ? { stops, api: String(d.api || 'https://v6.vbb.transport.rest').replace(/\/$/, ''), per: clamp(Math.round(+d.per || 3), 1, 5) } : null;
+  if (!stops.length) return null;
+  const m = d.map === true ? {} : d.map && typeof d.map === 'object' ? d.map : null;
+  const map = m && stops.some((s) => s.id || s.at) ? {
+    radius: clamp(+m.radius || 300, 120, 1500), overpass: String(m.overpass || 'https://overpass-api.de/api/interpreter'),
+  } : null;
+  return { stops, api: String(d.api || 'https://v6.vbb.transport.rest').replace(/\/$/, ''), per: clamp(Math.round(+d.per || 3), 1, 5), map };
 }
 
 /* ---------------------------------------------------------------- Room graph (robot routes)

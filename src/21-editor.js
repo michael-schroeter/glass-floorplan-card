@@ -16,6 +16,7 @@ const LAYER_FILTER = {
   vacuum: (d) => d === 'vacuum',
   custom: (d) => !NO_DEVICE_DOMAINS.includes(d),
   departures: () => false,
+  departures_map: () => false,
 };
 /* the screen of a phone in the Home Assistant app (below the header) */
 const ED_PHONE = { w: 390, h: 788 };
@@ -431,7 +432,7 @@ class GfcEditor extends HTMLElement {
     const stage = fix ? null : this._liveStage(cfg), bare = this._bare();
     this._area = area;
     // a layer without devices (departures) only shows in the layers step – building the plan or placing devices needs the plan
-    const tab = this._layerSel !== 'departures' || (this._tool === 'layers' && !bare) ? this._layerSel : this._layerDefs().find((L) => !L.noDevices)?.id || 'light';
+    const tab = !VIEW_TYPES.includes(this._layerSel) || (this._tool === 'layers' && !bare) ? this._layerSel : this._layerDefs().find((L) => !L.noDevices)?.id || 'light';
     const key = JSON.stringify([cfg, scr, stage, fix, bare, tab]);
     if (key !== this._liveKey) {
       this._liveKey = key;
@@ -662,7 +663,7 @@ class GfcEditor extends HTMLElement {
       html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${a[0]}px;top:${a[1]}px"></i>${this._measure.b ? `<i style="left:${b[0]}px;top:${b[1]}px"></i>` : ''}</div>`;
     }
     // the departures view hides the plan: no handles on it
-    this._world.innerHTML = card?._layer?.()?.type === 'departures' && card._root?.dataset.type === 'departures' && !card._root.classList.contains('bare') ? '' : html;
+    this._world.innerHTML = VIEW_TYPES.includes(card?._layer?.()?.type) && VIEW_TYPES.includes(card._root?.dataset.type) && !card._root.classList.contains('bare') ? '' : html;
     fitText(this._world.querySelectorAll('.eroom .en b'));
     this._world.querySelectorAll('.efloat button').forEach((b) => b.addEventListener('click', () => {
       if (b.dataset.act === 'rot') this._rotateFurn(); else if (b.dataset.act === 'dup') this._duplicateSel(); else this._deleteSel();
@@ -1263,13 +1264,14 @@ class GfcEditor extends HTMLElement {
     const out = list.map((l, i) => {
       const type = builtinType(l);
       // departures come from YAML and hold no devices
-      if (type === 'departures') return { id: type, type, name: l.name || t('layer_departures'), icon: l.icon || LAYER_TYPES[type].icon, kinds: [], ents: [], noDevices: true };
+      if (VIEW_TYPES.includes(type)) return { id: type, type, name: l.name || t(`layer_${type}`), icon: l.icon || LAYER_TYPES[type].icon, kinds: [], ents: [], noDevices: true };
       if (type) return { id: type, type, name: l.name || t(`layer_${type}`), icon: l.icon || LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: layerExtras(l, ek) };
       return l && typeof l === 'object' ? { id: this._layerIdOf(l, i), type: 'custom', name: l.name || t('layer'), icon: l.icon || 'layers', kinds: [].concat(l.show || []), ents: [].concat(l.entities || []), raw: l } : null;
     }).filter(Boolean);
     // built-in layers are always offered for placing devices
     for (const type of ['light', 'climate', 'cover', 'vacuum']) if (!out.some((L) => L.id === type)) out.push({ id: type, type, name: t(`layer_${type}`), icon: LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: [], hidden: true });
     if (this._c.departures && !out.some((L) => L.id === 'departures')) out.push({ id: 'departures', type: 'departures', name: t('layer_departures'), icon: LAYER_TYPES.departures.icon, kinds: [], ents: [], hidden: true, noDevices: true });
+    if (this._c.departures?.map && !out.some((L) => L.id === 'departures_map')) out.push({ id: 'departures_map', type: 'departures_map', name: t('layer_departures_map'), icon: LAYER_TYPES.departures_map.icon, kinds: [], ents: [], hidden: true, noDevices: true });
     return out;
   }
   _layerDef(id) { return this._layerDefs().find((L) => L.id === id); }

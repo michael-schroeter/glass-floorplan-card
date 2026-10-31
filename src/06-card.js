@@ -93,6 +93,7 @@ class GlassFloorplanCard extends HTMLElement {
       this._subscribeForecast();
       this._kickRobot?.();
       this._depSync();
+      this._tmSync();
     }
   }
 
@@ -107,6 +108,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._rraf = null;
     this._wiredKey = false;
     this._depStop();
+    this._tmStop();
   }
 
   set hass(hass) {
@@ -193,7 +195,7 @@ class GlassFloorplanCard extends HTMLElement {
     if (this._ev?.stage) M.stage = { ...this._ev.stage };
     if (this._ev?.tab && M.layers.some((l) => l.id === this._ev.tab)) this._tab = this._ev.tab;
     // the editor needs the plan: a card with nothing but departures gets a plain layer to show it
-    if (this._ev?.tab && !M.layers.some((l) => l.id === this._ev.tab) && M.layers.every((l) => l.type === 'departures')) {
+    if (this._ev?.tab && !M.layers.some((l) => l.id === this._ev.tab) && M.layers.every((l) => VIEW_TYPES.includes(l.type))) {
       M.layers.unshift({ id: 'light', type: 'light', name: null, icon: 'bulb', kinds: new Set(LAYER_TYPES.light.kinds), ents: new Set() });
       this._tab = 'light';
     }
@@ -263,7 +265,7 @@ class GlassFloorplanCard extends HTMLElement {
       ${M.layers.map((L) => `<button data-tab="${esc(L.id)}" role="tab" aria-label="${esc(this._layerName(L))}">${this._iconHtml(L.icon)}<span>${esc(this._layerName(L))}</span></button>`).join('')}</div>` : '';
     const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
-    this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}${STYLES_D}</style>
+    this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}${STYLES_D}${STYLES_T}</style>
 <div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}${this._ev?.bare ? ' bare' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
@@ -282,6 +284,7 @@ class GlassFloorplanCard extends HTMLElement {
     ${empty}
   </div>
   ${M.dep ? '<div class="dview"></div>' : ''}
+  ${M.dep?.map ? '<div class="tview"></div>' : ''}
   ${dock ? bar : ''}
   <div class="pop-wrap"><div class="scrim"></div><div class="pshell"></div><div class="pop" role="dialog" aria-modal="true" tabindex="-1"></div></div>
   <div class="menu" role="menu"></div>
@@ -295,6 +298,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._gcard = $('.gcard');
     this._sideEl = $('.side, .mside');
     this._dview = $('.dview');
+    this._tview = $('.tview');
     this._shell = $('.pshell');
     this._scrim = $('.scrim');
     this._tip = $('.tip');
@@ -440,6 +444,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._fitBtnTiles();
     this._fitGcard();
     this._depLayout();
+    this._tmLayout();
     this._declutter();
   }
 
@@ -830,7 +835,8 @@ class GlassFloorplanCard extends HTMLElement {
     this._placeKnob(!animate);
     this._gapKind = null;
     this._depSync();
-    this._depInert(L.type === 'departures');
+    this._tmSync();
+    this._depInert(VIEW_TYPES.includes(L.type));
     this._depShow();
     if (this._hass) { this._renderGap(); this._updClean(); this._updRobot(); this._updAmbient(); this._updRooms(); }
     this._declutter();
@@ -1005,7 +1011,7 @@ class GlassFloorplanCard extends HTMLElement {
       else if (L.type === 'light') {
         const lit = this._roomEnts(k, L, 'light');
         if (lit.length) s = onL.length ? t('nOn', onL.length) : t('off');
-      } else if (L.type !== 'departures') s = this._roomCustomLabel(k, L);
+      } else if (!VIEW_TYPES.includes(L.type)) s = this._roomCustomLabel(k, L);
       el.querySelector('.rl span').textContent = s;
     }
   }
@@ -1030,7 +1036,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._root.style.setProperty('--dli', (day * (1 - clouds * 0.6)).toFixed(2));
     if (!this._gcard) return;
     const L = this._layer(), lit = this._M.ents.some((l) => l.kind === 'light' && isOn(this._st(l.entity)));
-    const tint = L.type === 'vacuum' || L.type === 'departures' ? ['30, 52, 92', '20, 30, 58']
+    const tint = L.type === 'vacuum' || VIEW_TYPES.includes(L.type) ? ['30, 52, 92', '20, 30, 58']
       : L.type === 'climate' ? this._climTint()
         : L.type === 'cover' ? ['44, 54, 72', '28, 32, 44']
           : lit && L.kinds.has('light') ? ['112, 72, 54', '92, 52, 36'] : ['46, 46, 54', '30, 30, 36'];
@@ -1048,7 +1054,7 @@ class GlassFloorplanCard extends HTMLElement {
       this._gcard.innerHTML = '';
       const v = L.type === 'vacuum' ? this._cleanGap(this._gapUpd) : L.type === 'climate' ? this._climateGap(L, this._gapUpd)
         : L.type === 'cover' ? this._coverGap(L, this._gapUpd) : L.type === 'light' ? this._lightGap(L, this._gapUpd)
-          : L.type === 'departures' ? this._depGap() : this._customGap(L, this._gapUpd);
+          : VIEW_TYPES.includes(L.type) ? this._depGap() : this._customGap(L, this._gapUpd);
       this._gcard.append(v);
     }
     this._gapUpd.forEach((f) => f());

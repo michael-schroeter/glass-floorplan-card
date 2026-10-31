@@ -23,7 +23,10 @@ const depDir = (d) => String(d || '').replace(/\s*->.*$/, '').replace(/\s+via\s.
 /* a departure as the interface sends it / as the integration's sensor has it */
 const depFromApi = (x) => {
   const l = x.line || {}, w = x.when || x.plannedWhen;
-  return { line: l.name || '?', product: l.product || '', bg: l.color?.bg || null, fg: l.color?.fg || null, dir: depDir(x.direction), t: w ? Date.parse(w) : NaN, delay: x.delay ?? null, cancelled: !!x.cancelled };
+  const p = x.currentTripPosition, ll = (o) => (o && Number.isFinite(o.latitude) ? [o.latitude, o.longitude] : null);
+  return { line: l.name || '?', product: l.product || '', bg: l.color?.bg || null, fg: l.color?.fg || null, dir: depDir(x.direction), t: w ? Date.parse(w) : NaN, delay: x.delay ?? null, cancelled: !!x.cancelled,
+    // for the live map: the trip, where its vehicle is now and where it ends
+    trip: x.tripId || null, pos: ll(p), to: ll(x.destination?.location) };
 };
 const depFromSensor = (x) => ({
   line: x.line_name || '?', product: x.line_type || '', bg: x.color || null, fg: x.text_color || null, dir: depDir(x.direction),
@@ -155,9 +158,9 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
   /* while the view is shown: fetch now, every 30 s and when the browser tab comes back */
   _depSync() {
-    const on = !!this._M?.dep && this.isConnected && this._layer()?.type === 'departures';
+    const on = !!this._M?.dep && this.isConnected && VIEW_TYPES.includes(this._layer()?.type);
     if (!this._depVis) {
-      this._depVis = () => { if (!document.hidden && this._layer()?.type === 'departures') { this._depFetch(); this._depShow(); } };
+      this._depVis = () => { if (!document.hidden && VIEW_TYPES.includes(this._layer()?.type)) { this._depFetch(); this._depShow(); } };
       document.addEventListener('visibilitychange', this._depVis);
     }
     if (!on) { clearInterval(this._depI); this._depI = null; return; }
@@ -170,7 +173,11 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (this._depVis) document.removeEventListener('visibilitychange', this._depVis);
     this._depVis = null;
   },
-  _depShow() { if (this._dview && this._layer()?.type === 'departures') this._depView(); },
+  _depShow() {
+    const type = this._layer()?.type;
+    if (this._dview && type === 'departures') this._depView();
+    if (type === 'departures_map') this._tmShow();
+  },
   /* what the view hides cannot be reached with the keyboard either */
   _depInert(on) {
     const sr = this.shadowRoot;

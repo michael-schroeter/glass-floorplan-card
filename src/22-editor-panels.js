@@ -760,7 +760,7 @@ Object.assign(GfcEditor.prototype, {
         ed.title = t('ed_edit');
         ed.addEventListener('click', () => { this._editLayer = L.id; this._layerSel = L.id; this._draw(); this._panel(); });
         mv.append(ed);
-      } else if ((L.type !== 'vacuum' || c.vacuum) && (L.type !== 'departures' || c.departures)) {
+      } else if ((L.type !== 'vacuum' || c.vacuum) && (L.type !== 'departures' || c.departures) && (L.type !== 'departures_map' || c.departures?.map)) {
         box.querySelector('.elayer').append(this._tglEl(on, (v) => this._change(() => {
           this._materializeLayers();
           if (v) c.layers.push(L.type); else c.layers = c.layers.filter((l) => builtinType(l) !== L.type);
