@@ -5155,8 +5155,8 @@ const depFromApi = (x) => {
   const l = x.line || {}, w = x.when || x.plannedWhen;
   const p = x.currentTripPosition, ll = (o) => (o && Number.isFinite(o.latitude) ? [o.latitude, o.longitude] : null);
   return { line: l.name || '?', product: l.product || '', bg: l.color?.bg || null, fg: l.color?.fg || null, dir: depDir(x.direction), t: w ? Date.parse(w) : NaN, delay: x.delay ?? null, cancelled: !!x.cancelled,
-    // for the live map: the trip, where its vehicle is now and where it ends
-    trip: x.tripId || null, pos: ll(p), to: ll(x.destination?.location) };
+    // for the live map: the trip, where its vehicle is now, where it ends and where exactly it leaves (a station has several stops)
+    trip: x.tripId || null, pos: ll(p), to: ll(x.destination?.location), at: ll(x.stop?.location) };
 };
 const depFromSensor = (x) => ({
   line: x.line_name || '?', product: x.line_type || '', bg: x.color || null, fg: x.text_color || null, dir: depDir(x.direction),
@@ -5673,18 +5673,21 @@ function tmAtS(L, s) {
 }
 
 /* ---------------------------------------------------------------- OSM → the map in metres around the centre (kept) */
-function tmQuery(c, half, stops) {
+/* streets, railways, parks and water in the area; the routes of the lines by name (a station's stops can lie apart),
+ * of a stop without a line filter every route that stops near it */
+function tmQuery(c, half, refs, open) {
   const pr = tmProj(c), [s, w] = pr.ll(-half, half), [n, e] = pr.ll(half, -half), f = (v) => v.toFixed(5);
   const bb = `${f(Math.min(s, n))},${f(Math.min(w, e))},${f(Math.max(s, n))},${f(Math.max(w, e))}`;
-  const near = stops.map((p) => `node(around:150,${f(p[0])},${f(p[1])})[public_transport];`).join('');
+  const rt = '[type=route][route~"^(bus|trolleybus|tram|subway|light_rail|train|ferry)$"]';
+  const named = refs.length ? `rel${rt}[ref~"^(${refs.map((r) => r.replace(/[.*+?^${}()|[\]\\"]/g, '\\$&')).join('|')})$"];` : '';
+  const near = open.length ? `(${open.map((p) => `node(around:300,${f(p[0])},${f(p[1])})[public_transport];`).join('')});rel(bn)${rt};` : '';
   return `[out:json][timeout:90][bbox:${bb}];
 (way[highway~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|pedestrian)(_link)?$"];
 way[railway~"^(rail|light_rail|narrow_gauge)$"];
 way[leisure~"^(${TM_GREEN.leisure.join('|')})$"];way[landuse~"^(${TM_GREEN.landuse.join('|')})$"];way[natural~"^(water|${TM_GREEN.natural.join('|')})$"];
 rel[natural~"^(water|wood)$"];rel[leisure=park];rel[landuse~"^(forest|cemetery|grass|recreation_ground)$"];);
 out body geom qt;
-(${near});
-rel(bn)[type=route][route~"^(bus|trolleybus|tram|subway|light_rail|train|ferry)$"];
+(${named}${near});
 out body geom(${bb}) qt;`;
 }
 
@@ -5943,7 +5946,8 @@ Object.assign(GlassFloorplanCard.prototype, {
     const pr0 = tmProj(c0), m = pts.map((p) => pr0.xy(...p));
     const ext = Math.max(...m.map((p) => Math.max(Math.abs(p[0]), Math.abs(p[1])))) + D.map.radius;
     const half = Math.round((ext * 2.2 + 200) / 50) * 50, c = c0.map((v) => Math.round(v * 2e4) / 2e4);
-    const key = `${TM_KEY}${hashStr(JSON.stringify([TM_V, c, half, pts.map((p) => p.map((v) => +v.toFixed(4))), D.map.overpass]))}`;
+    const refs = [...new Set(D.stops.flatMap((s) => s.lines))].sort(), open = D.stops.map((s, i) => (!s.lines.length ? ll[i] : null)).filter(Boolean);
+    const key = `${TM_KEY}${hashStr(JSON.stringify([TM_V, c, half, pts.map((p) => p.map((v) => +v.toFixed(4))), refs, D.map.overpass]))}`;
     const L = (this._tmL = this._tmL || {});
     if (L.key !== key) {
       Object.assign(L, { key, c, half, stops: pts, geo: null, at: 0, busy: false, wait: 0, tries: 0, err: false });
@@ -5953,7 +5957,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (L.busy || (L.geo && Date.now() - L.at < TM_KEEP) || Date.now() < L.wait) { if (!L.geo) this._tmMsg(t(L.err ? 'tmOffline' : 'tmLoading')); return; }
     L.busy = true;
     if (!L.geo) this._tmMsg(t('tmLoading'));
-    fetch(D.map.overpass, { method: 'POST', body: new URLSearchParams({ data: tmQuery(c, half, pts) }) })
+    fetch(D.map.overpass, { method: 'POST', body: new URLSearchParams({ data: tmQuery(c, half, refs, open) }) })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j) => {
         if (L.key !== key) return;
@@ -5990,6 +5994,12 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
   _tmMsg(s) { const el = this._tview?.querySelector('.tm-msg'); if (el && el.textContent !== s) el.textContent = s; },
 
+  /* where a line leaves a stop: a station's stops can lie apart (the bus stop round the corner) – from its departures,
+   * else the stop's own position */
+  _tmAnchor(si, ref) {
+    const s = this._M.dep.stops[si], d = (this._depC?.[this._depKey(s)]?.list || []).find((x) => x.line === ref && x.at);
+    return d ? d.at : this._tmStopsLL()[si];
+  },
   /* the lines of a stop: as configured, else every line leaving there */
   _tmLinesOf(s) {
     if (s.lines.length) return s.lines;
@@ -6022,9 +6032,10 @@ Object.assign(GlassFloorplanCard.prototype, {
       const S = G.pr.xy(...ll[si]), lines = this._tmLinesOf(s), plats = [];
       G.routes.forEach((r, ri) => {
         if (!lines.includes(r.ref)) return;
-        const near = r.stopP.map((p) => [p, tmLen(p, S)]).filter((x) => x[1] < 160).sort((a, b) => a[1] - b[1])[0];
+        const A = G.pr.xy(...(this._tmAnchor(si, r.ref) || ll[si]));
+        const near = r.stopP.map((p) => [p, tmLen(p, A)]).filter((x) => x[1] < 160).sort((a, b) => a[1] - b[1])[0];
         r.lines.forEach((L, li) => {
-          const o = tmOn(L, near ? near[0] : S);
+          const o = tmOn(L, near ? near[0] : A);
           if (o.d > (near ? 35 : 70)) return;
           const a = L.P[o.i - 1], b = L.P[o.i];
           plats.push({ si, ri, li, s: o.s, ref: r.ref, prod: r.prod, ug: r.mode === 'subway', pt: tmAtS(L, o.s).p, ang: Math.atan2(b[1] - a[1], b[0] - a[0]) });
@@ -6071,7 +6082,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const G = this._tmG;
     if (!G) return;
     // the stops with the radius around them fill the free part
-    const ll = this._tmStopsLL().filter(Boolean).map((p) => G.pr.xy(...p)), r = M.dep.map.radius;
+    const ll = M.dep.stops.flatMap((s, si) => { const refs = this._tmLinesOf(s); return refs.length ? refs.map((ref) => this._tmAnchor(si, ref)) : [this._tmStopsLL()[si]]; }).filter(Boolean).map((p) => G.pr.xy(...p)), r = M.dep.map.radius;
     const fb = [Math.min(...ll.map((p) => p[0])) - r, Math.min(...ll.map((p) => p[1])) - r, Math.max(...ll.map((p) => p[0])) + r, Math.max(...ll.map((p) => p[1])) + r];
     const k = clamp(Math.min((F[2] - F[0]) / (fb[2] - fb[0]), (F[3] - F[1]) / (fb[3] - fb[1])), 0.12, 3);
     const view = { k, ox: (F[0] + F[2]) / 2 - ((fb[0] + fb[2]) / 2) * k, oy: (F[1] + F[3]) / 2 - ((fb[1] + fb[3]) / 2) * k, W, H, u };
@@ -6084,7 +6095,12 @@ Object.assign(GlassFloorplanCard.prototype, {
     this._tmShow();
   },
   /* what the drawing depends on besides the screen: the lines of the stops and their colours */
-  _tmSig() { return this._M.dep.stops.map((s) => this._tmLinesOf(s).map((ref) => { const l = this._tmLooks?.[ref]; return `${ref}${l ? l.glow.join('.') : ''}`; }).join()).join('|'); },
+  _tmSig() {
+    return this._M.dep.stops.map((s, si) => this._tmLinesOf(s).map((ref) => {
+      const l = this._tmLooks?.[ref], a = this._tmAnchor(si, ref);
+      return `${ref}${l ? l.glow.join('.') : ''}@${a ? a.map((v) => v.toFixed(4)).join() : ''}`;
+    }).join()).join('|');
+  },
   _tmX(p) { const V = this._tmView; return [V.ox + p[0] * V.k, V.oy + p[1] * V.k]; },
 
   _tmDom() {
@@ -6146,34 +6162,42 @@ Object.assign(GlassFloorplanCard.prototype, {
       <linearGradient id="tmgg" x1="0" y1="0" x2=".45" y2="1"><stop offset="0" stop-color="rgb(110,210,135)" stop-opacity=".2"/><stop offset="1" stop-color="rgb(70,170,100)" stop-opacity=".12"/></linearGradient>
       <linearGradient id="tmgw" x1="0" y1="0" x2=".45" y2="1"><stop offset="0" stop-color="rgb(90,160,255)" stop-opacity=".2"/><stop offset="1" stop-color="rgb(40,100,220)" stop-opacity=".11"/></linearGradient>
     </defs>${out}${glow.join('')}${core.join('')}`;
+    // points every few pixels along the lines in view: chips keep off them where they can
+    this._tmLinePts = [];
+    for (const sc of this._tmScr.values()) for (let i = 1; i < sc.P.length; i++) {
+      const a = sc.P[i - 1], b = sc.P[i], n = Math.ceil(tmLen(a, b) / 6);
+      for (let k = 0; k < n; k++) { const p = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]; if (p[0] > 0 && p[1] > 0 && p[0] < W && p[1] < H) this._tmLinePts.push(p); }
+    }
     this._tmPl = this._tmPlats();
     this._tmDrawn = this._tmSig();
     this._tmStatic();
   },
 
-  /* the stops: name, a light on every side, the chip with the next departures there (filled in by _tmShow) */
+  /* the stops: a light on every side of the street with the chip of what comes next there beside it (on the side where one
+   * waits); a station under the street is one light, its lines' chips stacked beside it. The name above. Placed by _tmShow. */
   _tmStatic() {
     const ov = this._tview.querySelector('.tm-ov'), D = this._M.dep, V = this._tmView, u = V.u;
     let html = '';
     this._tmSides = [];
+    this._tmStops = [];
     for (const st of this._tmPl || []) {
-      const s = D.stops[st.si], name = s.name || s.id || '';
-      const pts = st.sides.map((g) => this._tmX(g.pt));
-      for (const [i, g] of st.sides.entries()) {
-        const p = pts[i];
-        html += `<i class="tm-pt${g.ug ? ' ug' : ''}" style="transform:translate(${p[0].toFixed(1)}px,${p[1].toFixed(1)}px)"></i>`;
-        // the chip lies on the side of the street where one waits: right of the direction of travel
-        const dx = -Math.sin(g.ang), dy = Math.cos(g.ang), off = 26 * u;
-        const ax = p[0] + dx * off, ay = p[1] + dy * off;
-        const el = { g, ax, ay, dx, dy, id: `${st.si}-${i}` };
-        this._tmSides.push(el);
-        html += `<div class="tm-pf" data-side="${el.id}" style="visibility:hidden"></div>`;
+      const s = D.stops[st.si], up = st.sides.filter((g) => !g.ug), down = st.sides.filter((g) => g.ug);
+      for (const g of up) {
+        const p = this._tmX(g.pt), dx = -Math.sin(g.ang), dy = Math.cos(g.ang), off = 26 * u;
+        html += `<i class="tm-pt" style="transform:translate(${p[0].toFixed(1)}px,${p[1].toFixed(1)}px)"></i>`;
+        this._tmSides.push({ g, ax: p[0] + dx * off, ay: p[1] + dy * off, dx, dy, id: `${st.si}-${this._tmSides.length}` });
       }
-      // the name above everything of the stop
-      const top = pts.length ? pts.reduce((a, p) => [a[0] + p[0] / pts.length, Math.min(a[1], p[1])], [0, Infinity]) : this._tmX(st.S);
-      html += `<span class="tm-sl" data-stop="${st.si}" style="transform:translate(calc(${top[0].toFixed(1)}px - 50%),calc(${(top[1] - 30 * u).toFixed(1)}px - 100%))">${esc(name)}</span>`;
+      let stn = null;
+      if (down.length) {
+        stn = this._tmX(down.reduce((a, g) => [a[0] + g.pt[0] / down.length, a[1] + g.pt[1] / down.length], [0, 0]));
+        html += `<i class="tm-pt ug" style="transform:translate(${stn[0].toFixed(1)}px,${stn[1].toFixed(1)}px)"></i>`;
+        down.forEach((g, k) => this._tmSides.push({ g, stack: { at: stn, k, n: down.length }, id: `${st.si}-${this._tmSides.length}` }));
+      }
+      const pts = st.sides.map((g) => this._tmX(g.pt));
+      this._tmStops.push({ si: st.si, stn, pts: pts.length ? pts : [this._tmX(st.S)] });
+      html += `<span class="tm-sl" data-stop="${st.si}">${esc(s.name || s.id || '')}</span>`;
     }
-    ov.innerHTML = `${html}<div class="tm-hs"></div>`;
+    ov.innerHTML = `${html}${this._tmSides.map((e) => `<div class="tm-pf" data-side="${e.id}" style="visibility:hidden"></div>`).join('')}<div class="tm-hs"></div>`;
   },
 
   /* ---------------------------------------------------------------- live: radar, vehicles, the minutes */
@@ -6256,14 +6280,14 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (cand.length < 2) return cand[0] || null;
     const v = this._tmVeh?.get(d.trip);
     if (v && v.ri >= 0) { const p = cand.find((x) => x.ri === v.ri && x.li === v.li) || cand.find((x) => x.ri === v.ri); if (p) return p; }
-    const S = st.S, cos = (a, b) => ((a[0] * b[0] + a[1] * b[1]) / ((Math.hypot(...a) * Math.hypot(...b)) || 1));
+    const cos = (a, b) => ((a[0] * b[0] + a[1] * b[1]) / ((Math.hypot(...a) * Math.hypot(...b)) || 1));
     const line = (p) => G.routes[p.ri].lines[p.li];
     if (d.pos) {
       // on the route before the stop: that one; far out: the route that comes from where it is
       const P = G.pr.xy(...d.pos);
       let best = null;
       for (const p of cand) {
-        const L = line(p), o = tmOn(L, P), up = tmAtS(L, p.s - 600).p;
+        const L = line(p), o = tmOn(L, P), up = tmAtS(L, p.s - 600).p, S = p.pt;
         const sc = o.d < 60 && o.s <= p.s + 25 ? o.d : 1000 - 500 * cos([P[0] - S[0], P[1] - S[1]], [up[0] - S[0], up[1] - S[1]]);
         if (!best || sc < best.sc) best = { sc, p };
       }
@@ -6271,7 +6295,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     }
     if (d.to) {
       const P = G.pr.xy(...d.to);
-      return cand.map((p) => { const dn = tmAtS(line(p), p.s + 600).p; return [p, cos([P[0] - S[0], P[1] - S[1]], [dn[0] - S[0], dn[1] - S[1]])]; }).sort((a, b) => b[1] - a[1])[0][0];
+      return cand.map((p) => { const dn = tmAtS(line(p), p.s + 600).p, S = p.pt; return [p, cos([P[0] - S[0], P[1] - S[1]], [dn[0] - S[0], dn[1] - S[1]])]; }).sort((a, b) => b[1] - a[1])[0][0];
     }
     const n = (x) => depDir(x).toLowerCase();
     return cand.find((p) => n(G.routes[p.ri].to).includes(n(d.dir)) || n(d.dir).includes(n(G.routes[p.ri].to))) || cand[0];
@@ -6327,21 +6351,44 @@ Object.assign(GlassFloorplanCard.prototype, {
         // a side of the street: where it goes, then every line stopping there
         : `${arrow(el.g.ang)}${el.g.refs.slice().sort(order).map((ref) => { const nx = next((e) => e.d.line === ref); return `<span class="tm-ln">${this._tmBadge(ref, this._tmLook(ref, el.g.plats[0].prod))}${nx ? mnHtml(nx.d) : '<span class="tm-mn none">–</span>'}</span>`; }).join('')}`;
       if (node.dataset.h !== html) { node.dataset.h = html; node.innerHTML = html; }
+      el.node = node;
+      el.w = node.offsetWidth;
+      el.h = node.offsetHeight;
+      if (el.stack) continue;
       // beside the street, never over it: centred on a point pushed out until the chip clears it
-      const w = node.offsetWidth, h = node.offsetHeight, ext = Math.abs(el.dx) * w / 2 + Math.abs(el.dy) * h / 2;
-      const x = el.ax + el.dx * ext - w / 2, y = el.ay + el.dy * ext - h / 2;
-      node.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
-      node.style.visibility = '';
-      el.box = [x, y, x + w, y + h];
+      const ext = (Math.abs(el.dx) * el.w) / 2 + (Math.abs(el.dy) * el.h) / 2, x = el.ax + el.dx * ext - el.w / 2, y = el.ay + el.dy * ext - el.h / 2;
+      el.box = [x, y, x + el.w, y + el.h];
+    }
+    // a station under the street: its lines stacked beside its light (on the side with room), its name above them
+    const E = this._tmBox.E, u = V.u;
+    for (const st of this._tmStops || []) {
+      const lab = v.querySelector(`.tm-sl[data-stop="${st.si}"]`), stack = (this._tmSides || []).filter((e) => e.stack && e.g.si === st.si);
+      if (stack.length) {
+        const at = st.stn, w = Math.max(...stack.map((e) => e.w)), gap = 6, H = stack.reduce((a, e) => a + e.h, 0) + gap * (stack.length - 1);
+        // beside its light where it covers the fewest lines (right first)
+        const busy = (x0, y0) => this._tmLinePts.reduce((n, p) => n + (p[0] > x0 - 4 && p[0] < x0 + w + 4 && p[1] > y0 - 4 && p[1] < y0 + H + 4), 0);
+        const opts = [[at[0] + 16 * u, at[1] - H / 2], [at[0] - 16 * u - w, at[1] - H / 2], [at[0] + 12 * u, at[1] + 16 * u], [at[0] + 12 * u, at[1] - 16 * u - H],
+          [at[0] - 12 * u - w, at[1] + 16 * u], [at[0] - 12 * u - w, at[1] - 16 * u - H]].filter((o) => o[0] >= E[0] && o[0] + w <= E[2]);
+        const best = opts.map((o, i) => [o, busy(...o) + i * 0.5]).sort((a, b) => a[1] - b[1])[0]?.[0] || [at[0] + 16 * u, at[1] - H / 2];
+        const x = best[0];
+        let y = clamp(best[1], E[1] + 24 * u, E[3] - H);
+        for (const e of stack) { e.box = [x, y, x + e.w, y + e.h]; e.fixed = true; y += e.h + gap; }
+        if (lab) lab.style.transform = `translate(${(x + 4).toFixed(1)}px,calc(${(stack[0].box[1] - 6).toFixed(1)}px - 100%))`;
+      } else if (lab) {
+        const cx = st.pts.reduce((a, p) => a + p[0], 0) / st.pts.length, top = Math.min(...st.pts.map((p) => p[1]));
+        lab.style.transform = `translate(calc(${cx.toFixed(1)}px - 50%),calc(${(top - 30 * u).toFixed(1)}px - 100%))`;
+      }
     }
     this._tmLabelsApart();
     this._tmHints(bySide, mnHtml);
     this._tmKick();
   },
-  /* chips that would overlap move apart (the shorter way), away from the stop names, inside the card */
+  /* chips beside the street that would overlap move apart (the shorter way), away from names, lights and a station's
+   * stack, inside the card */
   _tmLabelsApart() {
-    const S = (this._tmSides || []).filter((e) => e.box), B = this._tmBox, rb = this._root.getBoundingClientRect();
-    const fixed = [...this._tview.querySelectorAll('.tm-sl, .tm-pt')].map((n) => { const b = n.getBoundingClientRect(); return [b.left - rb.left, b.top - rb.top, b.right - rb.left, b.bottom - rb.top]; });
+    const all = (this._tmSides || []).filter((e) => e.box), S = all.filter((e) => !e.fixed), B = this._tmBox, rb = this._root.getBoundingClientRect();
+    const fixed = [...this._tview.querySelectorAll('.tm-sl, .tm-pt')].map((n) => { const b = n.getBoundingClientRect(); return [b.left - rb.left, b.top - rb.top, b.right - rb.left, b.bottom - rb.top]; })
+      .concat(all.filter((e) => e.fixed).map((e) => e.box));
     const push = (a, b, both) => {
       const ox = Math.min(a[2], b[2]) - Math.max(a[0], b[0]) + 6, oy = Math.min(a[3], b[3]) - Math.max(a[1], b[1]) + 6;
       if (ox <= 0 || oy <= 0) return false;
@@ -6358,10 +6405,10 @@ Object.assign(GlassFloorplanCard.prototype, {
       }
       if (!moved) break;
     }
-    for (const e of S) {
+    for (const e of all) {
       const b = e.box, w = b[2] - b[0], h = b[3] - b[1], x = clamp(b[0], B.E[0], B.E[2] - w), y = clamp(b[1], B.E[1], B.E[3] - h);
-      const n = this._tview.querySelector(`.tm-pf[data-side="${e.id}"]`);
-      if (n) n.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
+      e.node.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
+      e.node.style.visibility = '';
     }
   },
   /* the next vehicle of each line and side that is not on the map yet: at the edge where its route comes in */

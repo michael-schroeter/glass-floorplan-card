@@ -25,8 +25,8 @@ const depFromApi = (x) => {
   const l = x.line || {}, w = x.when || x.plannedWhen;
   const p = x.currentTripPosition, ll = (o) => (o && Number.isFinite(o.latitude) ? [o.latitude, o.longitude] : null);
   return { line: l.name || '?', product: l.product || '', bg: l.color?.bg || null, fg: l.color?.fg || null, dir: depDir(x.direction), t: w ? Date.parse(w) : NaN, delay: x.delay ?? null, cancelled: !!x.cancelled,
-    // for the live map: the trip, where its vehicle is now and where it ends
-    trip: x.tripId || null, pos: ll(p), to: ll(x.destination?.location) };
+    // for the live map: the trip, where its vehicle is now, where it ends and where exactly it leaves (a station has several stops)
+    trip: x.tripId || null, pos: ll(p), to: ll(x.destination?.location), at: ll(x.stop?.location) };
 };
 const depFromSensor = (x) => ({
   line: x.line_name || '?', product: x.line_type || '', bg: x.color || null, fg: x.text_color || null, dir: depDir(x.direction),
