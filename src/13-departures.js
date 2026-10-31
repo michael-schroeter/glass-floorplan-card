@@ -1,6 +1,6 @@
 /* ================================================================== Departures: the next trains and buses at stops nearby
  * A view of its own: the plan, the tiles and the layer card make way, only the layer bar stays. Each stop is a glass
- * card – every line once with its badge, each direction with an arrow, the next departure large on the right and the
+ * card – every line once with its badge, each direction on one line with the next departure large on the right, the
  * ones after it in a quiet second line.
  * Stops by id are fetched by the card itself (public VBB / BVG interface, every 30 s while the view is shown), stops by
  * entity come from Home Assistant (integration "Berlin (BVG) and Brandenburg (VBB) transport"). */
@@ -39,8 +39,10 @@ const STYLES_D = `
 .root[data-type="departures"]:not(.bare) .lay .tabs { pointer-events: auto; }
 /* its own calm light: the warm glows of the rooms and the plan's dot grid recede */
 .root[data-type="departures"] .bg .g1, .root[data-type="departures"] .bg .g2 { opacity: calc(var(--warm) * .22); }
-.root[data-type="departures"] .bg .g3 { opacity: .9; }
+.root[data-type="departures"] .bg .g3, .root[data-type="departures"] .bg .g6 { opacity: 1; }
 .root[data-type="departures"] .bg .dots { opacity: .4; }
+/* a cool pool of light behind the board – the glass needs something to frost */
+.bg .g6 { background: radial-gradient(55% 60% at 60% 36%, rgba(70, 88, 160, .2), rgba(70, 88, 160, 0) 70%), radial-gradient(40% 45% at 86% 86%, rgba(120, 70, 150, .11), rgba(120, 70, 150, 0) 70%); opacity: 0; }
 .bg .dots { transition: opacity 1.2s ease; }
 .root .room { transition: box-shadow .6s ease, background .5s ease, transform var(--sp-ms) var(--sp), opacity .4s ease; }
 .root .pas, .root .win.fd { transition: opacity .4s ease, background .4s, box-shadow .4s; }
@@ -55,44 +57,41 @@ const STYLES_D = `
   display: flex; flex-direction: column; gap: calc(20 * var(--dz)); }
 .root[data-type="departures"] .dview .dp-in { animation: dpin .6s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes dpin { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
-.dview .dp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 0 2px; }
-.dview .dp-head h2 { margin: 0; font-size: clamp(24px, calc(28 * var(--dz)), 34px); font-weight: 700; letter-spacing: -.03em; }
-.dview .dp-live { display: flex; align-items: center; gap: 7px; font-size: calc(14.5 * var(--dz)); font-weight: 500; color: var(--t2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dview .dp-head { display: flex; align-items: center; gap: calc(14 * var(--dz)); padding: 0 calc(6 * var(--dz)); }
+.dview .dp-head h2 { margin: 0; font-size: calc(14 * var(--dz)); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t2); }
+.dview .dp-live { display: flex; align-items: center; gap: 7px; font-size: calc(14 * var(--dz)); font-weight: 500; color: var(--t3); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .dview .dp-live i { width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--green)); animation: dplive 3s ease-in-out infinite; }
 .dview .dp-live.off i { background: rgb(var(--orange)); animation: none; }
 @keyframes dplive { 50% { opacity: .4; } }
-.dview .dp-stops { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(380 * var(--dz))), 1fr)); gap: calc(20 * var(--dz)); }
+.dview .dp-stops { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(340 * var(--dz))), 1fr)); align-items: start; gap: calc(20 * var(--dz)); }
 .dview .dp-card { min-width: 0; border-radius: calc(26 * var(--dz)); padding: calc(18 * var(--dz)) calc(24 * var(--dz)) calc(10 * var(--dz));
   background: linear-gradient(160deg, rgba(46, 46, 54, .58), rgba(22, 23, 28, .64));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .095), inset 0 1px 0 rgba(255, 255, 255, .07), 0 18px 44px rgba(0, 0, 0, .3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .11), 0 18px 44px rgba(0, 0, 0, .34);
   -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%); }
 /* the stop's name is a quiet label, like the tiles' ("Außen", "Innen") – the minutes are what counts */
 .dview .dp-card > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: calc(4 * var(--dz));
-  font-size: calc(16 * var(--dz)); font-weight: 600; color: var(--t2); }
+  font-size: calc(15.5 * var(--dz)); font-weight: 500; color: var(--t2); }
 .dview .dp-card > header b { min-width: 0; font-weight: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dview .dp-card > header span { flex: none; display: flex; gap: calc(6 * var(--dz)); font-size: calc(19 * var(--dz)); }
 .dview .dp-card > header .ic { stroke-width: 1.8; }
-.dview .dp-grid { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; column-gap: calc(14 * var(--dz)); }
-.dview .dp-grid hr { grid-column: 1 / -1; height: 1px; margin: calc(4 * var(--dz)) 0; border: 0; background: rgba(255, 255, 255, .07); }
-.dview .dp-badge { grid-column: 1; align-self: start; margin-top: calc(13 * var(--dz)); display: inline-grid; place-items: center; box-sizing: border-box;
+.dview .dp-grid { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: calc(14 * var(--dz)); }
+.dview .dp-grid hr { grid-column: 1 / -1; height: 1px; margin: calc(9 * var(--dz)) 0; border: 0; background: rgba(255, 255, 255, .08); }
+.dview .dp-badge { grid-column: 1; align-self: baseline; display: inline-grid; place-items: center; box-sizing: border-box;
   min-width: calc(50 * var(--dz)); height: calc(28 * var(--dz)); padding: 0 calc(7 * var(--dz)); border-radius: calc(8 * var(--dz));
   background: var(--lb); color: var(--lf); font-size: calc(15 * var(--dz)); font-weight: 700; letter-spacing: -.01em;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .16); }
-.dview .dp-dir { grid-column: 2; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: calc(2 * var(--dz));
-  min-height: calc(58 * var(--dz)); padding: calc(7 * var(--dz)) 0; }
-.dview .dp-to { display: flex; align-items: center; gap: calc(7 * var(--dz)); min-width: 0; font-size: calc(19 * var(--dz)); font-weight: 600; letter-spacing: -.012em; }
-.dview .dp-to .ic { flex: none; font-size: .78em; color: var(--t3); stroke-width: 2.1; }
-.dview .dp-to span, .dview .dp-sub { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dview .dp-sub { padding-left: calc(22 * var(--dz)); font-size: calc(14 * var(--dz)); font-weight: 500; color: var(--t2); font-variant-numeric: tabular-nums; }
+.dview .dp-dir { grid-column: 2; align-self: baseline; min-width: 0; display: flex; flex-direction: column; gap: calc(3 * var(--dz)); padding: calc(9 * var(--dz)) 0 calc(8 * var(--dz)); }
+.dview .dp-to, .dview .dp-sub { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dview .dp-to { font-size: calc(19 * var(--dz)); font-weight: 600; letter-spacing: -.012em; }
+.dview .dp-sub { font-size: calc(14 * var(--dz)); font-weight: 500; color: var(--t2); font-variant-numeric: tabular-nums; }
 .dview .dp-sub s { color: rgb(var(--red)); text-decoration-thickness: 1.5px; }
-.dview .dp-num { grid-column: 3; align-self: center; justify-self: end; font-size: calc(36 * var(--dz)); font-weight: 700; letter-spacing: -.035em; line-height: 1;
+/* the minutes with their unit set small on the same baseline – like the tiles' "486 W" */
+.dview .dp-num { grid-column: 3; align-self: baseline; justify-self: end; font-size: calc(36 * var(--dz)); font-weight: 700; letter-spacing: -.035em; line-height: 1;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dview .dp-num small { margin-left: calc(5 * var(--dz)); font-size: calc(13.5 * var(--dz)); font-weight: 600; letter-spacing: 0; color: var(--t2); }
 .dview .dp-num.word { font-size: calc(21 * var(--dz)); letter-spacing: -.02em; }
-.dview .dp-num.plan { color: rgba(235, 235, 245, .78); }
-.dview .dp-num.x { color: rgb(var(--red)); }
-.dview .dp-unit { grid-column: 4; align-self: center; justify-self: start; min-width: calc(30 * var(--dz)); margin-left: calc(-9 * var(--dz)); padding-top: calc(11 * var(--dz));
-  font-size: calc(13.5 * var(--dz)); font-weight: 600; color: var(--t2); }
-.dview .late { color: rgb(var(--orange)); }
+.dview .dp-num.dp-x { color: rgb(var(--red)); }
+.dview .dp-late { color: rgb(var(--orange)); }
 .dview .dp-msg { grid-column: 1 / -1; margin: 0; padding: calc(10 * var(--dz)) 0 calc(12 * var(--dz)); font-size: calc(16 * var(--dz)); color: var(--t3); }
 `;
 
@@ -113,8 +112,10 @@ Object.assign(GlassFloorplanCard.prototype, {
   /* has a stop answered, did its last try fail, when were its data new, are they still fresh */
   _depState(s) {
     if (s.entity) {
+      // Home Assistant keeps last_updated while the departures stay the same: still fresh while some lie ahead
       const st = this._hass?.states?.[s.entity], bad = !st || unavailable(st), at = st ? Date.parse(st.last_updated) : null;
-      return { ok: !bad, err: bad, at, fresh: !bad && Date.now() - at < 240e3 };
+      const ahead = (st?.attributes?.departures || []).some((x) => Date.parse(x.timestamp || '') > Date.now());
+      return { ok: !bad, err: bad, at, fresh: !bad && (Date.now() - at < 240e3 || ahead) };
     }
     const c = this._depC?.[this._depKey(s)], ok = !!c?.list && Date.now() - c.at < 600e3;
     return { ok, err: !!c?.err, at: c?.at || null, fresh: ok && !c.err && Date.now() - c.at < 100e3 };
@@ -145,9 +146,11 @@ Object.assign(GlassFloorplanCard.prototype, {
       c.busy = true;
       c.tried = Date.now();
       const url = `${D.api}/stops/${encodeURIComponent(s.id)}/departures?duration=90&results=60&remarks=false&linesOfStops=false`;
-      fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => {
+      // a request that hangs (a phone between networks) is given up – otherwise the stop would never be asked again
+      const ab = new AbortController(), to = setTimeout(() => ab.abort(), 15e3);
+      fetch(url, { signal: ab.signal }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => {
         Object.assign(c, { at: Date.now(), list: (Array.isArray(j) ? j : j.departures || []).map(depFromApi), err: false });
-      }).catch(() => { c.err = true; }).finally(() => { c.busy = false; this._depShow(); });
+      }).catch(() => { c.err = true; }).finally(() => { clearTimeout(to); c.busy = false; this._depShow(); });
     }
   },
   /* while the view is shown: fetch now, every 30 s and when the browser tab comes back */
@@ -175,27 +178,44 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
 
   /* where the view goes: the whole card except the layer bar – beside it on a laptop (its heading level with the bar's
-   * top), above it on a phone; the size grows with the room there */
+   * top, the bar's margin mirrored on the other side, so bar and board sit where bar and plan were), above it on a
+   * phone; the size grows with the room there */
   _depLayout() {
     const v = this._dview, lv = this._lv, M = this._M;
     if (!v || !lv) return;
     const W = this._ev ? this._ev.w : this._root.clientWidth, H = this._h || lv.H;
-    let R = [0, 0, W, H], barTop = null;
+    let R = [0, 0, W, H], barTop = null, px = null;
     const tabs = this.$('.tabs');
     if (tabs && !tabs.hidden && tabs.offsetWidth) {
       if (tabs.classList.contains('dock')) R[3] = Math.max(160, H - tabs.offsetHeight - 24 - (this._safeB || 0));
       else if (M.widgets.bar) {
-        const c = center(M.widgets.bar), x = lv.sx + (c[0] - lv.S.x) * lv.pu, y = lv.sy + (c[1] - lv.S.y) * lv.pu, w = tabs.offsetWidth / 2 + 14, h = tabs.offsetHeight / 2 + 14;
-        R = freeOf(R, [[x - w, y - h, x + w, y + h]]);
-        if (!tabs.classList.contains('h')) barTop = y - tabs.offsetHeight / 2;
+        const c = center(M.widgets.bar), x = lv.sx + (c[0] - lv.S.x) * lv.pu, y = lv.sy + (c[1] - lv.S.y) * lv.pu;
+        const bw = tabs.offsetWidth / 2, bh = tabs.offsetHeight / 2, gap = 16;
+        R = freeOf(R, [[x - bw - 14, y - bh - 14, x + bw + 14, y + bh + 14]]);
+        // the heading level with the bar's top only when the board stands beside the bar
+        if (!tabs.classList.contains('h') && R[1] <= y - bh && R[3] >= y + bh) {
+          barTop = y - bh;
+          // a bar near the edge: its margin mirrored on the other side (a bar further in leaves the board its room)
+          if (R[0] >= x && x < W * 0.3) { R[0] = x + bw + gap; R[2] = Math.min(R[2], W - (x - bw)); px = 0; }
+          else if (R[2] <= x && x > W * 0.7) { R[2] = x - bw - gap; R[0] = Math.max(R[0], W - (x + bw)); px = 0; }
+        }
       }
     }
-    const pad = this._m ? 12 : clamp(Math.round(W * 0.025), 16, 36), w = R[2] - R[0] - 2 * pad, h = R[3] - R[1] - 2 * pad;
-    Object.assign(v.style, { left: `${R[0] + pad}px`, top: `${R[1] + pad}px`, width: `${Math.max(0, w)}px`, height: `${Math.max(0, h)}px` });
-    const dz = this._m ? clamp(w / 380, 0.88, 1.05) : clamp(Math.min(w / 880, h / 620), 0.9, 1.25);
+    const pad = this._m ? 12 : clamp(Math.round(W * 0.025), 16, 36), ph = px ?? pad, w = R[2] - R[0] - 2 * ph, h = R[3] - R[1] - 2 * pad;
+    Object.assign(v.style, { left: `${R[0] + ph}px`, top: `${R[1] + pad}px`, width: `${Math.max(0, w)}px`, height: `${Math.max(0, h)}px` });
+    const dz = this._m ? clamp(w / 380, 0.88, 1.05) : clamp(Math.min(w / 800, h / 620), 0.95, 1.25);
     v.style.setProperty('--dz', `${dz.toFixed(3)}px`);
-    v.style.setProperty('--dtop', `${barTop == null ? 0 : Math.max(0, Math.round(barTop - R[1] - pad))}px`);
+    this._dtop = barTop == null ? 0 : Math.max(0, Math.round(barTop - R[1] - pad));
     v.style.setProperty('--dpn', Math.min(2, this._M.dep?.stops.length || 1));
+    this._depFit();
+  },
+  /* the heading level with the bar – unless the board would not fit below it then: it moves up as far as it must */
+  _depFit() {
+    const v = this._dview;
+    if (!v) return;
+    v.style.setProperty('--dtop', `${this._dtop || 0}px`);
+    const over = v.scrollHeight - v.clientHeight;
+    if (this._dtop && over > 0) v.style.setProperty('--dtop', `${Math.max(0, this._dtop - over)}px`);
     this._depOvf();
   },
   _depOvf() {
@@ -209,14 +229,14 @@ Object.assign(GlassFloorplanCard.prototype, {
     ds.sort((a, b) => a.t - b.t);
     const go = ds.filter((d) => !d.cancelled), hero = go[0] || null, f = hero ? this._depTime(hero.t) : null;
     const sub = [];
-    if (hero && hero.delay >= DEP_LATE) sub.push(`<span class="late">+${Math.round(hero.delay / 60)} ${esc(unit)}</span>`);
+    if (hero && hero.delay >= DEP_LATE) sub.push(`<span class="dp-late">+${Math.round(hero.delay / 60)} ${esc(unit)}</span>`);
     const gone = ds.find((d) => d.cancelled && (!hero || d.t <= hero.t));
     if (gone) sub.push(`<s>${esc(this._depTime(gone.t).v)}</s> ${esc(t('depCancelled'))}`);
     const later = ds.filter((d) => d !== hero && d !== gone && this._depMin(d.t) < 60).slice(0, per - 1);
     if (later.length) sub.push(`${esc(t('depThen'))} ${later.map((d) => (d.cancelled ? `<s>${esc(this._depTime(d.t).v)}</s>` : esc(this._depTime(d.t).v))).join(', ')} ${esc(unit)}`);
-    const cls = !hero ? 'dp-num word x' : `dp-num${f.word ? ' word' : ''}${hero.delay >= DEP_LATE ? ' late' : hero.delay == null ? ' plan' : ''}`;
-    return `<span class="dp-dir"><span class="dp-to">${icon('arrowR')}<span>${esc(dir)}</span></span><span class="dp-sub">${sub.join(' · ') || '&nbsp;'}</span></span>`
-      + `<b class="${cls}">${esc(hero ? f.v : t('depCancelled'))}</b><span class="dp-unit">${hero && !f.word ? esc(unit) : ''}</span>`;
+    const cls = !hero ? 'dp-num word dp-x' : `dp-num${f.word ? ' word' : ''}${hero.delay >= DEP_LATE ? ' dp-late' : ''}`;
+    return `<span class="dp-dir"><span class="dp-to">${esc(dir)}</span><span class="dp-sub">${sub.join(' · ') || '&nbsp;'}</span></span>`
+      + `<b class="${cls}">${esc(hero ? f.v : t('depCancelled'))}${hero && !f.word ? `<small>${esc(unit)}</small>` : ''}</b>`;
   },
 
   /* the view: a heading with the state of the data, then one glass card per stop – each line once, its directions beside it */
@@ -250,7 +270,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       return `<section class="dp-card"><header><b>${esc(name)}</b><span>${kinds.map((k) => icon(k)).join('')}</span></header><div class="dp-grid">${rows || `<p class="dp-msg">${esc(msg)}</p>`}</div></section>`;
     }).join('');
     // only what changed is drawn again (the live dot keeps pulsing)
-    if (cards !== this._depHtml) { this._depHtml = cards; v.querySelector('.dp-stops').innerHTML = cards; }
+    if (cards !== this._depHtml) { this._depHtml = cards; v.querySelector('.dp-stops').innerHTML = cards; this._depFit(); }
     v.querySelector('.dp-head h2').textContent = this._layerName(this._layer());
     // live while every stop's data are fresh; else as of when, or offline
     const ats = states.filter((x) => x.ok && x.at).map((x) => x.at), err = states.some((x) => x.err), fresh = ats.length && states.every((x) => x.fresh);

@@ -270,8 +270,9 @@ function buildLayers(M) {
     if (M.ents.some((e) => e.kind === 'climate')) list.push('climate');
     if (M.ents.some((e) => e.kind === 'cover')) list.push('cover');
     if (M.vac) list.push('vacuum');
-    if (M.dep) list.push('departures');
+    // the plan always comes first, the departures after it
     if (!list.length) list.push('light');
+    if (M.dep) list.push('departures');
   }
   const out = [], used = new Set();
   list.forEach((l, i) => {

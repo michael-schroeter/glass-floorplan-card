@@ -192,6 +192,11 @@ class GlassFloorplanCard extends HTMLElement {
     const M = this._M = buildModel(this._config, this._hass, { mobile: this._m });
     if (this._ev?.stage) M.stage = { ...this._ev.stage };
     if (this._ev?.tab && M.layers.some((l) => l.id === this._ev.tab)) this._tab = this._ev.tab;
+    // the editor needs the plan: a card with nothing but departures gets a plain layer to show it
+    if (this._ev?.tab && !M.layers.some((l) => l.id === this._ev.tab) && M.layers.every((l) => l.type === 'departures')) {
+      M.layers.unshift({ id: 'light', type: 'light', name: null, icon: 'bulb', kinds: new Set(LAYER_TYPES.light.kinds), ents: new Set() });
+      this._tab = 'light';
+    }
     if (!M.layers.some((l) => l.id === this._tab)) this._tab = M.layers[0].id;
     this._sel = this._sel.filter((k) => M.byRoom[k]);
     const S = M.stage, G = this._G = geo(S), D = M.D;
@@ -264,7 +269,7 @@ class GlassFloorplanCard extends HTMLElement {
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
     <linearGradient id="gfcdial" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5aa8ff"/><stop offset=".5" stop-color="#7fe0c0"/><stop offset="1" stop-color="#ff9f45"/></linearGradient>
   </defs></svg>
-  <div class="bg"><i class="g3"></i><i class="g4"></i><i class="g5"></i><i class="g1"></i><i class="g2"></i><i class="dots"></i></div>
+  <div class="bg"><i class="g3"></i><i class="g4"></i><i class="g5"></i><i class="g6"></i><i class="g1"></i><i class="g2"></i><i class="dots"></i></div>
   <div class="lay">
     <div class="stage">
       <div class="glows">${glows}</div>

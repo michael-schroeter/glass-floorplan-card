@@ -662,7 +662,7 @@ class GfcEditor extends HTMLElement {
       html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${a[0]}px;top:${a[1]}px"></i>${this._measure.b ? `<i style="left:${b[0]}px;top:${b[1]}px"></i>` : ''}</div>`;
     }
     // the departures view hides the plan: no handles on it
-    this._world.innerHTML = card?._layer?.()?.type === 'departures' && card._root?.dataset.type === 'departures' ? '' : html;
+    this._world.innerHTML = card?._layer?.()?.type === 'departures' && card._root?.dataset.type === 'departures' && !card._root.classList.contains('bare') ? '' : html;
     fitText(this._world.querySelectorAll('.eroom .en b'));
     this._world.querySelectorAll('.efloat button').forEach((b) => b.addEventListener('click', () => {
       if (b.dataset.act === 'rot') this._rotateFurn(); else if (b.dataset.act === 'dup') this._duplicateSel(); else this._deleteSel();
