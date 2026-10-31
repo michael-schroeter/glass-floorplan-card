@@ -145,7 +145,8 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
       for (const [line, type, bg, fg, dirs, every, off] of lines) dirs.forEach((dir, di) => {
         const o = off + di * 3;
         for (let m = Math.ceil((t0 - o) / every) * every + o, k = 0; k < Math.ceil(90 / every); m += every, k++) {
-          const n = Math.round(m / every), delay = n % 5 === 0 ? 120 : 0, ts = new Date((m + delay / 60) * 60000);
+          // each line late at other times (the same rule as the simulator in transit.js)
+          const n = Math.round(m / every), delay = (n + ({ U2: 0, U5: 2, 142: 4, M8: 1 }[line] || 0)) % 5 === 0 ? 120 : 0, ts = new Date((m + delay / 60) * 60000);
           list.push({ line_name: line, line_type: type, timestamp: ts.toISOString(), time: ts.toTimeString().slice(0, 5), direction: dir, color: bg || depColor[type], text_color: fg,
             cancelled: type === 'bus' && (n + 6 * di) % 13 === 0, delay, walking_time: 1 });
         }

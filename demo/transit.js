@@ -508,12 +508,13 @@
       return { s: S[n - 1].s, o: n - 2, d: n - 1, end: true };
     };
     // trip k of a direction reaches the line's key stop (Linden Square, Town Hall) at minute k · every + offset;
-    // every 5th trip is two minutes late, every 13th bus does not run – the two directions at different times (the same rules
-    // as the departures sensors in hass.js)
+    // every 5th trip is two minutes late (each line at other times), every 13th bus does not run – the two directions at
+    // different times (the same rules as the departures sensors in hass.js)
+    const LATE = { U2: 0, U5: 2, 142: 4, M8: 1 };
     const dmy = (ms) => { const t = new Date(ms); return `${pad(t.getDate())}${pad(t.getMonth() + 1)}${t.getFullYear()}`; };
     const trip = (d, k) => {
       const ev = d.line.every, m = k * ev + d.o, n = Math.round(m / ev);
-      const delay = n % 5 === 0 ? 120 : 0, plannedKey = m * 60000, plannedStart = plannedKey - d.arr[d.key] * 1000;
+      const delay = (n + LATE[d.line.ref]) % 5 === 0 ? 120 : 0, plannedKey = m * 60000, plannedStart = plannedKey - d.arr[d.key] * 1000;
       return { k, n, delay, cancelled: d.line.product === 'bus' && (n + 6 * d.di) % 13 === 0, plannedKey, plannedStart, start: plannedStart + delay * 1000,
         id: `1|${k}${d.li}${d.di}|0|86|${dmy(plannedStart)}`, fahrtNr: String(1000 + ((((k * 37 + d.li * 101 + d.di * 7) % 9000) + 9000) % 9000)) };
     };
