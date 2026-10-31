@@ -135,7 +135,7 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
   // every line runs every few minutes (the same times on every refresh), now and then late or cancelled
   const DEP = {
     departures_linden_square: [N('Linden Square', 'Lindenplatz'), ['U2', 'subway', '#e8432f', '#fff', [N('North Park', 'Nordpark'), N('Lake Street', 'Seestraße')], 5, 1], ['U5', 'subway', '#8a6340', '#fff', [N('Central Station', 'Hauptbahnhof'), N('Forest Estate', 'Waldsiedlung')], 6, 3]],
-    departures_town_hall: [N('Town Hall', 'Rathaus'), ['142', 'bus', null, null, [N('East Station', 'Bahnhof Ost'), N('Market Square', 'Marktplatz')], 6, 4], ['M8', 'tram', null, null, [N('Hospital', 'Klinikum'), N('Harbour', 'Hafen')], 6, 2]],
+    departures_town_hall: [N('Town Hall', 'Rathaus'), ['142', 'bus', null, null, [N('East Station', 'Bahnhof Ost'), N('Market Square', 'Marktplatz')], 6, 4], ['M8', 'tram', '#0e8f84', '#fff', [N('Hospital', 'Klinikum'), N('Harbour', 'Hafen')], 6, 2]],
   };
   const depColor = { subway: '#2864A6', bus: '#A5027D', tram: '#D82020' };
   const departures = () => {

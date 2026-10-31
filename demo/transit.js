@@ -266,7 +266,7 @@
         stops: [['forge_street', -1180, cy(-1180)], ['town_park', -700, cy(-700)], ['church_street', -250, cy(-250)], ['town_hall', 250, cy(250)], ['dock_street', 700, cy(700)], ['station_road', 1215, cy(1215)]],
         ends: [{ len: 3800, bend: 0.3, names: [['Dyer Street', 'Färberstraße'], ['Hay Market', 'Heumarkt'], ['Guild Hall', 'Gildehaus'], ['Fountain Street', 'Brunnenstraße'], ['Library', 'Bibliothek'], ['Theatre', 'Theater'], ['Corn Exchange', 'Kornbörse'], ['Old Town Gate', 'Altes Tor'], ['Market Square', 'Marktplatz']] },
           { len: 3100, bend: -0.35, names: [['Elm Court', 'Ulmenhof'], ['Gasworks', 'Gaswerk'], ['Canal Bridge', 'Kanalbrücke'], ['Printing Works', 'Druckerei'], ['Sawmill', 'Sägewerk'], ['Freight Yard', 'Güterbahnhof'], ['East Station', 'Bahnhof Ost']] }] },
-      { ref: 'M8', product: 'tram', every: 6, off: 2, kmh: 19, key: 'town_hall',
+      { ref: 'M8', product: 'tram', bg: '#0e8f84', fg: '#fff', every: 6, off: 2, kmh: 19, key: 'town_hall',
         ways: [[['tramSB', 1], ['tramB', 1], ['tramS', 1], ['tramN', 1]], [['tramN'], ['tramS'], ['tramB'], ['tramSB']]],
         stops: [['harbour_bridge', hx(-1120), -1120], ['salt_street', 298, -590], ['town_hall', 291, -116, 291.5, -102], ['market_hall', 302, 245], ['linden_avenue', 315, 650], ['hill_street', 326, 1060]],
         ends: [{ len: 3200, bend: 0.45, names: [['Grain Silo', 'Kornspeicher'], ['Customs House', 'Zollhaus'], ['Fish Market', 'Fischmarkt'], ['Lock Gate', 'Schleuse'], ['Container Quay', 'Containerkai'], ['Harbour', 'Hafen']] },
