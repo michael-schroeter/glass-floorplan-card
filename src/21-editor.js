@@ -15,6 +15,7 @@ const LAYER_FILTER = {
   cover: (d) => d === 'cover',
   vacuum: (d) => d === 'vacuum',
   custom: (d) => !NO_DEVICE_DOMAINS.includes(d),
+  departures: () => false,
 };
 /* the screen of a phone in the Home Assistant app (below the header) */
 const ED_PHONE = { w: 390, h: 788 };
@@ -429,14 +430,16 @@ class GfcEditor extends HTMLElement {
     const fix = area ? { pu: this._fix.pu, ox: this._fix.ox - area.x, oy: this._fix.oy - area.y } : null;
     const stage = fix ? null : this._liveStage(cfg), bare = this._bare();
     this._area = area;
-    const key = JSON.stringify([cfg, scr, stage, fix, bare]);
+    // a layer without devices (departures) only shows in the layers step – building the plan or placing devices needs the plan
+    const tab = this._layerSel !== 'departures' || (this._tool === 'layers' && !bare) ? this._layerSel : this._layerDefs().find((L) => !L.noDevices)?.id || 'light';
+    const key = JSON.stringify([cfg, scr, stage, fix, bare, tab]);
     if (key !== this._liveKey) {
       this._liveKey = key;
       card.style.width = `${scr.w}px`;
-      card.setEditorView(cfg, { w: scr.w, h: scr.h, stage, fix, bare, tab: this._layerSel });
+      card.setEditorView(cfg, { w: scr.w, h: scr.h, stage, fix, bare, tab });
     }
     if (card.hass !== lh) card.hass = lh;
-    if (card._M && card._tab !== this._layerSel && card._M.layers.some((l) => l.id === this._layerSel)) { card._tab = this._layerSel; card._applyTab(true); }
+    if (card._M && card._tab !== tab && card._M.layers.some((l) => l.id === tab)) { card._tab = tab; card._applyTab(true); }
     const lv = card._lv, M = card._M;
     this._map = lv && M ? { S: lv.S, pu: lv.pu, sx: lv.sx, sy: lv.sy, H: lv.H, offX: area?.x || 0, offY: area?.y || 0, rot: M.rot ? M.rotP : null, inv: M.rot ? M.rotI : null } : null;
     if (draw && !this._fix && lv) this._fix = { pu: lv.pu, ox: lv.sx - lv.S.x * lv.pu, oy: lv.sy - lv.S.y * lv.pu };
@@ -658,7 +661,8 @@ class GfcEditor extends HTMLElement {
       const a = this.P(...this._measure.a), bb = this._measure.b || this._measure.cur, b = bb && this.P(...bb);
       html += `<svg class="emeas" style="left:0;top:0;width:100%;height:100%;overflow:visible">${b ? `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="rgb(255,70,200)" stroke-width="2" stroke-dasharray="6 4"/>` : ''}</svg><div class="emeas"><i style="left:${a[0]}px;top:${a[1]}px"></i>${this._measure.b ? `<i style="left:${b[0]}px;top:${b[1]}px"></i>` : ''}</div>`;
     }
-    this._world.innerHTML = html;
+    // the departures view hides the plan: no handles on it
+    this._world.innerHTML = card?._layer?.()?.type === 'departures' && card._root?.dataset.type === 'departures' ? '' : html;
     fitText(this._world.querySelectorAll('.eroom .en b'));
     this._world.querySelectorAll('.efloat button').forEach((b) => b.addEventListener('click', () => {
       if (b.dataset.act === 'rot') this._rotateFurn(); else if (b.dataset.act === 'dup') this._duplicateSel(); else this._deleteSel();

@@ -25,7 +25,7 @@ const STYLES_M = `
 .m .bot { --bs: 22px; }
 
 /* info tiles that did not fit into the plan: rows under it (up to three side by side, Home Assistant cards across) */
-.m .mside { position: absolute; z-index: 7; display: grid; grid-template-columns: repeat(var(--mc, 3), minmax(0, 1fr)); grid-auto-rows: 96px; grid-auto-flow: row dense; gap: 8px; }
+.m .mside { position: absolute; z-index: 7; transition: opacity .3s ease; display: grid; grid-template-columns: repeat(var(--mc, 3), minmax(0, 1fr)); grid-auto-rows: 96px; grid-auto-flow: row dense; gap: 8px; }
 .m .mside .card { position: relative; min-width: 0; }
 .m .mside .card.big { grid-column: 1 / -1; grid-row: span var(--h, 1); }
 /* info tiles inside the plan */
@@ -177,10 +177,13 @@ Object.assign(GlassFloorplanCard.prototype, {
     this._u = u;
     this._pu = pu;
     this._lv = { S, pu, sx, sy, H };
+    // a long layer name in the tab bar gets a little smaller before it is cut off
+    fitText(this.shadowRoot.querySelectorAll('.tabs.dock button span'), 0.82);
     this._placeKnob(true);
     this._fitLabels();
     this._fitBtnTiles();
     this._fitGcard();
+    this._depLayout();
     this._declutter();
   },
 

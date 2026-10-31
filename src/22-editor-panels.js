@@ -430,6 +430,8 @@ Object.assign(GfcEditor.prototype, {
       box.append(this._btn(`${icon('plan')}<span>${esc(t('ed_linkAreas'))}</span>`, 'sm', () => this._setTool('rooms')));
       I.append(box);
     }
+    // a layer without devices (departures) has nothing to place: the first one with devices instead
+    if (this._layerDef(this._layerSel)?.noDevices) this._layerSel = this._layerDefs().find((x) => !x.noDevices)?.id || 'light';
     this._layerChips(I);
     const L = this._layerDef(this._layerSel);
     if (!L) return;

@@ -28,13 +28,13 @@ Only the vacuum entity is needed. Status, battery, current room, cleaning mode a
 
 ## Departures (Berlin and Brandenburg)
 
-A layer with the next trains and buses at stops nearby: the plan fades away and a glass board shows each stop's lines in both directions with their next departures, in the lines' own colours – late ones in orange, cancelled ones struck through, those you can no longer reach on foot faded. The layer card shows the next departure you can still make and when to leave. Set it up in YAML:
+A layer with the next trains and buses at stops nearby – a view of its own: the plan, the tiles and the layer card make way, only the layer bar stays. Each stop is a glass card with its lines in their own colours, each direction with an arrow, the next departure large and the ones after it; late ones in orange, cancelled ones struck through. Set it up in YAML:
 
 ```yaml
 departures:
   stops:
-    - { id: 900100003, name: Alexanderplatz, walk: 5, lines: [U2, U5, U8] }   # fetched by the card (public VBB interface)
-    - { entity: sensor.my_stop, name: Market, walk: 3 }                     # or a sensor of the integration below
+    - { id: 900100003, name: Alexanderplatz, lines: [U2, U5, U8] }   # fetched by the card (public VBB interface)
+    - { entity: sensor.my_stop, name: Market }                       # or a sensor of the integration below
   per: 3                     # departures per line and direction (1–5)
 ```
 
@@ -43,7 +43,6 @@ departures:
 | `id` | VBB stop id. The card asks the public [VBB transport.rest](https://v6.vbb.transport.rest/) interface every 30 s while the layer is shown. Find ids with `https://v6.vbb.transport.rest/locations?query=…` |
 | `entity` | Instead of `id`: a sensor of the integration [Berlin (BVG) and Brandenburg (VBB) transport](https://github.com/vas3k/home-assistant-berlin-transport) (attribute `departures`) – then Home Assistant fetches, not every browser |
 | `name` | Name on the board |
-| `walk` | Minutes on foot – earlier departures fade, the card says when to leave |
 | `lines`, `exclude` | Only these lines / not these lines, e.g. `[U2, 142]` |
 
 The layer appears by itself; if you list your `layers`, add `departures` there.

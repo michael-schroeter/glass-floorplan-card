@@ -127,6 +127,7 @@ const ICONS = {
   /* departures */
   train: '<rect x="5.6" y="2.8" width="12.8" height="14.6" rx="3.4"/><path d="M5.6 10.2h12.8M12 2.8v7.4"/><circle cx="9" cy="13.8" r="1" class="f"/><circle cx="15" cy="13.8" r="1" class="f"/><path d="M8.6 17.4 6.6 21M15.4 17.4l2 3.6"/>',
   bus: '<rect x="4.6" y="3" width="14.8" height="14.8" rx="3"/><path d="M4.6 7.4h14.8M4.6 11.6h14.8"/><circle cx="8.2" cy="14.6" r="1" class="f"/><circle cx="15.8" cy="14.6" r="1" class="f"/><path d="M7.4 17.8v2.8M16.6 17.8v2.8"/>',
+  arrowR: '<path d="M4.5 12h14.5M13.5 6.5 19 12l-5.5 5.5"/>',
   walk: '<circle cx="13.2" cy="4.4" r="1.8"/><path d="M12.6 8.6 11 14.4l2.8 2.4.8 4.2"/><path d="M11 14.4 8.6 21"/><path d="M12.6 8.6 9 10.4l-1 3.4"/><path d="M12.6 8.6l1.8 3.2 3.2 1"/>',
   grip: '<circle cx="9" cy="6.6" r="1.2" class="f"/><circle cx="15" cy="6.6" r="1.2" class="f"/><circle cx="9" cy="12" r="1.2" class="f"/><circle cx="15" cy="12" r="1.2" class="f"/><circle cx="9" cy="17.4" r="1.2" class="f"/><circle cx="15" cy="17.4" r="1.2" class="f"/>',
 };

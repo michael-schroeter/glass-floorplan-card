@@ -217,7 +217,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
   padding: max(12px, calc(20 * var(--u))) calc(24 * var(--u)) max(12px, calc(22 * var(--u)));
   background: linear-gradient(150deg, rgba(var(--g1, 44, 44, 50), .64), rgba(var(--g2, 30, 30, 36), .66));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .08), 0 22px 50px rgba(0, 0, 0, .34);
-  -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%); transition: background 1s ease; }
+  -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%); transition: background 1s ease, opacity .3s ease; }
 .gcard > .gv { display: flex; flex-direction: column; height: 100%; animation: fadein .5s cubic-bezier(.2, .8, .2, 1) both; }
 .root.ev .gcard > .gv { animation: none; }
 /* editor, while the plan itself is built: only rooms, furniture, windows and doors – no devices, lamp light or layer bar */
@@ -335,7 +335,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
   border-radius: calc(22 * var(--u)); padding: calc(17 * var(--u)) calc(19 * var(--u)) calc(16 * var(--u));
   background: linear-gradient(160deg, rgba(46, 46, 54, .58), rgba(22, 23, 28, .64));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .095), inset 0 1px 0 rgba(255, 255, 255, .07), 0 calc(14 * var(--u)) calc(36 * var(--u)) rgba(0, 0, 0, .26);
-  -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%); transition: transform .4s var(--snap), box-shadow .3s ease, background .3s ease; }
+  -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%); transition: transform .4s var(--snap), box-shadow .3s ease, background .3s ease, opacity .3s ease; }
 .card { container-type: inline-size; }
 .card.tap { cursor: pointer; }
 /* narrow tiles (small plans, phones): less text */
@@ -371,7 +371,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .cbtn.on { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3), 0 0 14px rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .18); }
 
 /* tiles + layer card that did not fit into the plan: a column next to it, at a readable size */
-.side { position: absolute; z-index: 7; display: flex; flex-direction: column; gap: max(10px, calc(13 * var(--su, .7px))); --u: var(--su, .7px); }
+.side { position: absolute; z-index: 7; transition: opacity .3s ease; display: flex; flex-direction: column; gap: max(10px, calc(13 * var(--su, .7px))); --u: var(--su, .7px); }
 .side .card { position: relative; flex: 1 1 0; min-height: 0; max-height: calc(150 * var(--u)); }
 .side .card.dr { flex-grow: 1.18; max-height: calc(176 * var(--u)); }
 .side .gcard { position: relative; flex: none; height: calc(218 * var(--u)); margin-top: auto; }

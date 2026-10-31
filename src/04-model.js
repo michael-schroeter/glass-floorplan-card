@@ -257,9 +257,7 @@ function finishModel(M, hass, mobile) {
   M.indoor = ic === false ? [] : Array.isArray(ic) && ic.length ? ic : M.ents.filter((e) => e.kind === 'climate').map((e) => e.entity);
   M.layers = buildLayers(M);
   M.widgets = placeWidgets(M, mobile);
-  const wk = ['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)], all = [B, ...wk.map((k) => M.widgets[k]).filter(Boolean)];
-  // the departure board lies over the plan – beside the tiles in it
-  M.dboard = M.dep ? freeOf(B, wk.map((k) => M.widgets[k])) : null;
+  const all = [B, ...['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)].map((k) => M.widgets[k]).filter(Boolean)];
   const U = bboxOf(all), m = 6 * D;
   M.stage = { x: U[0] - m, y: U[1] - m, w: U[2] - U[0] + 2 * m, h: U[3] - U[1] + 2 * m };
 }
@@ -490,7 +488,7 @@ function placeWidgets(M, mobile) {
 }
 
 /* The largest rectangle inside B that none of the blocks covers (its edges lie on the edges of B and the blocks) –
- * too little left: B itself */
+ * too little left: B itself (the departures view beside the layer bar) */
 function freeOf(B, blocks) {
   const bs = blocks.filter((b) => b && b[2] > B[0] && b[0] < B[2] && b[3] > B[1] && b[1] < B[3]);
   const xs = [...new Set([B[0], B[2], ...bs.flatMap((b) => [b[0], b[2]]).filter((x) => x > B[0] && x < B[2])])].sort((a, b) => a - b);
@@ -504,12 +502,12 @@ function freeOf(B, blocks) {
 }
 
 /* ---------------------------------------------------------------- Departures (configuration)
- * departures: { stops: [{ id | entity, name, walk, lines, exclude }], api, per }
+ * departures: { stops: [{ id | entity, name, lines, exclude }], api, per }
  * A stop by its id is fetched from the public VBB / BVG interface (transport.rest), a stop by its entity is read from a
  * sensor of the integration "Berlin (BVG) and Brandenburg (VBB) transport" (attribute `departures`). */
 function normDepartures(d) {
   const stops = (Array.isArray(d?.stops) ? d.stops : []).filter((s) => s && (s.id || s.entity)).map((s, i) => ({
-    i, id: s.id ? String(s.id) : null, entity: s.entity || null, name: s.name || null, walk: Math.max(0, +s.walk || 0),
+    i, id: s.id ? String(s.id) : null, entity: s.entity || null, name: s.name || null,
     lines: [].concat(s.lines || []).map(String), exclude: [].concat(s.exclude || []).map(String),
   }));
   return stops.length ? { stops, api: String(d.api || 'https://v6.vbb.transport.rest').replace(/\/$/, ''), per: clamp(Math.round(+d.per || 3), 1, 5) } : null;

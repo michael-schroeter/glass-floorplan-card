@@ -1,11 +1,16 @@
 /* ================================================================== Departures: the next trains and buses at stops nearby
- * A layer of its own: the plan dims, a glass board lies over it – per stop the lines in both directions with their next
- * departures, in the lines' own colours. The layer card shows the next departure you can still reach on foot and when
- * to leave. Stops by id are fetched by the card itself (public VBB / BVG interface, every 30 s while the layer is shown),
- * stops by entity come from Home Assistant (integration "Berlin (BVG) and Brandenburg (VBB) transport"). */
+ * A view of its own: the plan, the tiles and the layer card make way, only the layer bar stays. Each stop is a glass
+ * card – every line once with its badge, each direction with an arrow, the next departure large on the right and the
+ * ones after it in a quiet second line.
+ * Stops by id are fetched by the card itself (public VBB / BVG interface, every 30 s while the view is shown), stops by
+ * entity come from Home Assistant (integration "Berlin (BVG) and Brandenburg (VBB) transport"). */
 const DEP_ORDER = ['subway', 'suburban', 'tram', 'regional', 'express', 'bus', 'ferry'];
 /* colours of a kind of line when the line has none of its own (as the integration uses them) */
 const DEP_COLORS = { subway: '#2864A6', suburban: '#008D4F', tram: '#D82020', bus: '#A5027D', ferry: '#0080BA', express: '#4D4D4D', regional: '#F01414' };
+/* late: from two minutes on (a minute is everyday noise) */
+const DEP_LATE = 120;
+/* WCAG luminance – a light line colour with white letters gets a darker shade */
+const relLum = (rgb) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]); };
 const hexRgb = (h) => {
   let s = String(h || '').replace('#', '');
   if (s.length === 3) s = s.replace(/./g, '$&$&');
@@ -26,167 +31,247 @@ const depFromSensor = (x) => ({
 });
 
 const STYLES_D = `
-/* departures take the plan's place: rooms, light and devices fade away, a glass board shows the departures */
-.root[data-type="departures"] .room, .root[data-type="departures"] .glows, .root[data-type="departures"] .win, .root[data-type="departures"] .pas,
-.root[data-type="departures"] .lamp:not(.tk), .root[data-type="departures"] .dev:not(.tk), .root[data-type="departures"] .bot, .root[data-type="departures"] .dockm,
-.root[data-type="departures"] .trail { opacity: 0 !important; pointer-events: none !important; }
+/* the departures are a view of their own: the plan, every tile and the layer card make way – the layer bar stays above */
+.root[data-type="departures"]:not(.bare) .stage > :not(.tabs):not(.tip), .root[data-type="departures"]:not(.bare) .side,
+.root[data-type="departures"]:not(.bare) .mside, .root[data-type="departures"]:not(.bare) .lay > .gcard,
+.root[data-type="departures"]:not(.bare) .empty-plan { opacity: 0 !important; pointer-events: none !important; }
+.root[data-type="departures"]:not(.bare) .lay { z-index: 3; pointer-events: none; }
+.root[data-type="departures"]:not(.bare) .lay .tabs { pointer-events: auto; }
+/* its own calm light: the warm glows of the rooms and the plan's dot grid recede */
+.root[data-type="departures"] .bg .g1, .root[data-type="departures"] .bg .g2 { opacity: calc(var(--warm) * .22); }
+.root[data-type="departures"] .bg .g3 { opacity: .9; }
+.root[data-type="departures"] .bg .dots { opacity: .4; }
+.bg .dots { transition: opacity 1.2s ease; }
 .root .room { transition: box-shadow .6s ease, background .5s ease, transform var(--sp-ms) var(--sp), opacity .4s ease; }
 .root .pas, .root .win.fd { transition: opacity .4s ease, background .4s, box-shadow .4s; }
-.dboard { position: absolute; z-index: 6; display: flex; flex-direction: column; border-radius: calc(26 * var(--u)); overflow: hidden;
-  background: linear-gradient(160deg, rgba(42, 44, 54, .66), rgba(18, 19, 24, .74));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .08), 0 24px 60px rgba(0, 0, 0, .4);
-  -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%);
-  opacity: 0; transform: scale(.985); pointer-events: none; transition: opacity .35s ease, transform var(--soft-ms) var(--soft); }
-.root[data-type="departures"] .dboard { opacity: 1; transform: none; pointer-events: auto; }
-.dbi { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(250px, calc(330 * var(--u)))), 1fr));
-  align-content: start; gap: max(14px, calc(22 * var(--u))) max(18px, calc(34 * var(--u))); padding: max(14px, calc(24 * var(--u))) max(14px, calc(26 * var(--u))); }
-.dbi::-webkit-scrollbar { display: none; }
-.dst header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 0 2px max(6px, calc(10 * var(--u)));
-  border-bottom: 1px solid rgba(255, 255, 255, .08); margin-bottom: max(4px, calc(6 * var(--u))); }
-.dst header b { min-width: 0; font-size: max(15px, calc(21 * var(--u))); font-weight: 700; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dst header span { flex: none; display: flex; align-items: center; gap: 4px; font-size: max(12px, calc(14 * var(--u))); font-weight: 500; color: var(--t2); }
-.dst header .ic { font-size: 1.2em; stroke-width: 1.8; }
-.drow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: max(9px, calc(13 * var(--u)));
-  padding: max(6px, calc(9 * var(--u))) 2px; border-bottom: 1px solid rgba(255, 255, 255, .05); }
-.drow:last-child { border-bottom: 0; }
-.dl { display: inline-grid; place-items: center; min-width: max(36px, calc(48 * var(--u))); height: max(22px, calc(29 * var(--u))); padding: 0 6px; box-sizing: border-box;
-  border-radius: max(6px, calc(8 * var(--u))); background: var(--lb); color: var(--lf); font-size: max(12.5px, calc(15.5 * var(--u))); font-weight: 750; letter-spacing: -.01em;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), 0 2px 10px rgba(var(--lr), .3); }
-.dd { min-width: 0; font-size: max(13.5px, calc(17 * var(--u))); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dt { display: flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dt b { font-size: max(17px, calc(24 * var(--u))); font-weight: 700; letter-spacing: -.03em; }
-.dt b + small { font-size: max(11px, calc(13 * var(--u))); font-weight: 600; color: var(--t2); margin-right: 4px; }
-.dt i { font-style: normal; font-size: max(12.5px, calc(15 * var(--u))); font-weight: 500; color: var(--t2); }
-.dt .late { color: rgb(var(--orange)); }
-.dt .x { color: rgb(var(--red)); text-decoration: line-through; }
-.dt .far { opacity: .38; }
-.dt sup { font-size: .62em; font-weight: 650; color: rgb(var(--orange)); margin-left: 1px; }
-.dmsg { padding: max(6px, calc(9 * var(--u))) 2px; font-size: max(12.5px, calc(15 * var(--u))); color: var(--t3); }
-/* the layer card: the line's badge in front of the next departure */
-.gt .dl { min-width: 0; height: 1.15em; padding: 0 .3em; margin-right: .35em; vertical-align: .08em; border-radius: .26em; font-size: .62em; box-shadow: none; }
-.m .dbi { padding: 12px 14px; gap: 12px; }
+
+.dview { position: absolute; z-index: 2; display: grid; overflow: auto; scrollbar-width: none; opacity: 0; visibility: hidden;
+  transition: opacity .3s ease, visibility 0s linear .3s; }
+.dview::-webkit-scrollbar { display: none; }
+.root.bare .dview { display: none; }
+.root[data-type="departures"]:not(.bare) .dview { opacity: 1; visibility: visible; transition: opacity .45s ease .08s; }
+.dview.ovf { -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), transparent); mask-image: linear-gradient(#000 calc(100% - 44px), transparent); }
+.dview .dp-in { width: 100%; max-width: calc(var(--dpn, 2) * 540 * var(--dz) + (var(--dpn, 2) - 1) * 20 * var(--dz)); margin: var(--dtop, 0px) auto auto;
+  display: flex; flex-direction: column; gap: calc(20 * var(--dz)); }
+.root[data-type="departures"] .dview .dp-in { animation: dpin .6s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes dpin { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+.dview .dp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 0 2px; }
+.dview .dp-head h2 { margin: 0; font-size: clamp(24px, calc(28 * var(--dz)), 34px); font-weight: 700; letter-spacing: -.03em; }
+.dview .dp-live { display: flex; align-items: center; gap: 7px; font-size: calc(14.5 * var(--dz)); font-weight: 500; color: var(--t2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dview .dp-live i { width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--green)); animation: dplive 3s ease-in-out infinite; }
+.dview .dp-live.off i { background: rgb(var(--orange)); animation: none; }
+@keyframes dplive { 50% { opacity: .4; } }
+.dview .dp-stops { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(380 * var(--dz))), 1fr)); gap: calc(20 * var(--dz)); }
+.dview .dp-card { min-width: 0; border-radius: calc(26 * var(--dz)); padding: calc(18 * var(--dz)) calc(24 * var(--dz)) calc(10 * var(--dz));
+  background: linear-gradient(160deg, rgba(46, 46, 54, .58), rgba(22, 23, 28, .64));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .095), inset 0 1px 0 rgba(255, 255, 255, .07), 0 18px 44px rgba(0, 0, 0, .3);
+  -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%); }
+/* the stop's name is a quiet label, like the tiles' ("Außen", "Innen") – the minutes are what counts */
+.dview .dp-card > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: calc(4 * var(--dz));
+  font-size: calc(16 * var(--dz)); font-weight: 600; color: var(--t2); }
+.dview .dp-card > header b { min-width: 0; font-weight: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dview .dp-card > header span { flex: none; display: flex; gap: calc(6 * var(--dz)); font-size: calc(19 * var(--dz)); }
+.dview .dp-card > header .ic { stroke-width: 1.8; }
+.dview .dp-grid { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; column-gap: calc(14 * var(--dz)); }
+.dview .dp-grid hr { grid-column: 1 / -1; height: 1px; margin: calc(4 * var(--dz)) 0; border: 0; background: rgba(255, 255, 255, .07); }
+.dview .dp-badge { grid-column: 1; align-self: start; margin-top: calc(13 * var(--dz)); display: inline-grid; place-items: center; box-sizing: border-box;
+  min-width: calc(50 * var(--dz)); height: calc(28 * var(--dz)); padding: 0 calc(7 * var(--dz)); border-radius: calc(8 * var(--dz));
+  background: var(--lb); color: var(--lf); font-size: calc(15 * var(--dz)); font-weight: 700; letter-spacing: -.01em;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .16); }
+.dview .dp-dir { grid-column: 2; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: calc(2 * var(--dz));
+  min-height: calc(58 * var(--dz)); padding: calc(7 * var(--dz)) 0; }
+.dview .dp-to { display: flex; align-items: center; gap: calc(7 * var(--dz)); min-width: 0; font-size: calc(19 * var(--dz)); font-weight: 600; letter-spacing: -.012em; }
+.dview .dp-to .ic { flex: none; font-size: .78em; color: var(--t3); stroke-width: 2.1; }
+.dview .dp-to span, .dview .dp-sub { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dview .dp-sub { padding-left: calc(22 * var(--dz)); font-size: calc(14 * var(--dz)); font-weight: 500; color: var(--t2); font-variant-numeric: tabular-nums; }
+.dview .dp-sub s { color: rgb(var(--red)); text-decoration-thickness: 1.5px; }
+.dview .dp-num { grid-column: 3; align-self: center; justify-self: end; font-size: calc(36 * var(--dz)); font-weight: 700; letter-spacing: -.035em; line-height: 1;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dview .dp-num.word { font-size: calc(21 * var(--dz)); letter-spacing: -.02em; }
+.dview .dp-num.plan { color: rgba(235, 235, 245, .78); }
+.dview .dp-num.x { color: rgb(var(--red)); }
+.dview .dp-unit { grid-column: 4; align-self: center; justify-self: start; min-width: calc(30 * var(--dz)); margin-left: calc(-9 * var(--dz)); padding-top: calc(11 * var(--dz));
+  font-size: calc(13.5 * var(--dz)); font-weight: 600; color: var(--t2); }
+.dview .late { color: rgb(var(--orange)); }
+.dview .dp-msg { grid-column: 1 / -1; margin: 0; padding: calc(10 * var(--dz)) 0 calc(12 * var(--dz)); font-size: calc(16 * var(--dz)); color: var(--t3); }
 `;
 
 Object.assign(GlassFloorplanCard.prototype, {
+  _depKey(s) { return `${this._M.dep.api}|${s.id}`; },
   /* the departures of a stop, now: fetched or from its sensor, with the stop's line filters */
   _depList(s) {
-    let list = [];
+    let list;
     if (s.entity) list = (this._hass?.states?.[s.entity]?.attributes?.departures || []).map(depFromSensor);
-    else list = this._depC?.[`${this._M.dep.api}|${s.id}`]?.list || [];
+    else {
+      const c = this._depC?.[this._depKey(s)];
+      // a list older than ten minutes is no use any more
+      list = c?.list && Date.now() - c.at < 600e3 ? c.list : [];
+    }
     const now = Date.now() - 20e3;
     return list.filter((d) => Number.isFinite(d.t) && d.t >= now && (!s.lines.length || s.lines.includes(d.line)) && !s.exclude.includes(d.line));
   },
-  /* has a stop answered at all (fetched once / sensor known), did it fail */
+  /* has a stop answered, did its last try fail, when were its data new, are they still fresh */
   _depState(s) {
-    if (s.entity) { const st = this._hass?.states?.[s.entity]; return { ok: !!st && !unavailable(st), err: !st || unavailable(st) }; }
-    const c = this._depC?.[`${this._M.dep.api}|${s.id}`];
-    return { ok: !!c?.list, err: !!c?.err && !c?.list };
+    if (s.entity) {
+      const st = this._hass?.states?.[s.entity], bad = !st || unavailable(st), at = st ? Date.parse(st.last_updated) : null;
+      return { ok: !bad, err: bad, at, fresh: !bad && Date.now() - at < 240e3 };
+    }
+    const c = this._depC?.[this._depKey(s)], ok = !!c?.list && Date.now() - c.at < 600e3;
+    return { ok, err: !!c?.err, at: c?.at || null, fresh: ok && !c.err && Date.now() - c.at < 100e3 };
   },
   _depMin(ms) { return Math.floor((ms - Date.now()) / 60000); },
   /* "4", "jetzt", "05:28" (an hour or more ahead) */
   _depTime(ms) {
     const m = this._depMin(ms);
-    if (m < 1) return { v: t('depNow'), unit: '' };
-    if (m >= 60) return { v: new Date(ms).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' }), unit: '' };
-    return { v: String(m), unit: t('min') };
+    if (m < 1) return { v: t('depNow'), word: true };
+    if (m >= 60) return { v: new Date(ms).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' }), word: true };
+    return { v: String(m), word: false };
   },
-  _depBadge(d) {
-    const bg = d.bg || DEP_COLORS[d.product] || '#6e6e78', fg = d.fg || '#fff';
-    return `<span class="dl" style="--lb:${esc(bg)};--lf:${esc(fg)};--lr:${hexRgb(bg).join(',')}">${esc(d.line)}</span>`;
+  _depBadge(d, rows = 1) {
+    let bg = hexRgb(d.bg || DEP_COLORS[d.product] || '#6e6e78');
+    const fg = hexRgb(d.fg || '#fff'), lb = relLum(bg), lf = relLum(fg);
+    if ((Math.max(lb, lf) + 0.05) / (Math.min(lb, lf) + 0.05) < 3 && lf > lb) bg = bg.map((v) => Math.round(v * 0.72));
+    return `<span class="dp-badge" style="--lb:rgb(${bg.join(',')});--lf:rgb(${fg.join(',')})${rows > 1 ? `;grid-row:span ${rows}` : ''}">${esc(d.line)}</span>`;
   },
 
-  /* fetch the stops given by id (not more often than every 25 s; a hidden browser tab waits) */
-  _depFetch(force) {
+  /* fetch the stops given by id: each at most every 25 s, a new one at once; a hidden browser tab waits */
+  _depFetch() {
     const D = this._M?.dep;
-    if (!D || (!force && (document.hidden || Date.now() - (this._depT || 0) < 25e3))) return;
-    this._depT = Date.now();
+    if (!D || document.hidden) return;
     this._depC = this._depC || {};
     for (const s of D.stops.filter((x) => x.id)) {
-      const key = `${D.api}|${s.id}`, url = `${D.api}/stops/${encodeURIComponent(s.id)}/departures?duration=90&results=60&remarks=false&linesOfStops=false`;
+      const key = this._depKey(s), c = this._depC[key] || (this._depC[key] = {});
+      if (c.busy || Date.now() - (c.tried || 0) < 25e3) continue;
+      c.busy = true;
+      c.tried = Date.now();
+      const url = `${D.api}/stops/${encodeURIComponent(s.id)}/departures?duration=90&results=60&remarks=false&linesOfStops=false`;
       fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => {
-        this._depC[key] = { at: Date.now(), list: (Array.isArray(j) ? j : j.departures || []).map(depFromApi) };
-        this._depShow();
-      }).catch(() => { this._depC[key] = { ...(this._depC[key] || {}), err: true }; this._depShow(); });
+        Object.assign(c, { at: Date.now(), list: (Array.isArray(j) ? j : j.departures || []).map(depFromApi), err: false });
+      }).catch(() => { c.err = true; }).finally(() => { c.busy = false; this._depShow(); });
     }
   },
-  /* while the layer is shown: fetch now and every 30 s */
+  /* while the view is shown: fetch now, every 30 s and when the browser tab comes back */
   _depSync() {
     const on = !!this._M?.dep && this.isConnected && this._layer()?.type === 'departures';
+    if (!this._depVis) {
+      this._depVis = () => { if (!document.hidden && this._layer()?.type === 'departures') { this._depFetch(); this._depShow(); } };
+      document.addEventListener('visibilitychange', this._depVis);
+    }
     if (!on) { clearInterval(this._depI); this._depI = null; return; }
     if (!this._depI) this._depI = setInterval(() => this._depFetch(), 30e3);
     this._depFetch();
   },
-  _depShow() { if (this._layer()?.type === 'departures') this._renderGap(); },
+  _depStop() {
+    clearInterval(this._depI);
+    this._depI = null;
+    if (this._depVis) document.removeEventListener('visibilitychange', this._depVis);
+    this._depVis = null;
+  },
+  _depShow() { if (this._dview && this._layer()?.type === 'departures') this._depView(); },
+  /* what the view hides cannot be reached with the keyboard either */
+  _depInert(on) {
+    const sr = this.shadowRoot;
+    for (const el of sr.querySelectorAll('.stage > :not(.tabs):not(.tip), .side, .mside, .lay > .gcard, .empty-plan')) el.inert = on;
+  },
 
-  /* the board: per stop its lines (by kind, then name) and directions with the next departures */
-  _depBoard() {
-    const el = this.shadowRoot.querySelector('.dbi'), D = this._M.dep;
-    if (!el || !D) return;
-    const per = D.per;
-    el.innerHTML = D.stops.map((s) => {
-      const st = this._depState(s), groups = new Map();
+  /* where the view goes: the whole card except the layer bar – beside it on a laptop (its heading level with the bar's
+   * top), above it on a phone; the size grows with the room there */
+  _depLayout() {
+    const v = this._dview, lv = this._lv, M = this._M;
+    if (!v || !lv) return;
+    const W = this._ev ? this._ev.w : this._root.clientWidth, H = this._h || lv.H;
+    let R = [0, 0, W, H], barTop = null;
+    const tabs = this.$('.tabs');
+    if (tabs && !tabs.hidden && tabs.offsetWidth) {
+      if (tabs.classList.contains('dock')) R[3] = Math.max(160, H - tabs.offsetHeight - 24 - (this._safeB || 0));
+      else if (M.widgets.bar) {
+        const c = center(M.widgets.bar), x = lv.sx + (c[0] - lv.S.x) * lv.pu, y = lv.sy + (c[1] - lv.S.y) * lv.pu, w = tabs.offsetWidth / 2 + 14, h = tabs.offsetHeight / 2 + 14;
+        R = freeOf(R, [[x - w, y - h, x + w, y + h]]);
+        if (!tabs.classList.contains('h')) barTop = y - tabs.offsetHeight / 2;
+      }
+    }
+    const pad = this._m ? 12 : clamp(Math.round(W * 0.025), 16, 36), w = R[2] - R[0] - 2 * pad, h = R[3] - R[1] - 2 * pad;
+    Object.assign(v.style, { left: `${R[0] + pad}px`, top: `${R[1] + pad}px`, width: `${Math.max(0, w)}px`, height: `${Math.max(0, h)}px` });
+    const dz = this._m ? clamp(w / 380, 0.88, 1.05) : clamp(Math.min(w / 880, h / 620), 0.9, 1.25);
+    v.style.setProperty('--dz', `${dz.toFixed(3)}px`);
+    v.style.setProperty('--dtop', `${barTop == null ? 0 : Math.max(0, Math.round(barTop - R[1] - pad))}px`);
+    v.style.setProperty('--dpn', Math.min(2, this._M.dep?.stops.length || 1));
+    this._depOvf();
+  },
+  _depOvf() {
+    const v = this._dview;
+    if (v) v.classList.toggle('ovf', v.scrollHeight > v.clientHeight + 4 && v.scrollTop + v.clientHeight < v.scrollHeight - 4);
+  },
+
+  /* one direction of a line: the next departure you can take large, the delay, a cancelled one and the ones after it below */
+  _depRow(dir, ds) {
+    const per = this._M.dep.per, unit = t('min');
+    ds.sort((a, b) => a.t - b.t);
+    const go = ds.filter((d) => !d.cancelled), hero = go[0] || null, f = hero ? this._depTime(hero.t) : null;
+    const sub = [];
+    if (hero && hero.delay >= DEP_LATE) sub.push(`<span class="late">+${Math.round(hero.delay / 60)} ${esc(unit)}</span>`);
+    const gone = ds.find((d) => d.cancelled && (!hero || d.t <= hero.t));
+    if (gone) sub.push(`<s>${esc(this._depTime(gone.t).v)}</s> ${esc(t('depCancelled'))}`);
+    const later = ds.filter((d) => d !== hero && d !== gone && this._depMin(d.t) < 60).slice(0, per - 1);
+    if (later.length) sub.push(`${esc(t('depThen'))} ${later.map((d) => (d.cancelled ? `<s>${esc(this._depTime(d.t).v)}</s>` : esc(this._depTime(d.t).v))).join(', ')} ${esc(unit)}`);
+    const cls = !hero ? 'dp-num word x' : `dp-num${f.word ? ' word' : ''}${hero.delay >= DEP_LATE ? ' late' : hero.delay == null ? ' plan' : ''}`;
+    return `<span class="dp-dir"><span class="dp-to">${icon('arrowR')}<span>${esc(dir)}</span></span><span class="dp-sub">${sub.join(' · ') || '&nbsp;'}</span></span>`
+      + `<b class="${cls}">${esc(hero ? f.v : t('depCancelled'))}</b><span class="dp-unit">${hero && !f.word ? esc(unit) : ''}</span>`;
+  },
+
+  /* the view: a heading with the state of the data, then one glass card per stop – each line once, its directions beside it */
+  _depView() {
+    const v = this._dview, D = this._M.dep;
+    if (!v || !D) return;
+    if (!v.firstElementChild) {
+      // a new view (the card was built anew): everything is drawn again
+      this._depHtml = null;
+      v.innerHTML = `<div class="dp-in"><header class="dp-head"><h2></h2><span class="dp-live"><i></i><span></span></span></header><div class="dp-stops"></div></div>`;
+      v.addEventListener('scroll', () => this._depOvf(), { passive: true });
+    }
+    const rank = (p) => (DEP_ORDER.indexOf(p) + 1 || 99);
+    const states = D.stops.map((s) => this._depState(s));
+    const cards = D.stops.map((s, si) => {
+      const st = states[si], lines = new Map();
       for (const d of this._depList(s)) {
-        const k = `${d.line}|${d.dir}`;
-        if (!groups.has(k)) groups.set(k, { ...d, deps: [] });
-        groups.get(k).deps.push(d);
+        if (!lines.has(d.line)) lines.set(d.line, { ...d, dirs: new Map() });
+        const L = lines.get(d.line);
+        if (!L.dirs.has(d.dir)) L.dirs.set(d.dir, []);
+        L.dirs.get(d.dir).push(d);
       }
-      const rank = (p) => (DEP_ORDER.indexOf(p) + 1 || 99);
-      const rows = [...groups.values()].sort((a, b) => rank(a.product) - rank(b.product) || a.line.localeCompare(b.line, undefined, { numeric: true }) || a.dir.localeCompare(b.dir, LOCALE));
-      const body = rows.length ? rows.map((g) => {
-        const ds = g.deps.sort((a, b) => a.t - b.t).slice(0, per);
-        const cls = (d) => [d.cancelled ? 'x' : d.delay >= 60 ? 'late' : '', this._depMin(d.t) < s.walk ? 'far' : ''].filter(Boolean).join(' ');
-        const first = ds[0], f = this._depTime(first.t), late = first.delay >= 60 && !first.cancelled ? `<sup>+${Math.round(first.delay / 60)}</sup>` : '';
-        const more = ds.slice(1).map((d) => `<span class="${cls(d)}">${esc(this._depTime(d.t).v)}</span>`).join(' · ');
-        return `<div class="drow">${this._depBadge(g)}<span class="dd">${esc(g.dir)}</span><span class="dt"><b class="${cls(first)}">${esc(f.v)}${late}</b>${f.unit ? `<small class="${cls(first)}">${esc(f.unit)}</small>` : ''}${more ? `<i>${more}</i>` : ''}</span></div>`;
-      }).join('') : `<div class="dmsg">${esc(t(st.err ? 'depOffline' : st.ok ? 'depNone' : 'depLoading'))}</div>`;
+      const sorted = [...lines.values()].sort((a, b) => rank(a.product) - rank(b.product) || a.line.localeCompare(b.line, undefined, { numeric: true }));
+      const rows = sorted.map((L, li) => {
+        const dirs = [...L.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0], LOCALE));
+        return `${li ? '<hr>' : ''}${this._depBadge(L, dirs.length)}${dirs.map(([dir, ds]) => this._depRow(dir, ds)).join('')}`;
+      }).join('');
+      const kinds = [...new Set(sorted.map((L) => (L.product === 'bus' ? 'bus' : 'train')))].sort().reverse();
       const name = s.name || (s.entity ? this._nameOf(s.entity) : s.id);
-      return `<section class="dst"><header><b>${esc(name)}</b>${s.walk ? `<span>${icon('walk')}${esc(t('depWalk', s.walk))}</span>` : ''}</header>${body}</section>`;
+      const msg = t(st.err ? 'depOffline' : st.ok ? 'depNone' : 'depLoading');
+      return `<section class="dp-card"><header><b>${esc(name)}</b><span>${kinds.map((k) => icon(k)).join('')}</span></header><div class="dp-grid">${rows || `<p class="dp-msg">${esc(msg)}</p>`}</div></section>`;
     }).join('');
+    // only what changed is drawn again (the live dot keeps pulsing)
+    if (cards !== this._depHtml) { this._depHtml = cards; v.querySelector('.dp-stops').innerHTML = cards; }
+    v.querySelector('.dp-head h2').textContent = this._layerName(this._layer());
+    // live while every stop's data are fresh; else as of when, or offline
+    const ats = states.filter((x) => x.ok && x.at).map((x) => x.at), err = states.some((x) => x.err), fresh = ats.length && states.every((x) => x.fresh);
+    const live = v.querySelector('.dp-live');
+    live.classList.toggle('off', !fresh);
+    live.lastElementChild.textContent = fresh ? t('depLive') : err && !ats.length ? t('depOfflineShort') : ats.length
+      ? t('depAsOf', new Date(Math.min(...ats)).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })) : t('depLoadingShort');
+    this._depOvf();
   },
 
-  /* the next departure you can still reach on foot (each stop with its walk), and the ones after it */
-  _depNext() {
-    const all = [];
-    for (const s of this._M.dep.stops) for (const d of this._depList(s)) if (!d.cancelled && this._depMin(d.t) >= s.walk) all.push({ ...d, stop: s });
-    return all.sort((a, b) => (a.t - a.stop.walk * 6e4) - (b.t - b.stop.walk * 6e4));
-  },
-
-  /* ---------------------------------------------------------------- layer card */
-  _depGap(L, upd) {
-    const v = mk('div', 'gv sub', `<div class="gk"><span>${esc(this._layerName(L))}</span><span class="bat"></span></div>
-      <div class="gt"><b></b><span class="w"></span></div><div class="gs"></div><div class="segs"></div>`);
-    upd.push(() => {
-      this._depBoard();
-      const next = this._depNext(), n = next[0], D = this._M.dep;
-      const b = v.querySelector('.gt b'), w = v.querySelector('.gt .w'), gs = v.querySelector('.gs');
-      const st = D.stops.map((s) => this._depState(s));
-      if (n) {
-        b.innerHTML = `${this._depBadge(n)}${esc(n.dir)}`;
-        const tm = this._depTime(n.t);
-        w.textContent = tm.unit ? t('depIn', tm.v) : tm.v;
-        const leave = this._depMin(n.t) - n.stop.walk, after = next.find((x) => x.stop !== n.stop || x.line !== n.line);
-        gs.textContent = [n.stop.walk ? (leave <= 0 ? t('depGoNow') : t('depLeaveIn', leave)) : '', n.stop.name || '', after ? t('depThen', after.line, Math.max(0, this._depMin(after.t))) : ''].filter(Boolean).join(' · ');
-      } else {
-        b.textContent = t(st.some((x) => x.err) && !st.some((x) => x.ok) ? 'depOffline' : st.some((x) => x.ok) ? 'depNone' : 'depLoading');
-        w.textContent = '';
-        gs.textContent = '';
-      }
-      // the coming departures as a strip in the colours of their lines
-      const segs = next.slice(0, 12);
-      v.querySelector('.segs').innerHTML = segs.map((d) => `<i class="on" style="--c:${hexRgb(d.bg || DEP_COLORS[d.product]).join(',')}"></i>`).join('') || '<i></i>';
-      v.querySelector('.gk .bat').innerHTML = this._iconHtml(L.icon);
-    });
-    return v;
-  },
+  /* the layer card is not shown with the departures */
+  _depGap() { return mk('div', 'gv'); },
 });
 
 Object.assign(STR.en, {
-  layer_departures: 'Departures', depNow: 'now', depIn: (m) => `in ${m} min`, depLeaveIn: (m) => `Leave in ${m} min`, depGoNow: 'Leave now',
-  depWalk: (m) => `${m} min`, depThen: (l, m) => `then ${l} in ${m} min`, depNone: 'No departures in the next hour and a half',
-  depLoading: 'Loading departures …', depOffline: 'Timetable not reachable',
+  layer_departures: 'Departures', depNow: 'now', depCancelled: 'cancelled', depThen: 'then', depLive: 'Live', depAsOf: (x) => `As of ${x}`,
+  depNone: 'No departures in the next hour and a half', depLoading: 'Loading departures …', depLoadingShort: 'Loading …',
+  depOffline: 'Timetable not reachable', depOfflineShort: 'Offline',
 });
 Object.assign(STR.de, {
-  layer_departures: 'Abfahrten', depNow: 'jetzt', depIn: (m) => `in ${m} min`, depLeaveIn: (m) => `Losgehen in ${m} min`, depGoNow: 'Jetzt losgehen',
-  depWalk: (m) => `${m} min`, depThen: (l, m) => `danach ${l} in ${m} min`, depNone: 'Keine Abfahrten in den nächsten anderthalb Stunden',
-  depLoading: 'Abfahrten werden geladen …', depOffline: 'Fahrplan nicht erreichbar',
+  layer_departures: 'Abfahrten', depNow: 'jetzt', depCancelled: 'fällt aus', depThen: 'dann', depLive: 'Live', depAsOf: (x) => `Stand ${x}`,
+  depNone: 'Keine Abfahrten in den nächsten anderthalb Stunden', depLoading: 'Abfahrten werden geladen …', depLoadingShort: 'Lädt …',
+  depOffline: 'Fahrplan nicht erreichbar', depOfflineShort: 'Offline',
 });
