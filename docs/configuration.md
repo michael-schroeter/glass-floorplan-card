@@ -28,7 +28,7 @@ Only the vacuum entity is needed. Status, battery, current room, cleaning mode a
 
 ## Departures (Berlin and Brandenburg)
 
-A layer with the next trains and buses at stops nearby: the plan dims and a glass board shows each stop's lines in both directions with their next departures, in the lines' own colours – late ones in orange, cancelled ones struck through, those you can no longer reach on foot faded. The layer card shows the next departure you can still make and when to leave. Set it up in YAML:
+A layer with the next trains and buses at stops nearby: the plan fades away and a glass board shows each stop's lines in both directions with their next departures, in the lines' own colours – late ones in orange, cancelled ones struck through, those you can no longer reach on foot faded. The layer card shows the next departure you can still make and when to leave. Set it up in YAML:
 
 ```yaml
 departures:

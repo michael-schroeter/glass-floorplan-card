@@ -271,7 +271,7 @@ class GlassFloorplanCard extends HTMLElement {
       <div class="glows">${glows}</div>
       ${pas}${rooms}${wins}${vac}${markers}${dock ? '' : bar}
       ${Wd.card ? `<div class="gcard${cmp}" style="${G.tile(Wd.card)}"></div>` : ''}
-      ${M.dboard ? `<div class="dboard" style="${G.tile(M.dboard).replace('height:', 'max-height:')}"><div class="dbi"></div></div>` : ''}
+      ${M.dboard ? `<div class="dboard" style="${G.tile(M.dboard)}"><div class="dbi"></div></div>` : ''}
       <div class="tip"></div>
     </div>
     ${Wd.side ? `<div class="${this._m ? 'mside' : 'side'}">${Wd.side.card ? `<div class="gcard${cmp}"></div>` : ''}</div>` : ''}

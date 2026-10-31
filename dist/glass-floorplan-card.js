@@ -1968,7 +1968,7 @@ class GlassFloorplanCard extends HTMLElement {
       <div class="glows">${glows}</div>
       ${pas}${rooms}${wins}${vac}${markers}${dock ? '' : bar}
       ${Wd.card ? `<div class="gcard${cmp}" style="${G.tile(Wd.card)}"></div>` : ''}
-      ${M.dboard ? `<div class="dboard" style="${G.tile(M.dboard).replace('height:', 'max-height:')}"><div class="dbi"></div></div>` : ''}
+      ${M.dboard ? `<div class="dboard" style="${G.tile(M.dboard)}"><div class="dbi"></div></div>` : ''}
       <div class="tip"></div>
     </div>
     ${Wd.side ? `<div class="${this._m ? 'mside' : 'side'}">${Wd.side.card ? `<div class="gcard${cmp}"></div>` : ''}</div>` : ''}
@@ -5125,7 +5125,12 @@ const depFromSensor = (x) => ({
 });
 
 const STYLES_D = `
-/* departures: a glass board over the dimmed plan */
+/* departures take the plan's place: rooms, light and devices fade away, a glass board shows the departures */
+.root[data-type="departures"] .room, .root[data-type="departures"] .glows, .root[data-type="departures"] .win, .root[data-type="departures"] .pas,
+.root[data-type="departures"] .lamp, .root[data-type="departures"] .dev, .root[data-type="departures"] .bot, .root[data-type="departures"] .dockm,
+.root[data-type="departures"] .trail { opacity: 0 !important; pointer-events: none !important; }
+.root .room { transition: box-shadow .6s ease, background .5s ease, transform var(--sp-ms) var(--sp), opacity .4s ease; }
+.root .pas, .root .win.fd { transition: opacity .4s ease, background .4s, box-shadow .4s; }
 .dboard { position: absolute; z-index: 6; display: flex; flex-direction: column; border-radius: calc(26 * var(--u)); overflow: hidden;
   background: linear-gradient(160deg, rgba(42, 44, 54, .66), rgba(18, 19, 24, .74));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .08), 0 24px 60px rgba(0, 0, 0, .4);
