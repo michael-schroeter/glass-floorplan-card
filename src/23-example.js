@@ -65,6 +65,8 @@ function exampleConfig(lang = 'en') {
     weather: 'weather.home',
     tiles: [{ id: 'energy', name: N('Energy', 'Energie'), icon: 'bolt', entities: ['sensor.home_power', { entity: 'sensor.energy_today', name: N('Today', 'Heute') }] }],
     layers: ['light', 'climate', 'cover', 'vacuum',
-      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }],
+      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }, 'departures'],
+    // two made-up stops nearby, from sensors of the transport integration (the demo simulates them)
+    departures: { stops: [{ entity: 'sensor.departures_linden_square', name: N('Linden Square', 'Lindenplatz'), walk: 4 }, { entity: 'sensor.departures_town_hall', name: N('Town Hall', 'Rathaus'), walk: 6 }] },
   };
 }

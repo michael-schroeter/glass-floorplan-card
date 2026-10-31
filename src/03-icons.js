@@ -124,6 +124,10 @@ const ICONS = {
   copy: '<rect x="8.4" y="8.4" width="11.8" height="11.8" rx="2.4"/><path d="M15.6 8.4V6a2.2 2.2 0 0 0-2.2-2.2H6A2.2 2.2 0 0 0 3.8 6v7.4a2.2 2.2 0 0 0 2.2 2.2h2.4"/>',
   fit: '<path d="M4 9V5.4C4 4.6 4.6 4 5.4 4H9M15 4h3.6c.8 0 1.4.6 1.4 1.4V9M20 15v3.6c0 .8-.6 1.4-1.4 1.4H15M9 20H5.4c-.8 0-1.4-.6-1.4-1.4V15"/>',
   info: '<circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.4"/><circle cx="12" cy="7.8" r=".9" class="f"/>',
+  /* departures */
+  train: '<rect x="5.6" y="2.8" width="12.8" height="14.6" rx="3.4"/><path d="M5.6 10.2h12.8M12 2.8v7.4"/><circle cx="9" cy="13.8" r="1" class="f"/><circle cx="15" cy="13.8" r="1" class="f"/><path d="M8.6 17.4 6.6 21M15.4 17.4l2 3.6"/>',
+  bus: '<rect x="4.6" y="3" width="14.8" height="14.8" rx="3"/><path d="M4.6 7.4h14.8M4.6 11.6h14.8"/><circle cx="8.2" cy="14.6" r="1" class="f"/><circle cx="15.8" cy="14.6" r="1" class="f"/><path d="M7.4 17.8v2.8M16.6 17.8v2.8"/>',
+  walk: '<circle cx="13.2" cy="4.4" r="1.8"/><path d="M12.6 8.6 11 14.4l2.8 2.4.8 4.2"/><path d="M11 14.4 8.6 21"/><path d="M12.6 8.6 9 10.4l-1 3.4"/><path d="M12.6 8.6l1.8 3.2 3.2 1"/>',
   grip: '<circle cx="9" cy="6.6" r="1.2" class="f"/><circle cx="15" cy="6.6" r="1.2" class="f"/><circle cx="9" cy="12" r="1.2" class="f"/><circle cx="15" cy="12" r="1.2" class="f"/><circle cx="9" cy="17.4" r="1.2" class="f"/><circle cx="15" cy="17.4" r="1.2" class="f"/>',
 };
 const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.dot}</svg>`;

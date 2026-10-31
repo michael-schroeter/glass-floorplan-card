@@ -1258,11 +1258,14 @@ class GfcEditor extends HTMLElement {
     const list = this._c.layers?.length ? this._c.layers : (this._model()?.layers || []).map((L) => L.id), ek = this._entKinds();
     const out = list.map((l, i) => {
       const type = builtinType(l);
+      // departures come from YAML and hold no devices
+      if (type === 'departures') return { id: type, type, name: l.name || t('layer_departures'), icon: l.icon || LAYER_TYPES[type].icon, kinds: [], ents: [], noDevices: true };
       if (type) return { id: type, type, name: l.name || t(`layer_${type}`), icon: l.icon || LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: layerExtras(l, ek) };
       return l && typeof l === 'object' ? { id: this._layerIdOf(l, i), type: 'custom', name: l.name || t('layer'), icon: l.icon || 'layers', kinds: [].concat(l.show || []), ents: [].concat(l.entities || []), raw: l } : null;
     }).filter(Boolean);
     // built-in layers are always offered for placing devices
     for (const type of ['light', 'climate', 'cover', 'vacuum']) if (!out.some((L) => L.id === type)) out.push({ id: type, type, name: t(`layer_${type}`), icon: LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: [], hidden: true });
+    if (this._c.departures && !out.some((L) => L.id === 'departures')) out.push({ id: 'departures', type: 'departures', name: t('layer_departures'), icon: LAYER_TYPES.departures.icon, kinds: [], ents: [], hidden: true, noDevices: true });
     return out;
   }
   _layerDef(id) { return this._layerDefs().find((L) => L.id === id); }

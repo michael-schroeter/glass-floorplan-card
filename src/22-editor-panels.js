@@ -149,7 +149,7 @@ Object.assign(GfcEditor.prototype, {
       this._change(() => {
         const ex = exampleConfig(LANG), h = this._hs() || {};
         // in a real home the example devices do not exist – then only the floor plan is used
-        if (!ex.entities.every((e) => h.states?.[e.entity])) { delete ex.entities; delete ex.door; delete ex.vacuum; delete ex.layers; delete ex.weather; }
+        if (!ex.entities.every((e) => h.states?.[e.entity])) { delete ex.entities; delete ex.door; delete ex.vacuum; delete ex.layers; delete ex.weather; delete ex.departures; }
         for (const k of ['rooms', 'windows', 'doors', 'entrance', 'entities', 'door', 'vacuum', 'layers', 'widgets']) delete this._c[k];
         dropPhoneWidgets(this._c);
         Object.assign(this._c, normEditorConfig({ ...this._c, ...ex, language: this._c.language }));
@@ -408,7 +408,7 @@ Object.assign(GfcEditor.prototype, {
   /* ---------------------------------------------------------------- devices */
   _layerChips(I) {
     const chips = mk('div', 'echips');
-    for (const L of this._layerDefs()) {
+    for (const L of this._layerDefs().filter((x) => !x.noDevices)) {
       const b = mk('button', `echip${L.id === this._layerSel ? ' act' : ''}`, `${this._iconHtml(L.icon)}<span>${esc(L.name)}</span>`);
       b.addEventListener('click', () => { this._layerSel = L.id; this._s = null; this._draw(); this._panel(); });
       chips.append(b);
@@ -758,7 +758,7 @@ Object.assign(GfcEditor.prototype, {
         ed.title = t('ed_edit');
         ed.addEventListener('click', () => { this._editLayer = L.id; this._layerSel = L.id; this._draw(); this._panel(); });
         mv.append(ed);
-      } else if (L.type !== 'vacuum' || c.vacuum) {
+      } else if ((L.type !== 'vacuum' || c.vacuum) && (L.type !== 'departures' || c.departures)) {
         box.querySelector('.elayer').append(this._tglEl(on, (v) => this._change(() => {
           this._materializeLayers();
           if (v) c.layers.push(L.type); else c.layers = c.layers.filter((l) => builtinType(l) !== L.type);

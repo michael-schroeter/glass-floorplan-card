@@ -36,6 +36,7 @@ const LAYER_TYPES = {
   climate: { icon: 'thermo', kinds: ['climate'] },
   cover: { icon: 'blinds', kinds: ['cover'] },
   vacuum: { icon: 'robot', kinds: ['vacuum'] },
+  departures: { icon: 'train', kinds: [] },
 };
 const SHOW_KINDS = ['light', 'media', 'door', 'climate', 'cover'];
 /* A built-in layer in the configuration: 'light', or { type: 'light', entities: [...] } with extra devices of any kind */
@@ -201,7 +202,7 @@ function buildModel(cfg, hass, { mobile = false } = {}) {
   const tids = new Set();
   const tiles = (Array.isArray(cfg.tiles) ? cfg.tiles : []).map(normTile).filter((x) => x && !tids.has(x.id) && tids.add(x.id));
   const M = {
-    cfg, rooms, ents, door, vac, tiles, rot: 0,
+    cfg, rooms, ents, door, vac, tiles, rot: 0, dep: normDepartures(cfg.departures),
     windows: (cfg.windows || []).map(normSeg).filter(Boolean),
     passages: (cfg.doors || []).map(normSeg).filter(Boolean),
     entrance: normSeg(cfg.entrance),
@@ -256,7 +257,9 @@ function finishModel(M, hass, mobile) {
   M.indoor = ic === false ? [] : Array.isArray(ic) && ic.length ? ic : M.ents.filter((e) => e.kind === 'climate').map((e) => e.entity);
   M.layers = buildLayers(M);
   M.widgets = placeWidgets(M, mobile);
-  const all = [B, ...['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)].map((k) => M.widgets[k]).filter(Boolean)];
+  const wk = ['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)], all = [B, ...wk.map((k) => M.widgets[k]).filter(Boolean)];
+  // the departure board lies over the plan – beside the tiles in it
+  M.dboard = M.dep ? freeOf(B, wk.map((k) => M.widgets[k])) : null;
   const U = bboxOf(all), m = 6 * D;
   M.stage = { x: U[0] - m, y: U[1] - m, w: U[2] - U[0] + 2 * m, h: U[3] - U[1] + 2 * m };
 }
@@ -269,6 +272,7 @@ function buildLayers(M) {
     if (M.ents.some((e) => e.kind === 'climate')) list.push('climate');
     if (M.ents.some((e) => e.kind === 'cover')) list.push('cover');
     if (M.vac) list.push('vacuum');
+    if (M.dep) list.push('departures');
     if (!list.length) list.push('light');
   }
   const out = [], used = new Set();
@@ -283,7 +287,7 @@ function buildLayers(M) {
         kinds: new Set([].concat(l.show || []).filter((k) => SHOW_KINDS.includes(k))), ents: new Set([].concat(l.entities || [])),
       };
     }
-    if (!L || used.has(L.id) || (L.type === 'vacuum' && !M.vac)) return;
+    if (!L || used.has(L.id) || (L.type === 'vacuum' && !M.vac) || (L.type === 'departures' && !M.dep)) return;
     used.add(L.id);
     out.push(L);
   });
@@ -483,6 +487,32 @@ function placeWidgets(M, mobile) {
     else { const cy = B[1] + (B[3] - B[1]) * 0.36; out.bar = [B[0] - BAR.w, cy - BAR.h / 2, B[0], cy + BAR.h / 2]; }
   }
   return out;
+}
+
+/* The largest rectangle inside B that none of the blocks covers (its edges lie on the edges of B and the blocks) –
+ * too little left: B itself */
+function freeOf(B, blocks) {
+  const bs = blocks.filter((b) => b && b[2] > B[0] && b[0] < B[2] && b[3] > B[1] && b[1] < B[3]);
+  const xs = [...new Set([B[0], B[2], ...bs.flatMap((b) => [b[0], b[2]]).filter((x) => x > B[0] && x < B[2])])].sort((a, b) => a - b);
+  const ys = [...new Set([B[1], B[3], ...bs.flatMap((b) => [b[1], b[3]]).filter((y) => y > B[1] && y < B[3])])].sort((a, b) => a - b);
+  let best = null;
+  for (let a = 0; a < xs.length; a++) for (let c = a + 1; c < xs.length; c++) for (let b = 0; b < ys.length; b++) for (let d = b + 1; d < ys.length; d++) {
+    const R = [xs[a], ys[b], xs[c], ys[d]];
+    if ((!best || rectArea(R) > rectArea(best)) && !bs.some((q) => q[0] < R[2] && q[2] > R[0] && q[1] < R[3] && q[3] > R[1])) best = R;
+  }
+  return best && rectArea(best) > rectArea(B) * 0.3 ? best : [...B];
+}
+
+/* ---------------------------------------------------------------- Departures (configuration)
+ * departures: { stops: [{ id | entity, name, walk, lines, exclude }], api, per }
+ * A stop by its id is fetched from the public VBB / BVG interface (transport.rest), a stop by its entity is read from a
+ * sensor of the integration "Berlin (BVG) and Brandenburg (VBB) transport" (attribute `departures`). */
+function normDepartures(d) {
+  const stops = (Array.isArray(d?.stops) ? d.stops : []).filter((s) => s && (s.id || s.entity)).map((s, i) => ({
+    i, id: s.id ? String(s.id) : null, entity: s.entity || null, name: s.name || null, walk: Math.max(0, +s.walk || 0),
+    lines: [].concat(s.lines || []).map(String), exclude: [].concat(s.exclude || []).map(String),
+  }));
+  return stops.length ? { stops, api: String(d.api || 'https://v6.vbb.transport.rest').replace(/\/$/, ''), per: clamp(Math.round(+d.per || 3), 1, 5) } : null;
 }
 
 /* ---------------------------------------------------------------- Room graph (robot routes)

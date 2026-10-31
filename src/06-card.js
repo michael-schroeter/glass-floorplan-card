@@ -92,6 +92,7 @@ class GlassFloorplanCard extends HTMLElement {
       this._layout();
       this._subscribeForecast();
       this._kickRobot?.();
+      this._depSync();
     }
   }
 
@@ -105,6 +106,8 @@ class GlassFloorplanCard extends HTMLElement {
     cancelAnimationFrame(this._rraf);
     this._rraf = null;
     this._wiredKey = false;
+    clearInterval(this._depI);
+    this._depI = null;
   }
 
   set hass(hass) {
@@ -256,7 +259,7 @@ class GlassFloorplanCard extends HTMLElement {
       ${M.layers.map((L) => `<button data-tab="${esc(L.id)}" role="tab" aria-label="${esc(this._layerName(L))}">${this._iconHtml(L.icon)}<span>${esc(this._layerName(L))}</span></button>`).join('')}</div>` : '';
     const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
-    this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}</style>
+    this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}${STYLES_D}</style>
 <div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}${this._ev?.bare ? ' bare' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
@@ -268,6 +271,7 @@ class GlassFloorplanCard extends HTMLElement {
       <div class="glows">${glows}</div>
       ${pas}${rooms}${wins}${vac}${markers}${dock ? '' : bar}
       ${Wd.card ? `<div class="gcard${cmp}" style="${G.tile(Wd.card)}"></div>` : ''}
+      ${M.dboard ? `<div class="dboard" style="${G.tile(M.dboard).replace('height:', 'max-height:')}"><div class="dbi"></div></div>` : ''}
       <div class="tip"></div>
     </div>
     ${Wd.side ? `<div class="${this._m ? 'mside' : 'side'}">${Wd.side.card ? `<div class="gcard${cmp}"></div>` : ''}</div>` : ''}
@@ -373,6 +377,7 @@ class GlassFloorplanCard extends HTMLElement {
     if (M.vac) Object.values(this._vacEnts()).forEach((i) => ids.add(i));
     for (const L of M.layers) L.ents.forEach((i) => ids.add(i));
     for (const x of M.tiles) { x.ents.forEach((e) => ids.add(e.entity)); (x.btns || []).forEach((b) => ids.add(b.entity)); }
+    for (const s of M.dep?.stops || []) ids.add(s.entity);
     ids.delete(null); ids.delete(undefined);
     return [...ids];
   }
@@ -818,6 +823,7 @@ class GlassFloorplanCard extends HTMLElement {
     for (const [k, el] of Object.entries(this._roomEls)) el.classList.toggle('idle', L.type !== 'vacuum' && !this._roomHas(k, L));
     this._placeKnob(!animate);
     this._gapKind = null;
+    this._depSync();
     if (this._hass) { this._renderGap(); this._updClean(); this._updRobot(); this._updAmbient(); this._updRooms(); }
     this._declutter();
   }
@@ -990,7 +996,7 @@ class GlassFloorplanCard extends HTMLElement {
       else if (L.type === 'light') {
         const lit = this._roomEnts(k, L, 'light');
         if (lit.length) s = onL.length ? t('nOn', onL.length) : t('off');
-      } else s = this._roomCustomLabel(k, L);
+      } else if (L.type !== 'departures') s = this._roomCustomLabel(k, L);
       el.querySelector('.rl span').textContent = s;
     }
   }
@@ -1015,7 +1021,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._root.style.setProperty('--dli', (day * (1 - clouds * 0.6)).toFixed(2));
     if (!this._gcard) return;
     const L = this._layer(), lit = this._M.ents.some((l) => l.kind === 'light' && isOn(this._st(l.entity)));
-    const tint = L.type === 'vacuum' ? ['30, 52, 92', '20, 30, 58']
+    const tint = L.type === 'vacuum' || L.type === 'departures' ? ['30, 52, 92', '20, 30, 58']
       : L.type === 'climate' ? this._climTint()
         : L.type === 'cover' ? ['44, 54, 72', '28, 32, 44']
           : lit && L.kinds.has('light') ? ['112, 72, 54', '92, 52, 36'] : ['46, 46, 54', '30, 30, 36'];
@@ -1032,7 +1038,8 @@ class GlassFloorplanCard extends HTMLElement {
       this._gapUpd = [];
       this._gcard.innerHTML = '';
       const v = L.type === 'vacuum' ? this._cleanGap(this._gapUpd) : L.type === 'climate' ? this._climateGap(L, this._gapUpd)
-        : L.type === 'cover' ? this._coverGap(L, this._gapUpd) : L.type === 'light' ? this._lightGap(L, this._gapUpd) : this._customGap(L, this._gapUpd);
+        : L.type === 'cover' ? this._coverGap(L, this._gapUpd) : L.type === 'light' ? this._lightGap(L, this._gapUpd)
+          : L.type === 'departures' ? this._depGap(L, this._gapUpd) : this._customGap(L, this._gapUpd);
       this._gcard.append(v);
     }
     this._gapUpd.forEach((f) => f());
@@ -1227,6 +1234,8 @@ class GlassFloorplanCard extends HTMLElement {
 
   _tick() {
     if (this._hass && this._root) this._updSide();
+    // departures count down
+    if (this._hass && this._root && this._layer()?.type === 'departures') this._renderGap();
   }
 
   _wxIcon(cond, hour) {

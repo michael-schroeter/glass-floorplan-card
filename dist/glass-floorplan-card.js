@@ -398,6 +398,10 @@ const ICONS = {
   copy: '<rect x="8.4" y="8.4" width="11.8" height="11.8" rx="2.4"/><path d="M15.6 8.4V6a2.2 2.2 0 0 0-2.2-2.2H6A2.2 2.2 0 0 0 3.8 6v7.4a2.2 2.2 0 0 0 2.2 2.2h2.4"/>',
   fit: '<path d="M4 9V5.4C4 4.6 4.6 4 5.4 4H9M15 4h3.6c.8 0 1.4.6 1.4 1.4V9M20 15v3.6c0 .8-.6 1.4-1.4 1.4H15M9 20H5.4c-.8 0-1.4-.6-1.4-1.4V15"/>',
   info: '<circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.4"/><circle cx="12" cy="7.8" r=".9" class="f"/>',
+  /* departures */
+  train: '<rect x="5.6" y="2.8" width="12.8" height="14.6" rx="3.4"/><path d="M5.6 10.2h12.8M12 2.8v7.4"/><circle cx="9" cy="13.8" r="1" class="f"/><circle cx="15" cy="13.8" r="1" class="f"/><path d="M8.6 17.4 6.6 21M15.4 17.4l2 3.6"/>',
+  bus: '<rect x="4.6" y="3" width="14.8" height="14.8" rx="3"/><path d="M4.6 7.4h14.8M4.6 11.6h14.8"/><circle cx="8.2" cy="14.6" r="1" class="f"/><circle cx="15.8" cy="14.6" r="1" class="f"/><path d="M7.4 17.8v2.8M16.6 17.8v2.8"/>',
+  walk: '<circle cx="13.2" cy="4.4" r="1.8"/><path d="M12.6 8.6 11 14.4l2.8 2.4.8 4.2"/><path d="M11 14.4 8.6 21"/><path d="M12.6 8.6 9 10.4l-1 3.4"/><path d="M12.6 8.6l1.8 3.2 3.2 1"/>',
   grip: '<circle cx="9" cy="6.6" r="1.2" class="f"/><circle cx="15" cy="6.6" r="1.2" class="f"/><circle cx="9" cy="12" r="1.2" class="f"/><circle cx="15" cy="12" r="1.2" class="f"/><circle cx="9" cy="17.4" r="1.2" class="f"/><circle cx="15" cy="17.4" r="1.2" class="f"/>',
 };
 const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.dot}</svg>`;
@@ -460,6 +464,7 @@ const LAYER_TYPES = {
   climate: { icon: 'thermo', kinds: ['climate'] },
   cover: { icon: 'blinds', kinds: ['cover'] },
   vacuum: { icon: 'robot', kinds: ['vacuum'] },
+  departures: { icon: 'train', kinds: [] },
 };
 const SHOW_KINDS = ['light', 'media', 'door', 'climate', 'cover'];
 /* A built-in layer in the configuration: 'light', or { type: 'light', entities: [...] } with extra devices of any kind */
@@ -625,7 +630,7 @@ function buildModel(cfg, hass, { mobile = false } = {}) {
   const tids = new Set();
   const tiles = (Array.isArray(cfg.tiles) ? cfg.tiles : []).map(normTile).filter((x) => x && !tids.has(x.id) && tids.add(x.id));
   const M = {
-    cfg, rooms, ents, door, vac, tiles, rot: 0,
+    cfg, rooms, ents, door, vac, tiles, rot: 0, dep: normDepartures(cfg.departures),
     windows: (cfg.windows || []).map(normSeg).filter(Boolean),
     passages: (cfg.doors || []).map(normSeg).filter(Boolean),
     entrance: normSeg(cfg.entrance),
@@ -680,7 +685,9 @@ function finishModel(M, hass, mobile) {
   M.indoor = ic === false ? [] : Array.isArray(ic) && ic.length ? ic : M.ents.filter((e) => e.kind === 'climate').map((e) => e.entity);
   M.layers = buildLayers(M);
   M.widgets = placeWidgets(M, mobile);
-  const all = [B, ...['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)].map((k) => M.widgets[k]).filter(Boolean)];
+  const wk = ['card', 'weather', 'indoor', 'door', 'bar', ...M.tiles.map((x) => x.id)], all = [B, ...wk.map((k) => M.widgets[k]).filter(Boolean)];
+  // the departure board lies over the plan – beside the tiles in it
+  M.dboard = M.dep ? freeOf(B, wk.map((k) => M.widgets[k])) : null;
   const U = bboxOf(all), m = 6 * D;
   M.stage = { x: U[0] - m, y: U[1] - m, w: U[2] - U[0] + 2 * m, h: U[3] - U[1] + 2 * m };
 }
@@ -693,6 +700,7 @@ function buildLayers(M) {
     if (M.ents.some((e) => e.kind === 'climate')) list.push('climate');
     if (M.ents.some((e) => e.kind === 'cover')) list.push('cover');
     if (M.vac) list.push('vacuum');
+    if (M.dep) list.push('departures');
     if (!list.length) list.push('light');
   }
   const out = [], used = new Set();
@@ -707,7 +715,7 @@ function buildLayers(M) {
         kinds: new Set([].concat(l.show || []).filter((k) => SHOW_KINDS.includes(k))), ents: new Set([].concat(l.entities || [])),
       };
     }
-    if (!L || used.has(L.id) || (L.type === 'vacuum' && !M.vac)) return;
+    if (!L || used.has(L.id) || (L.type === 'vacuum' && !M.vac) || (L.type === 'departures' && !M.dep)) return;
     used.add(L.id);
     out.push(L);
   });
@@ -907,6 +915,32 @@ function placeWidgets(M, mobile) {
     else { const cy = B[1] + (B[3] - B[1]) * 0.36; out.bar = [B[0] - BAR.w, cy - BAR.h / 2, B[0], cy + BAR.h / 2]; }
   }
   return out;
+}
+
+/* The largest rectangle inside B that none of the blocks covers (its edges lie on the edges of B and the blocks) –
+ * too little left: B itself */
+function freeOf(B, blocks) {
+  const bs = blocks.filter((b) => b && b[2] > B[0] && b[0] < B[2] && b[3] > B[1] && b[1] < B[3]);
+  const xs = [...new Set([B[0], B[2], ...bs.flatMap((b) => [b[0], b[2]]).filter((x) => x > B[0] && x < B[2])])].sort((a, b) => a - b);
+  const ys = [...new Set([B[1], B[3], ...bs.flatMap((b) => [b[1], b[3]]).filter((y) => y > B[1] && y < B[3])])].sort((a, b) => a - b);
+  let best = null;
+  for (let a = 0; a < xs.length; a++) for (let c = a + 1; c < xs.length; c++) for (let b = 0; b < ys.length; b++) for (let d = b + 1; d < ys.length; d++) {
+    const R = [xs[a], ys[b], xs[c], ys[d]];
+    if ((!best || rectArea(R) > rectArea(best)) && !bs.some((q) => q[0] < R[2] && q[2] > R[0] && q[1] < R[3] && q[3] > R[1])) best = R;
+  }
+  return best && rectArea(best) > rectArea(B) * 0.3 ? best : [...B];
+}
+
+/* ---------------------------------------------------------------- Departures (configuration)
+ * departures: { stops: [{ id | entity, name, walk, lines, exclude }], api, per }
+ * A stop by its id is fetched from the public VBB / BVG interface (transport.rest), a stop by its entity is read from a
+ * sensor of the integration "Berlin (BVG) and Brandenburg (VBB) transport" (attribute `departures`). */
+function normDepartures(d) {
+  const stops = (Array.isArray(d?.stops) ? d.stops : []).filter((s) => s && (s.id || s.entity)).map((s, i) => ({
+    i, id: s.id ? String(s.id) : null, entity: s.entity || null, name: s.name || null, walk: Math.max(0, +s.walk || 0),
+    lines: [].concat(s.lines || []).map(String), exclude: [].concat(s.exclude || []).map(String),
+  }));
+  return stops.length ? { stops, api: String(d.api || 'https://v6.vbb.transport.rest').replace(/\/$/, ''), per: clamp(Math.round(+d.per || 3), 1, 5) } : null;
 }
 
 /* ---------------------------------------------------------------- Room graph (robot routes)
@@ -1755,6 +1789,7 @@ class GlassFloorplanCard extends HTMLElement {
       this._layout();
       this._subscribeForecast();
       this._kickRobot?.();
+      this._depSync();
     }
   }
 
@@ -1768,6 +1803,8 @@ class GlassFloorplanCard extends HTMLElement {
     cancelAnimationFrame(this._rraf);
     this._rraf = null;
     this._wiredKey = false;
+    clearInterval(this._depI);
+    this._depI = null;
   }
 
   set hass(hass) {
@@ -1919,7 +1956,7 @@ class GlassFloorplanCard extends HTMLElement {
       ${M.layers.map((L) => `<button data-tab="${esc(L.id)}" role="tab" aria-label="${esc(this._layerName(L))}">${this._iconHtml(L.icon)}<span>${esc(this._layerName(L))}</span></button>`).join('')}</div>` : '';
     const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
 
-    this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}</style>
+    this.shadowRoot.innerHTML = `<style>${STYLES}${STYLES_M}${STYLES_D}</style>
 <div class="root boot${this._m ? ' m' : ''}${this._inPreview() || this._ev ? ' pv' : ''}${this._ev ? ' ev' : ''}${this._ev?.bare ? ' bare' : ''}" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs>
     <linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient>
@@ -1931,6 +1968,7 @@ class GlassFloorplanCard extends HTMLElement {
       <div class="glows">${glows}</div>
       ${pas}${rooms}${wins}${vac}${markers}${dock ? '' : bar}
       ${Wd.card ? `<div class="gcard${cmp}" style="${G.tile(Wd.card)}"></div>` : ''}
+      ${M.dboard ? `<div class="dboard" style="${G.tile(M.dboard).replace('height:', 'max-height:')}"><div class="dbi"></div></div>` : ''}
       <div class="tip"></div>
     </div>
     ${Wd.side ? `<div class="${this._m ? 'mside' : 'side'}">${Wd.side.card ? `<div class="gcard${cmp}"></div>` : ''}</div>` : ''}
@@ -2036,6 +2074,7 @@ class GlassFloorplanCard extends HTMLElement {
     if (M.vac) Object.values(this._vacEnts()).forEach((i) => ids.add(i));
     for (const L of M.layers) L.ents.forEach((i) => ids.add(i));
     for (const x of M.tiles) { x.ents.forEach((e) => ids.add(e.entity)); (x.btns || []).forEach((b) => ids.add(b.entity)); }
+    for (const s of M.dep?.stops || []) ids.add(s.entity);
     ids.delete(null); ids.delete(undefined);
     return [...ids];
   }
@@ -2481,6 +2520,7 @@ class GlassFloorplanCard extends HTMLElement {
     for (const [k, el] of Object.entries(this._roomEls)) el.classList.toggle('idle', L.type !== 'vacuum' && !this._roomHas(k, L));
     this._placeKnob(!animate);
     this._gapKind = null;
+    this._depSync();
     if (this._hass) { this._renderGap(); this._updClean(); this._updRobot(); this._updAmbient(); this._updRooms(); }
     this._declutter();
   }
@@ -2653,7 +2693,7 @@ class GlassFloorplanCard extends HTMLElement {
       else if (L.type === 'light') {
         const lit = this._roomEnts(k, L, 'light');
         if (lit.length) s = onL.length ? t('nOn', onL.length) : t('off');
-      } else s = this._roomCustomLabel(k, L);
+      } else if (L.type !== 'departures') s = this._roomCustomLabel(k, L);
       el.querySelector('.rl span').textContent = s;
     }
   }
@@ -2678,7 +2718,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._root.style.setProperty('--dli', (day * (1 - clouds * 0.6)).toFixed(2));
     if (!this._gcard) return;
     const L = this._layer(), lit = this._M.ents.some((l) => l.kind === 'light' && isOn(this._st(l.entity)));
-    const tint = L.type === 'vacuum' ? ['30, 52, 92', '20, 30, 58']
+    const tint = L.type === 'vacuum' || L.type === 'departures' ? ['30, 52, 92', '20, 30, 58']
       : L.type === 'climate' ? this._climTint()
         : L.type === 'cover' ? ['44, 54, 72', '28, 32, 44']
           : lit && L.kinds.has('light') ? ['112, 72, 54', '92, 52, 36'] : ['46, 46, 54', '30, 30, 36'];
@@ -2695,7 +2735,8 @@ class GlassFloorplanCard extends HTMLElement {
       this._gapUpd = [];
       this._gcard.innerHTML = '';
       const v = L.type === 'vacuum' ? this._cleanGap(this._gapUpd) : L.type === 'climate' ? this._climateGap(L, this._gapUpd)
-        : L.type === 'cover' ? this._coverGap(L, this._gapUpd) : L.type === 'light' ? this._lightGap(L, this._gapUpd) : this._customGap(L, this._gapUpd);
+        : L.type === 'cover' ? this._coverGap(L, this._gapUpd) : L.type === 'light' ? this._lightGap(L, this._gapUpd)
+          : L.type === 'departures' ? this._depGap(L, this._gapUpd) : this._customGap(L, this._gapUpd);
       this._gcard.append(v);
     }
     this._gapUpd.forEach((f) => f());
@@ -2890,6 +2931,8 @@ class GlassFloorplanCard extends HTMLElement {
 
   _tick() {
     if (this._hass && this._root) this._updSide();
+    // departures count down
+    if (this._hass && this._root && this._layer()?.type === 'departures') this._renderGap();
   }
 
   _wxIcon(cond, hour) {
@@ -5054,6 +5097,194 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
 });
 
+/* ================================================================== Departures: the next trains and buses at stops nearby
+ * A layer of its own: the plan dims, a glass board lies over it – per stop the lines in both directions with their next
+ * departures, in the lines' own colours. The layer card shows the next departure you can still reach on foot and when
+ * to leave. Stops by id are fetched by the card itself (public VBB / BVG interface, every 30 s while the layer is shown),
+ * stops by entity come from Home Assistant (integration "Berlin (BVG) and Brandenburg (VBB) transport"). */
+const DEP_ORDER = ['subway', 'suburban', 'tram', 'regional', 'express', 'bus', 'ferry'];
+/* colours of a kind of line when the line has none of its own (as the integration uses them) */
+const DEP_COLORS = { subway: '#2864A6', suburban: '#008D4F', tram: '#D82020', bus: '#A5027D', ferry: '#0080BA', express: '#4D4D4D', regional: '#F01414' };
+const hexRgb = (h) => {
+  let s = String(h || '').replace('#', '');
+  if (s.length === 3) s = s.replace(/./g, '$&$&');
+  const n = parseInt(s, 16);
+  return s.length === 6 && Number.isFinite(n) ? [(n >> 16) & 255, (n >> 8) & 255, n & 255] : [120, 120, 132];
+};
+/* the destination, short: "U Britz-Süd via S Südkreuz" → "Britz-Süd", "S+U Zoologischer Garten" → "Zoologischer Garten",
+ * "U Berliner Str. -> N43 Richtung …" → "Berliner Str." */
+const depDir = (d) => String(d || '').replace(/\s*->.*$/, '').replace(/\s+via\s.*$/, '').replace(/\s*\((Berlin|Bln)\)/g, '').replace(/^(S\+U|U|S)\s+/, '').trim();
+/* a departure as the interface sends it / as the integration's sensor has it */
+const depFromApi = (x) => {
+  const l = x.line || {}, w = x.when || x.plannedWhen;
+  return { line: l.name || '?', product: l.product || '', bg: l.color?.bg || null, fg: l.color?.fg || null, dir: depDir(x.direction), t: w ? Date.parse(w) : NaN, delay: x.delay ?? null, cancelled: !!x.cancelled };
+};
+const depFromSensor = (x) => ({
+  line: x.line_name || '?', product: x.line_type || '', bg: x.color || null, fg: x.text_color || null, dir: depDir(x.direction),
+  t: Date.parse(x.timestamp || ''), delay: x.delay ?? null, cancelled: !!x.cancelled,
+});
+
+const STYLES_D = `
+/* departures: a glass board over the dimmed plan */
+.dboard { position: absolute; z-index: 6; display: flex; flex-direction: column; border-radius: calc(26 * var(--u)); overflow: hidden;
+  background: linear-gradient(160deg, rgba(42, 44, 54, .66), rgba(18, 19, 24, .74));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .08), 0 24px 60px rgba(0, 0, 0, .4);
+  -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%);
+  opacity: 0; transform: scale(.985); pointer-events: none; transition: opacity .35s ease, transform var(--soft-ms) var(--soft); }
+.root[data-type="departures"] .dboard { opacity: 1; transform: none; pointer-events: auto; }
+.dbi { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(250px, calc(330 * var(--u)))), 1fr));
+  align-content: start; gap: max(14px, calc(22 * var(--u))) max(18px, calc(34 * var(--u))); padding: max(14px, calc(24 * var(--u))) max(14px, calc(26 * var(--u))); }
+.dbi::-webkit-scrollbar { display: none; }
+.dst header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 0 2px max(6px, calc(10 * var(--u)));
+  border-bottom: 1px solid rgba(255, 255, 255, .08); margin-bottom: max(4px, calc(6 * var(--u))); }
+.dst header b { min-width: 0; font-size: max(15px, calc(21 * var(--u))); font-weight: 700; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dst header span { flex: none; display: flex; align-items: center; gap: 4px; font-size: max(12px, calc(14 * var(--u))); font-weight: 500; color: var(--t2); }
+.dst header .ic { font-size: 1.2em; stroke-width: 1.8; }
+.drow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: max(9px, calc(13 * var(--u)));
+  padding: max(6px, calc(9 * var(--u))) 2px; border-bottom: 1px solid rgba(255, 255, 255, .05); }
+.drow:last-child { border-bottom: 0; }
+.dl { display: inline-grid; place-items: center; min-width: max(36px, calc(48 * var(--u))); height: max(22px, calc(29 * var(--u))); padding: 0 6px; box-sizing: border-box;
+  border-radius: max(6px, calc(8 * var(--u))); background: var(--lb); color: var(--lf); font-size: max(12.5px, calc(15.5 * var(--u))); font-weight: 750; letter-spacing: -.01em;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), 0 2px 10px rgba(var(--lr), .3); }
+.dd { min-width: 0; font-size: max(13.5px, calc(17 * var(--u))); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dt { display: flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dt b { font-size: max(17px, calc(24 * var(--u))); font-weight: 700; letter-spacing: -.03em; }
+.dt b + small { font-size: max(11px, calc(13 * var(--u))); font-weight: 600; color: var(--t2); margin-right: 4px; }
+.dt i { font-style: normal; font-size: max(12.5px, calc(15 * var(--u))); font-weight: 500; color: var(--t2); }
+.dt .late { color: rgb(var(--orange)); }
+.dt .x { color: rgb(var(--red)); text-decoration: line-through; }
+.dt .far { opacity: .38; }
+.dt sup { font-size: .62em; font-weight: 650; color: rgb(var(--orange)); margin-left: 1px; }
+.dmsg { padding: max(6px, calc(9 * var(--u))) 2px; font-size: max(12.5px, calc(15 * var(--u))); color: var(--t3); }
+/* the layer card: the line's badge in front of the next departure */
+.gt .dl { min-width: 0; height: 1.15em; padding: 0 .3em; margin-right: .35em; vertical-align: .08em; border-radius: .26em; font-size: .62em; box-shadow: none; }
+.m .dbi { padding: 12px 14px; gap: 12px; }
+`;
+
+Object.assign(GlassFloorplanCard.prototype, {
+  /* the departures of a stop, now: fetched or from its sensor, with the stop's line filters */
+  _depList(s) {
+    let list = [];
+    if (s.entity) list = (this._hass?.states?.[s.entity]?.attributes?.departures || []).map(depFromSensor);
+    else list = this._depC?.[`${this._M.dep.api}|${s.id}`]?.list || [];
+    const now = Date.now() - 20e3;
+    return list.filter((d) => Number.isFinite(d.t) && d.t >= now && (!s.lines.length || s.lines.includes(d.line)) && !s.exclude.includes(d.line));
+  },
+  /* has a stop answered at all (fetched once / sensor known), did it fail */
+  _depState(s) {
+    if (s.entity) { const st = this._hass?.states?.[s.entity]; return { ok: !!st && !unavailable(st), err: !st || unavailable(st) }; }
+    const c = this._depC?.[`${this._M.dep.api}|${s.id}`];
+    return { ok: !!c?.list, err: !!c?.err && !c?.list };
+  },
+  _depMin(ms) { return Math.floor((ms - Date.now()) / 60000); },
+  /* "4", "jetzt", "05:28" (an hour or more ahead) */
+  _depTime(ms) {
+    const m = this._depMin(ms);
+    if (m < 1) return { v: t('depNow'), unit: '' };
+    if (m >= 60) return { v: new Date(ms).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' }), unit: '' };
+    return { v: String(m), unit: t('min') };
+  },
+  _depBadge(d) {
+    const bg = d.bg || DEP_COLORS[d.product] || '#6e6e78', fg = d.fg || '#fff';
+    return `<span class="dl" style="--lb:${esc(bg)};--lf:${esc(fg)};--lr:${hexRgb(bg).join(',')}">${esc(d.line)}</span>`;
+  },
+
+  /* fetch the stops given by id (not more often than every 25 s; a hidden browser tab waits) */
+  _depFetch(force) {
+    const D = this._M?.dep;
+    if (!D || (!force && (document.hidden || Date.now() - (this._depT || 0) < 25e3))) return;
+    this._depT = Date.now();
+    this._depC = this._depC || {};
+    for (const s of D.stops.filter((x) => x.id)) {
+      const key = `${D.api}|${s.id}`, url = `${D.api}/stops/${encodeURIComponent(s.id)}/departures?duration=90&results=60&remarks=false&linesOfStops=false`;
+      fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => {
+        this._depC[key] = { at: Date.now(), list: (Array.isArray(j) ? j : j.departures || []).map(depFromApi) };
+        this._depShow();
+      }).catch(() => { this._depC[key] = { ...(this._depC[key] || {}), err: true }; this._depShow(); });
+    }
+  },
+  /* while the layer is shown: fetch now and every 30 s */
+  _depSync() {
+    const on = !!this._M?.dep && this.isConnected && this._layer()?.type === 'departures';
+    if (!on) { clearInterval(this._depI); this._depI = null; return; }
+    if (!this._depI) this._depI = setInterval(() => this._depFetch(), 30e3);
+    this._depFetch();
+  },
+  _depShow() { if (this._layer()?.type === 'departures') this._renderGap(); },
+
+  /* the board: per stop its lines (by kind, then name) and directions with the next departures */
+  _depBoard() {
+    const el = this.shadowRoot.querySelector('.dbi'), D = this._M.dep;
+    if (!el || !D) return;
+    const per = D.per;
+    el.innerHTML = D.stops.map((s) => {
+      const st = this._depState(s), groups = new Map();
+      for (const d of this._depList(s)) {
+        const k = `${d.line}|${d.dir}`;
+        if (!groups.has(k)) groups.set(k, { ...d, deps: [] });
+        groups.get(k).deps.push(d);
+      }
+      const rank = (p) => (DEP_ORDER.indexOf(p) + 1 || 99);
+      const rows = [...groups.values()].sort((a, b) => rank(a.product) - rank(b.product) || a.line.localeCompare(b.line, undefined, { numeric: true }) || a.dir.localeCompare(b.dir, LOCALE));
+      const body = rows.length ? rows.map((g) => {
+        const ds = g.deps.sort((a, b) => a.t - b.t).slice(0, per);
+        const cls = (d) => [d.cancelled ? 'x' : d.delay >= 60 ? 'late' : '', this._depMin(d.t) < s.walk ? 'far' : ''].filter(Boolean).join(' ');
+        const first = ds[0], f = this._depTime(first.t), late = first.delay >= 60 && !first.cancelled ? `<sup>+${Math.round(first.delay / 60)}</sup>` : '';
+        const more = ds.slice(1).map((d) => `<span class="${cls(d)}">${esc(this._depTime(d.t).v)}</span>`).join(' · ');
+        return `<div class="drow">${this._depBadge(g)}<span class="dd">${esc(g.dir)}</span><span class="dt"><b class="${cls(first)}">${esc(f.v)}${late}</b>${f.unit ? `<small class="${cls(first)}">${esc(f.unit)}</small>` : ''}${more ? `<i>${more}</i>` : ''}</span></div>`;
+      }).join('') : `<div class="dmsg">${esc(t(st.err ? 'depOffline' : st.ok ? 'depNone' : 'depLoading'))}</div>`;
+      const name = s.name || (s.entity ? this._nameOf(s.entity) : s.id);
+      return `<section class="dst"><header><b>${esc(name)}</b>${s.walk ? `<span>${icon('walk')}${esc(t('depWalk', s.walk))}</span>` : ''}</header>${body}</section>`;
+    }).join('');
+  },
+
+  /* the next departure you can still reach on foot (each stop with its walk), and the ones after it */
+  _depNext() {
+    const all = [];
+    for (const s of this._M.dep.stops) for (const d of this._depList(s)) if (!d.cancelled && this._depMin(d.t) >= s.walk) all.push({ ...d, stop: s });
+    return all.sort((a, b) => (a.t - a.stop.walk * 6e4) - (b.t - b.stop.walk * 6e4));
+  },
+
+  /* ---------------------------------------------------------------- layer card */
+  _depGap(L, upd) {
+    const v = mk('div', 'gv sub', `<div class="gk"><span>${esc(this._layerName(L))}</span><span class="bat"></span></div>
+      <div class="gt"><b></b><span class="w"></span></div><div class="gs"></div><div class="segs"></div>`);
+    upd.push(() => {
+      this._depBoard();
+      const next = this._depNext(), n = next[0], D = this._M.dep;
+      const b = v.querySelector('.gt b'), w = v.querySelector('.gt .w'), gs = v.querySelector('.gs');
+      const st = D.stops.map((s) => this._depState(s));
+      if (n) {
+        b.innerHTML = `${this._depBadge(n)}${esc(n.dir)}`;
+        const tm = this._depTime(n.t);
+        w.textContent = tm.unit ? t('depIn', tm.v) : tm.v;
+        const leave = this._depMin(n.t) - n.stop.walk, after = next.find((x) => x.stop !== n.stop || x.line !== n.line);
+        gs.textContent = [n.stop.walk ? (leave <= 0 ? t('depGoNow') : t('depLeaveIn', leave)) : '', n.stop.name || '', after ? t('depThen', after.line, Math.max(0, this._depMin(after.t))) : ''].filter(Boolean).join(' · ');
+      } else {
+        b.textContent = t(st.some((x) => x.err) && !st.some((x) => x.ok) ? 'depOffline' : st.some((x) => x.ok) ? 'depNone' : 'depLoading');
+        w.textContent = '';
+        gs.textContent = '';
+      }
+      // the coming departures as a strip in the colours of their lines
+      const segs = next.slice(0, 12);
+      v.querySelector('.segs').innerHTML = segs.map((d) => `<i class="on" style="--c:${hexRgb(d.bg || DEP_COLORS[d.product]).join(',')}"></i>`).join('') || '<i></i>';
+      v.querySelector('.gk .bat').innerHTML = this._iconHtml(L.icon);
+    });
+    return v;
+  },
+});
+
+Object.assign(STR.en, {
+  layer_departures: 'Departures', depNow: 'now', depIn: (m) => `in ${m} min`, depLeaveIn: (m) => `Leave in ${m} min`, depGoNow: 'Leave now',
+  depWalk: (m) => `${m} min`, depThen: (l, m) => `then ${l} in ${m} min`, depNone: 'No departures in the next hour and a half',
+  depLoading: 'Loading departures …', depOffline: 'Timetable not reachable',
+});
+Object.assign(STR.de, {
+  layer_departures: 'Abfahrten', depNow: 'jetzt', depIn: (m) => `in ${m} min`, depLeaveIn: (m) => `Losgehen in ${m} min`, depGoNow: 'Jetzt losgehen',
+  depWalk: (m) => `${m} min`, depThen: (l, m) => `danach ${l} in ${m} min`, depNone: 'Keine Abfahrten in den nächsten anderthalb Stunden',
+  depLoading: 'Abfahrten werden geladen …', depOffline: 'Fahrplan nicht erreichbar',
+});
+
 /* ================================================================== Floor plan editor: styles (same glass language as the card) */
 const EDITOR_STYLES = `
 dialog.ed { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: #08090c; color: var(--t1); overflow: hidden; }
@@ -6608,11 +6839,14 @@ class GfcEditor extends HTMLElement {
     const list = this._c.layers?.length ? this._c.layers : (this._model()?.layers || []).map((L) => L.id), ek = this._entKinds();
     const out = list.map((l, i) => {
       const type = builtinType(l);
+      // departures come from YAML and hold no devices
+      if (type === 'departures') return { id: type, type, name: l.name || t('layer_departures'), icon: l.icon || LAYER_TYPES[type].icon, kinds: [], ents: [], noDevices: true };
       if (type) return { id: type, type, name: l.name || t(`layer_${type}`), icon: l.icon || LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: layerExtras(l, ek) };
       return l && typeof l === 'object' ? { id: this._layerIdOf(l, i), type: 'custom', name: l.name || t('layer'), icon: l.icon || 'layers', kinds: [].concat(l.show || []), ents: [].concat(l.entities || []), raw: l } : null;
     }).filter(Boolean);
     // built-in layers are always offered for placing devices
     for (const type of ['light', 'climate', 'cover', 'vacuum']) if (!out.some((L) => L.id === type)) out.push({ id: type, type, name: t(`layer_${type}`), icon: LAYER_TYPES[type].icon, kinds: LAYER_TYPES[type].kinds, ents: [], hidden: true });
+    if (this._c.departures && !out.some((L) => L.id === 'departures')) out.push({ id: 'departures', type: 'departures', name: t('layer_departures'), icon: LAYER_TYPES.departures.icon, kinds: [], ents: [], hidden: true, noDevices: true });
     return out;
   }
   _layerDef(id) { return this._layerDefs().find((L) => L.id === id); }
@@ -7101,7 +7335,7 @@ Object.assign(GfcEditor.prototype, {
       this._change(() => {
         const ex = exampleConfig(LANG), h = this._hs() || {};
         // in a real home the example devices do not exist – then only the floor plan is used
-        if (!ex.entities.every((e) => h.states?.[e.entity])) { delete ex.entities; delete ex.door; delete ex.vacuum; delete ex.layers; delete ex.weather; }
+        if (!ex.entities.every((e) => h.states?.[e.entity])) { delete ex.entities; delete ex.door; delete ex.vacuum; delete ex.layers; delete ex.weather; delete ex.departures; }
         for (const k of ['rooms', 'windows', 'doors', 'entrance', 'entities', 'door', 'vacuum', 'layers', 'widgets']) delete this._c[k];
         dropPhoneWidgets(this._c);
         Object.assign(this._c, normEditorConfig({ ...this._c, ...ex, language: this._c.language }));
@@ -7360,7 +7594,7 @@ Object.assign(GfcEditor.prototype, {
   /* ---------------------------------------------------------------- devices */
   _layerChips(I) {
     const chips = mk('div', 'echips');
-    for (const L of this._layerDefs()) {
+    for (const L of this._layerDefs().filter((x) => !x.noDevices)) {
       const b = mk('button', `echip${L.id === this._layerSel ? ' act' : ''}`, `${this._iconHtml(L.icon)}<span>${esc(L.name)}</span>`);
       b.addEventListener('click', () => { this._layerSel = L.id; this._s = null; this._draw(); this._panel(); });
       chips.append(b);
@@ -7710,7 +7944,7 @@ Object.assign(GfcEditor.prototype, {
         ed.title = t('ed_edit');
         ed.addEventListener('click', () => { this._editLayer = L.id; this._layerSel = L.id; this._draw(); this._panel(); });
         mv.append(ed);
-      } else if (L.type !== 'vacuum' || c.vacuum) {
+      } else if ((L.type !== 'vacuum' || c.vacuum) && (L.type !== 'departures' || c.departures)) {
         box.querySelector('.elayer').append(this._tglEl(on, (v) => this._change(() => {
           this._materializeLayers();
           if (v) c.layers.push(L.type); else c.layers = c.layers.filter((l) => builtinType(l) !== L.type);
@@ -7902,7 +8136,9 @@ function exampleConfig(lang = 'en') {
     weather: 'weather.home',
     tiles: [{ id: 'energy', name: N('Energy', 'Energie'), icon: 'bolt', entities: ['sensor.home_power', { entity: 'sensor.energy_today', name: N('Today', 'Heute') }] }],
     layers: ['light', 'climate', 'cover', 'vacuum',
-      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }],
+      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }, 'departures'],
+    // two made-up stops nearby, from sensors of the transport integration (the demo simulates them)
+    departures: { stops: [{ entity: 'sensor.departures_linden_square', name: N('Linden Square', 'Lindenplatz'), walk: 4 }, { entity: 'sensor.departures_town_hall', name: N('Town Hall', 'Rathaus'), walk: 6 }] },
   };
 }
 
@@ -8111,7 +8347,7 @@ Object.assign(STR.en, {
   ed_inLayers: 'In own layers', ed_viaKind: 'Shown through the layer’s categories', ed_removeFromPlan: 'Remove from plan', ed_outside: 'This marker is outside of all rooms.',
   ed_layerName: 'Layer', ed_layers_lead: 'The symbols next to the plan. Built-in layers show one category – own layers combine categories and any devices.',
   ed_up: 'Up', ed_down: 'Down', ed_edit: 'Edit', ed_layers_help: 'Order = order of the symbols. A layer only appears when it has something to show.',
-  ed_layerDesc_light: 'Lights, front door', ed_layerDesc_climate: 'Thermostats, temperatures', ed_layerDesc_cover: 'Shutters, blinds', ed_layerDesc_vacuum: 'Roborock vacuum',
+  ed_layerDesc_light: 'Lights, front door', ed_layerDesc_climate: 'Thermostats, temperatures', ed_layerDesc_cover: 'Shutters, blinds', ed_layerDesc_vacuum: 'Roborock vacuum', ed_layerDesc_departures: 'Next trains and buses',
   ed_layerEmpty: 'Nothing chosen yet', ed_layerShows: 'Shows all', ed_layerShowsHelp: 'Pick whole categories – plus any single devices below.',
   ed_layerDevices: (n) => `More devices (${n})`, ed_addDevices: 'Add devices', ed_kind_media: 'Media',
   ed_tiles_lead: 'Weather, inside climate, front door, the layer card and the layer bar arrange themselves in free corners of your plan. Drag them to put them elsewhere – the phone has places of its own.',
@@ -8180,7 +8416,7 @@ Object.assign(STR.de, {
   ed_inLayers: 'In eigenen Ebenen', ed_viaKind: 'Über die Kategorien der Ebene enthalten', ed_removeFromPlan: 'Vom Plan entfernen', ed_outside: 'Dieser Knopf liegt außerhalb aller Räume.',
   ed_layerName: 'Ebene', ed_layers_lead: 'Die Symbole neben dem Plan. Eingebaute Ebenen zeigen eine Kategorie – eigene Ebenen kombinieren Kategorien und beliebige Geräte.',
   ed_up: 'Nach oben', ed_down: 'Nach unten', ed_edit: 'Bearbeiten', ed_layers_help: 'Reihenfolge = Reihenfolge der Symbole. Eine Ebene erscheint nur, wenn sie etwas zu zeigen hat.',
-  ed_layerDesc_light: 'Lichter, Haustür', ed_layerDesc_climate: 'Thermostate, Temperaturen', ed_layerDesc_cover: 'Rollläden, Jalousien', ed_layerDesc_vacuum: 'Roborock-Saugroboter',
+  ed_layerDesc_light: 'Lichter, Haustür', ed_layerDesc_climate: 'Thermostate, Temperaturen', ed_layerDesc_cover: 'Rollläden, Jalousien', ed_layerDesc_vacuum: 'Roborock-Saugroboter', ed_layerDesc_departures: 'Nächste Bahnen und Busse',
   ed_layerEmpty: 'Noch nichts gewählt', ed_layerShows: 'Zeigt alle', ed_layerShowsHelp: 'Ganze Kategorien wählen – plus einzelne Geräte darunter.',
   ed_layerDevices: (n) => `Weitere Geräte (${n})`, ed_addDevices: 'Geräte hinzufügen', ed_kind_media: 'Medien',
   ed_tiles_lead: 'Wetter, Innenklima, Haustür, Ebenen-Karte und Ebenen-Leiste ordnen sich in freien Ecken deines Plans an. Zum Umsetzen einfach ziehen – das Handy hat eigene Plätze.',
