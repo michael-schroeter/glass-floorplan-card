@@ -28,7 +28,7 @@ const depFromSensor = (x) => ({
 const STYLES_D = `
 /* departures take the plan's place: rooms, light and devices fade away, a glass board shows the departures */
 .root[data-type="departures"] .room, .root[data-type="departures"] .glows, .root[data-type="departures"] .win, .root[data-type="departures"] .pas,
-.root[data-type="departures"] .lamp, .root[data-type="departures"] .dev, .root[data-type="departures"] .bot, .root[data-type="departures"] .dockm,
+.root[data-type="departures"] .lamp:not(.tk), .root[data-type="departures"] .dev:not(.tk), .root[data-type="departures"] .bot, .root[data-type="departures"] .dockm,
 .root[data-type="departures"] .trail { opacity: 0 !important; pointer-events: none !important; }
 .root .room { transition: box-shadow .6s ease, background .5s ease, transform var(--sp-ms) var(--sp), opacity .4s ease; }
 .root .pas, .root .win.fd { transition: opacity .4s ease, background .4s, box-shadow .4s; }
