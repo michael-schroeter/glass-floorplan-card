@@ -251,7 +251,7 @@ class GlassFloorplanCard extends HTMLElement {
     const vac = M.vac ? `<svg class="trail" viewBox="${S.x} ${S.y} ${S.w} ${S.h}" preserveAspectRatio="none"><polyline class="t1" points=""/><polyline class="t2" points=""/></svg>
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';
     // layer bar: in the plan (upright or lying), on a phone else at the bottom of the screen like a tab bar
-    const Wd = M.widgets, dock = this._m && !Wd.bar, barH = dock || M.wopt.barH, cmp = M.wopt.compact ? ' cmp' : '';
+    const Wd = M.widgets, dock = this._m && !Wd.bar, barH = dock || M.wopt.barH, cmp = { normal: '', small: ' cmp', mini: ' cmp xs' }[M.wopt.size];
     const bar = Wd.bar || this._m ? `<div class="tabs${barH ? ' h' : ''}${dock ? ' dock' : ''}" role="tablist" aria-orientation="${barH ? 'horizontal' : 'vertical'}" style="${Wd.bar ? G.at(center(Wd.bar)) : ''}"><i class="knob"></i>
       ${M.layers.map((L) => `<button data-tab="${esc(L.id)}" role="tab" aria-label="${esc(this._layerName(L))}">${this._iconHtml(L.icon)}<span>${esc(this._layerName(L))}</span></button>`).join('')}</div>` : '';
     const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
@@ -428,6 +428,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._placeKnob(true);
     this._fitLabels();
     this._fitBtnTiles();
+    this._fitGcard();
     this._declutter();
   }
 
@@ -1035,8 +1036,19 @@ class GlassFloorplanCard extends HTMLElement {
       this._gcard.append(v);
     }
     this._gapUpd.forEach((f) => f());
-    // compact: the buttons show only their icon – the words as tooltip
-    if (this._gcard.classList.contains('cmp')) for (const b of this._gcard.querySelectorAll('.gbtn')) { const s = b.textContent.trim(); if (b.title !== s) { b.title = s; b.setAttribute('aria-label', s); } }
+    this._fitGcard();
+    // round buttons (small, mini – or too little room for the words): the words as tooltip
+    if (this._gcard.matches('.cmp, .fi')) for (const b of this._gcard.querySelectorAll('.gbtn')) { const s = b.textContent.trim(); if (b.title !== s) { b.title = s; b.setAttribute('aria-label', s); } }
+  }
+  /* The layer card keeps what it shows legible in the room it really has: what does not fit goes, step by step –
+   * normal: the subtitle, then the strip, then the heading; small: the strip, then the heading; mini: the heading.
+   * Buttons too narrow for their words show only their icon. */
+  _fitGcard() {
+    const g = this._gcard, v = g?.firstElementChild;
+    if (!v || !g.clientHeight) return;
+    g.classList.remove('f1', 'f2', 'f3', 'fi');
+    for (const c of ['f1', 'f2', 'f3']) { if (v.scrollHeight <= v.clientHeight + 1) break; g.classList.add(c); }
+    if ([...g.querySelectorAll('.gbtn > span')].some((s) => s.scrollWidth > s.clientWidth + 1)) g.classList.add('fi');
   }
 
   _lightGap(L, upd) {

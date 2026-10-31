@@ -36,7 +36,7 @@ Rooms named like a Home Assistant area are linked by themselves (also across lan
 
 **Out of the box** link your rooms to Home Assistant areas and the rest falls into place: devices land in their rooms, lamps get the right symbol, and layers for light, climate, covers and your Roborock appear on their own.
 
-**If you like**, you can fine-tune a lot: furniture, windows and the front door, symbols for each device, light cones for light, a door opener and doorbell, modes from your scenes and scripts, and your own layers such as *Night = lights + covers + front door lock*. Every device can get its own tap, hold and double tap action – the same ones as anywhere in Home Assistant. Your own tiles show values of your choice, buttons like the ones on the plan or any Home Assistant card in the glass look. The layer card can be compact, the layer bar vertical or horizontal – and laptop and phone are arranged separately. All of it is in the editor. YAML is there if you want it, but you never need it.
+**If you like**, you can fine-tune a lot: furniture, windows and the front door, symbols for each device, light cones for light, a door opener and doorbell, modes from your scenes and scripts, and your own layers such as *Night = lights + covers + front door lock*. Every device can get its own tap, hold and double tap action – the same ones as anywhere in Home Assistant. Your own tiles show values of your choice, buttons like the ones on the plan or any Home Assistant card in the glass look. The layer card comes in three sizes, the layer bar vertical or horizontal – and laptop and phone are arranged separately. All of it is in the editor. YAML is there if you want it, but you never need it.
 
 ## Install
 

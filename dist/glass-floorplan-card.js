@@ -557,8 +557,10 @@ const tileBtnCap = (size) => 3 * size[0] * size[1];
 /* a tile that takes a whole row of the phone's tiles under the plan */
 const tileBig = (x) => !!x.card || x.size[0] > 1 || (!!x.btns && x.size[1] > 1);
 
+/* the sizes of the layer card: as always, small (round buttons beside the state), mini (no strip either) */
+const CARD_SIZES = ['normal', 'small', 'mini'];
 /* Where a tile goes in one view (laptop: `widgets`, phone: `mobile.widgets`): a rectangle [x1, y1, x2, y2], false (hidden)
- * or { rect, …options } – the layer card: compact, place (phone: below | plan); the layer bar: direction (vertical |
+ * or { rect, …options } – the layer card: size (normal | small | mini), place (phone: below | plan); the layer bar: direction (vertical |
  * horizontal), place (phone: bottom | plan). Positions on a phone are in its own (turned) plan. */
 function widgetOpt(W, k) {
   const v = W?.[k];
@@ -723,7 +725,7 @@ function placeWidgets(M, mobile) {
   const opt = (k) => widgetOpt(cfgW, k), oc = opt('card'), ob = opt('bar');
   // the layer card and the layer bar of this view: on a phone they sit below the plan / at the bottom of the screen
   // unless they are put into the plan; the bar stands upright on a laptop and lies on a phone unless told otherwise
-  M.wopt = { compact: !!oc.compact, barH: mobile ? ob.direction !== 'vertical' : ob.direction === 'horizontal' };
+  M.wopt = { size: CARD_SIZES.includes(oc.size) ? oc.size : 'normal', barH: mobile ? ob.direction !== 'vertical' : ob.direction === 'horizontal' };
   const out = { card: null, weather: null, indoor: null, door: null, bar: null, side: null };
   const tiles = ['weather', 'indoor', 'door'].filter((k) => (k === 'weather' ? M.weather : k === 'indoor' ? M.indoor.length : M.door) && !opt(k).off)
     .concat(M.tiles.map((x) => x.id));
@@ -788,15 +790,25 @@ function placeWidgets(M, mobile) {
   // phones draw the tiles with fixed pixel fonts: they need more room in design units
   const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 186, maxW: 380, maxH: 280 }
     : { w: 209, h: 118, minW: 158, minH: 92, maxW: 300, maxH: 150 });
-  const cmp = M.wopt.compact;
-  const CARD = du(mobile ? (cmp ? { w: 520, h: 215, minW: 440, minH: 205, maxW: 640 } : { w: 760, h: 370, minW: 640, minH: 350, maxW: 900 })
-    : cmp ? { w: 360, h: 132, minW: 305, minH: 126, maxW: 440 } : { w: 446, h: 190, minW: 318, minH: 176, maxW: 560 });
+  // the layer card in its three sizes (a phone draws it in fixed pixels: more design units)
+  const CARD = du({
+    normal: mobile ? { w: 760, h: 370, minW: 640, minH: 350, maxW: 900 } : { w: 446, h: 190, minW: 318, minH: 176, maxW: 560 },
+    small: mobile ? { w: 520, h: 215, minW: 440, minH: 205, maxW: 640 } : { w: 360, h: 132, minW: 305, minH: 126, maxW: 440 },
+    mini: mobile ? { w: 460, h: 155, minW: 400, minH: 145, maxW: 560 } : { w: 300, h: 92, minW: 270, minH: 88, maxW: 380 },
+  }[M.wopt.size]);
   // the bar's buttons have a minimum size in pixels: on a phone that is more design units
   const nL = Math.max(1, M.layers.length), bu = mobile ? 86 : 64, bt = mobile ? 100 : 76;
   const BAR = du(M.wopt.barH ? { w: nL * bu + 12, h: bt } : { w: bt, h: nL * bu + 12 });
 
   for (const k of ['card', 'weather', 'indoor', 'door', ...M.tiles.map((x) => x.id)]) if (opt(k).rect) out[k] = opt(k).rect;
   if (ob.rect && M.layers.length > 1) out.bar = ob.rect;
+  // what was placed by hand is taken: the automatic ones go around it
+  for (const R of Object.values(out)) {
+    if (!R) continue;
+    const i1 = clamp(Math.floor((R[0] - B[0]) / cw), 0, nx), i2 = clamp(Math.ceil((R[2] - B[0]) / cw), 0, nx);
+    const j1 = clamp(Math.floor((R[1] - B[1]) / ch), 0, ny), j2 = clamp(Math.ceil((R[3] - B[1]) / ch), 0, ny);
+    if (i2 > i1 && j2 > j1) mark({ i: i1, j: j1, w: i2 - i1, h: j2 - j1 });
+  }
 
   // layer card: prefers the bottom right
   let cardC = null;
@@ -1180,7 +1192,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .root.bare .lamp, .root.bare .dev, .root.bare .glows, .root.bare .rgl > i[data-e], .root.bare .bot, .root.bare .dockm, .root.bare .trail,
 .root.bare .tabs, .root.bare .badge, .root.bare .ctint { visibility: hidden !important; }
 @keyframes fadein { from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
-/* compact layer card: name and state on the left, the buttons as round icons on the right, the strip below */
+/* small layer card: name and state on the left, the buttons as round icons on the right, the strip below */
 .gcard.cmp { padding: max(11px, calc(17 * var(--u))) calc(17 * var(--u)) max(11px, calc(18 * var(--u))) calc(20 * var(--u)); border-radius: calc(24 * var(--u)); }
 .gcard.cmp > .gv { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto 1fr; column-gap: calc(12 * var(--u)); }
 .gcard.cmp .gk, .gcard.cmp .gt { grid-column: 1; }
@@ -1194,9 +1206,27 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .gcard.cmp .gbtn { flex: none; width: max(34px, calc(42 * var(--u))); height: max(34px, calc(42 * var(--u))); padding: 0; border-radius: 50%; gap: 0; }
 .gcard.cmp .gbtn > span, .gcard.cmp .gbtn .ic.sm { display: none; }
 .gcard.cmp .gbtn .ic { font-size: max(16px, calc(22 * var(--u))); }
+/* mini: name and state beside the buttons – nothing else */
+.gcard.xs { padding: max(9px, calc(13 * var(--u))) calc(14 * var(--u)) max(9px, calc(13 * var(--u))) calc(18 * var(--u)); border-radius: calc(20 * var(--u)); }
+.gcard.xs > .gv { grid-template-rows: auto auto; align-content: center; }
+.gcard.xs .gk { font-size: max(10px, calc(12.5 * var(--u))); }
+.gcard.xs .gt { max-height: max(18px, calc(27 * var(--u))); }
+.gcard.xs .gt b { font-size: max(15px, calc(21 * var(--u))); }
+.gcard.xs .segs, .gcard.xs .prog { display: none !important; }
+.gcard.xs .gbtn { width: max(32px, calc(38 * var(--u))); height: max(32px, calc(38 * var(--u))); }
+.gcard.xs .gbtn .ic { font-size: max(15px, calc(19 * var(--u))); }
+.gcard.xs .gk .bat .ic { display: none; }
+/* too little room: the layer card leaves out step by step what it can do without (see _fitGcard) */
+.gcard.f1:not(.cmp) .gs { display: none; }
+.gcard.f1:not(.cmp) .gbtns { margin-top: calc(10 * var(--u)); }
+.gcard.f2:not(.cmp) .segs, .gcard.f2:not(.cmp) .prog, .gcard.cmp.f1 .segs, .gcard.cmp.f1 .prog { display: none !important; }
+.gcard.f2:not(.cmp) .gbtns { margin-top: auto; }
+.gcard.f3:not(.cmp) .gk, .gcard.cmp:not(.xs).f2 .gk, .gcard.xs.f1 .gk { display: none; }
+.gcard.cmp.f1:not(.xs) > .gv { grid-template-rows: auto auto; align-content: center; }
+.gcard.fi .gbtn > span, .gcard.fi .gbtn .ic.sm { display: none; }
 .gk { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: max(11px, calc(14 * var(--u))); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t2); }
 .gk > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gk .bat { display: flex; align-items: center; gap: 5px; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.gk .bat { flex: none; display: flex; align-items: center; gap: 5px; letter-spacing: 0; text-transform: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .gk .bat .ic { font-size: 1.25em; stroke-width: 1.6; }
 .gt { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: calc(4 * var(--u)); }
 .gt b { font-size: max(17px, calc(29 * var(--u))); font-weight: 700; letter-spacing: -.025em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
@@ -1315,6 +1345,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .side .gcard { position: relative; flex: none; height: calc(218 * var(--u)); margin-top: auto; }
 .side .card.big { flex-grow: var(--h); max-height: calc(150 * var(--u) * var(--h)); }
 .side .gcard.cmp { height: calc(140 * var(--u)); }
+.side .gcard.xs { height: calc(96 * var(--u)); }
 
 /* own tiles: values (the first one large) or a Home Assistant card in the glass frame */
 .card.ct .lbl { overflow: hidden; text-overflow: ellipsis; }
@@ -1883,7 +1914,7 @@ class GlassFloorplanCard extends HTMLElement {
     const vac = M.vac ? `<svg class="trail" viewBox="${S.x} ${S.y} ${S.w} ${S.h}" preserveAspectRatio="none"><polyline class="t1" points=""/><polyline class="t2" points=""/></svg>
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';
     // layer bar: in the plan (upright or lying), on a phone else at the bottom of the screen like a tab bar
-    const Wd = M.widgets, dock = this._m && !Wd.bar, barH = dock || M.wopt.barH, cmp = M.wopt.compact ? ' cmp' : '';
+    const Wd = M.widgets, dock = this._m && !Wd.bar, barH = dock || M.wopt.barH, cmp = { normal: '', small: ' cmp', mini: ' cmp xs' }[M.wopt.size];
     const bar = Wd.bar || this._m ? `<div class="tabs${barH ? ' h' : ''}${dock ? ' dock' : ''}" role="tablist" aria-orientation="${barH ? 'horizontal' : 'vertical'}" style="${Wd.bar ? G.at(center(Wd.bar)) : ''}"><i class="knob"></i>
       ${M.layers.map((L) => `<button data-tab="${esc(L.id)}" role="tab" aria-label="${esc(this._layerName(L))}">${this._iconHtml(L.icon)}<span>${esc(this._layerName(L))}</span></button>`).join('')}</div>` : '';
     const empty = !M.rooms.length && !this._ev ? `<div class="empty-plan"><div>${icon('plan')}<b>${esc(t('emptyTitle'))}</b><p>${esc(t('emptyText'))}</p></div></div>` : '';
@@ -2060,6 +2091,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._placeKnob(true);
     this._fitLabels();
     this._fitBtnTiles();
+    this._fitGcard();
     this._declutter();
   }
 
@@ -2667,8 +2699,19 @@ class GlassFloorplanCard extends HTMLElement {
       this._gcard.append(v);
     }
     this._gapUpd.forEach((f) => f());
-    // compact: the buttons show only their icon – the words as tooltip
-    if (this._gcard.classList.contains('cmp')) for (const b of this._gcard.querySelectorAll('.gbtn')) { const s = b.textContent.trim(); if (b.title !== s) { b.title = s; b.setAttribute('aria-label', s); } }
+    this._fitGcard();
+    // round buttons (small, mini – or too little room for the words): the words as tooltip
+    if (this._gcard.matches('.cmp, .fi')) for (const b of this._gcard.querySelectorAll('.gbtn')) { const s = b.textContent.trim(); if (b.title !== s) { b.title = s; b.setAttribute('aria-label', s); } }
+  }
+  /* The layer card keeps what it shows legible in the room it really has: what does not fit goes, step by step –
+   * normal: the subtitle, then the strip, then the heading; small: the strip, then the heading; mini: the heading.
+   * Buttons too narrow for their words show only their icon. */
+  _fitGcard() {
+    const g = this._gcard, v = g?.firstElementChild;
+    if (!v || !g.clientHeight) return;
+    g.classList.remove('f1', 'f2', 'f3', 'fi');
+    for (const c of ['f1', 'f2', 'f3']) { if (v.scrollHeight <= v.clientHeight + 1) break; g.classList.add(c); }
+    if ([...g.querySelectorAll('.gbtn > span')].some((s) => s.scrollWidth > s.clientWidth + 1)) g.classList.add('fi');
   }
 
   _lightGap(L, upd) {
@@ -4821,6 +4864,10 @@ const STYLES_M = `
 .m .gbtn { height: 46px; border-radius: 15px; font-size: 15px; }
 .m .gcard.cmp .gbtn { width: 42px; height: 42px; border-radius: 50%; }
 .m .gcard.cmp .gbtns { gap: 8px; }
+.m .gcard.cmp .gt b { font-size: 19px; }
+.m .gcard.xs { padding: 11px 13px 11px 16px; border-radius: 20px; }
+.m .gcard.xs .gbtn { width: 38px; height: 38px; }
+.m .gcard.xs .gt b { font-size: 17px; }
 /* switching layers: the card fades in without a blur filter (cheaper on phones) */
 .m .gcard > .gv { animation-name: fadeinm; }
 @keyframes fadeinm { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
@@ -4909,7 +4956,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const avail = this._ev ? this._ev.h : preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
     // the layer card below the plan and the tab bar at the bottom – unless they were put into the plan
     const below = !!this._gcard && !M.widgets.card, dock = M.layers.length > 1 && !M.widgets.bar;
-    const gH = below ? (M.wopt.compact ? 92 : 156) : 0, tabsH = dock ? 78 + this._safeB : 16, sy = 4;
+    const gH = below ? { normal: 156, small: 92, mini: 66 }[M.wopt.size] : 0, tabsH = dock ? 78 + this._safeB : 16, sy = 4;
     // tiles that did not fit into the plan: rows under it
     const rows = this._sideEl ? this._sideRows || 1 : 0, rowH = rows ? rows * 96 + (rows - 1) * 8 : 0;
     let pu = (W - 2 * pad) / S.w;
@@ -4937,6 +4984,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     this._placeKnob(true);
     this._fitLabels();
     this._fitBtnTiles();
+    this._fitGcard();
     this._declutter();
   },
 
@@ -8758,7 +8806,7 @@ Object.assign(GfcEditor.prototype, {
       if (k === 'bar' && (M?.layers.length || 0) < 2) continue;
       const o = this._widGet(k), inPlan = !!M?.widgets?.[k];
       const where = phone && !inPlan ? t(k === 'card' ? 'ed_placeBelow' : 'ed_placeBottom') : t(o.rect ? 'ed_placedByYou' : 'ed_auto');
-      const what = k === 'card' ? t(o.compact ? 'ed_cardCompact' : 'ed_cardFull') : phone && !inPlan ? '' : t(M?.wopt?.barH ? 'ed_barH' : 'ed_barV');
+      const what = k === 'card' ? t(`ed_card_${M?.wopt?.size || 'normal'}`) : phone && !inPlan ? '' : t(M?.wopt?.barH ? 'ed_barH' : 'ed_barV');
       const row = this._el(`<span class="ei">${icon(k === 'card' ? 'widget' : 'layers')}</span><div><b>${esc(t(`ed_tile_${k}`))}</b><small>${esc([what, where].filter(Boolean).join(' · '))}</small></div><span class="ego">${icon('chevR')}</span>`, 'erow');
       row.style.cursor = 'pointer';
       row.classList.toggle('on', s?.t === 'wid' && s.k === k);
@@ -8781,7 +8829,7 @@ Object.assign(GfcEditor.prototype, {
       })));
     }
     if (k === 'card') {
-      I.append(this._fieldEl(t('ed_cardSize'), this._segEl([['full', t('ed_cardFull')], ['compact', t('ed_cardCompact')]], o.compact ? 'compact' : 'full', (x) => set({ compact: x === 'compact' }))));
+      I.append(this._fieldEl(t('ed_cardSize'), this._segEl(CARD_SIZES.map((z) => [z, t(`ed_card_${z}`)]), CARD_SIZES.includes(o.size) ? o.size : 'normal', (x) => set({ size: x === 'normal' ? null : x }))));
       I.append(this._el(`<p class="small">${esc(t('ed_cardHelp'))}</p>`));
     } else if (!phone || inPlan || o.place === 'plan') {
       // turning the bar keeps its middle where it is
@@ -9127,8 +9175,8 @@ Object.assign(STR.en, {
   ed_arrangeFor: 'Arranging for', ed_viewsApart: 'Laptop and phone are arranged separately – what you change here is only for this view.',
   ed_cardAndBar: 'Layer card & layer bar', ed_infoTiles: 'Tiles', ed_placedByYou: 'placed by you',
   ed_cardWhat: 'The overview of the layer shown, with “Mode” and “All off”.', ed_barWhat: 'Switches between the layers.',
-  ed_cardSize: 'Size', ed_cardFull: 'Normal', ed_cardCompact: 'Compact',
-  ed_cardHelp: 'Compact: the state with round buttons for mode and “All off” – it needs much less room.',
+  ed_cardSize: 'Size', ed_card_normal: 'Normal', ed_card_small: 'Small', ed_card_mini: 'Smaller',
+  ed_cardHelp: 'Small: the state with round buttons for mode and “All off”. Smaller: without the strip below as well. With little room the card leaves out what it can do without, so everything stays legible.',
   ed_place: 'Place', ed_placeBelow: 'Below the plan', ed_placeBottom: 'Bottom of the screen', ed_placePlan: 'In the plan',
   ed_barDir: 'Direction', ed_barV: 'Vertical', ed_barH: 'Horizontal',
   ed_cardBelowLead: 'It sits below the plan, where your thumb is – put it into the plan to place it yourself.',
@@ -9168,8 +9216,8 @@ Object.assign(STR.de, {
   ed_arrangeFor: 'Anordnen für', ed_viewsApart: 'Laptop und Handy werden getrennt angeordnet – was du hier änderst, gilt nur für diese Ansicht.',
   ed_cardAndBar: 'Ebenen-Karte & Ebenen-Leiste', ed_infoTiles: 'Kacheln', ed_placedByYou: 'von dir platziert',
   ed_cardWhat: 'Die Übersicht der gezeigten Ebene, mit „Mode“ und „Alle aus“.', ed_barWhat: 'Wechselt zwischen den Ebenen.',
-  ed_cardSize: 'Größe', ed_cardFull: 'Normal', ed_cardCompact: 'Kompakt',
-  ed_cardHelp: 'Kompakt: der Zustand mit runden Knöpfen für Mode und „Alle aus“ – braucht viel weniger Platz.',
+  ed_cardSize: 'Größe', ed_card_normal: 'Normal', ed_card_small: 'Klein', ed_card_mini: 'Kleiner',
+  ed_cardHelp: 'Klein: der Zustand mit runden Knöpfen für Mode und „Alle aus“. Kleiner: zusätzlich ohne den Streifen darunter. Bei wenig Platz lässt die Karte weg, was sie nicht braucht – so bleibt alles lesbar.',
   ed_place: 'Platz', ed_placeBelow: 'Unter dem Plan', ed_placeBottom: 'Unten am Bildschirm', ed_placePlan: 'Im Plan',
   ed_barDir: 'Ausrichtung', ed_barV: 'Senkrecht', ed_barH: 'Waagerecht',
   ed_cardBelowLead: 'Sie liegt unter dem Plan, wo der Daumen ist – in den Plan gesetzt, platzierst du sie selbst.',

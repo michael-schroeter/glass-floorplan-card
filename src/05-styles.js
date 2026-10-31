@@ -224,7 +224,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .root.bare .lamp, .root.bare .dev, .root.bare .glows, .root.bare .rgl > i[data-e], .root.bare .bot, .root.bare .dockm, .root.bare .trail,
 .root.bare .tabs, .root.bare .badge, .root.bare .ctint { visibility: hidden !important; }
 @keyframes fadein { from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
-/* compact layer card: name and state on the left, the buttons as round icons on the right, the strip below */
+/* small layer card: name and state on the left, the buttons as round icons on the right, the strip below */
 .gcard.cmp { padding: max(11px, calc(17 * var(--u))) calc(17 * var(--u)) max(11px, calc(18 * var(--u))) calc(20 * var(--u)); border-radius: calc(24 * var(--u)); }
 .gcard.cmp > .gv { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto 1fr; column-gap: calc(12 * var(--u)); }
 .gcard.cmp .gk, .gcard.cmp .gt { grid-column: 1; }
@@ -238,9 +238,27 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .gcard.cmp .gbtn { flex: none; width: max(34px, calc(42 * var(--u))); height: max(34px, calc(42 * var(--u))); padding: 0; border-radius: 50%; gap: 0; }
 .gcard.cmp .gbtn > span, .gcard.cmp .gbtn .ic.sm { display: none; }
 .gcard.cmp .gbtn .ic { font-size: max(16px, calc(22 * var(--u))); }
+/* mini: name and state beside the buttons – nothing else */
+.gcard.xs { padding: max(9px, calc(13 * var(--u))) calc(14 * var(--u)) max(9px, calc(13 * var(--u))) calc(18 * var(--u)); border-radius: calc(20 * var(--u)); }
+.gcard.xs > .gv { grid-template-rows: auto auto; align-content: center; }
+.gcard.xs .gk { font-size: max(10px, calc(12.5 * var(--u))); }
+.gcard.xs .gt { max-height: max(18px, calc(27 * var(--u))); }
+.gcard.xs .gt b { font-size: max(15px, calc(21 * var(--u))); }
+.gcard.xs .segs, .gcard.xs .prog { display: none !important; }
+.gcard.xs .gbtn { width: max(32px, calc(38 * var(--u))); height: max(32px, calc(38 * var(--u))); }
+.gcard.xs .gbtn .ic { font-size: max(15px, calc(19 * var(--u))); }
+.gcard.xs .gk .bat .ic { display: none; }
+/* too little room: the layer card leaves out step by step what it can do without (see _fitGcard) */
+.gcard.f1:not(.cmp) .gs { display: none; }
+.gcard.f1:not(.cmp) .gbtns { margin-top: calc(10 * var(--u)); }
+.gcard.f2:not(.cmp) .segs, .gcard.f2:not(.cmp) .prog, .gcard.cmp.f1 .segs, .gcard.cmp.f1 .prog { display: none !important; }
+.gcard.f2:not(.cmp) .gbtns { margin-top: auto; }
+.gcard.f3:not(.cmp) .gk, .gcard.cmp:not(.xs).f2 .gk, .gcard.xs.f1 .gk { display: none; }
+.gcard.cmp.f1:not(.xs) > .gv { grid-template-rows: auto auto; align-content: center; }
+.gcard.fi .gbtn > span, .gcard.fi .gbtn .ic.sm { display: none; }
 .gk { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: max(11px, calc(14 * var(--u))); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t2); }
 .gk > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gk .bat { display: flex; align-items: center; gap: 5px; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.gk .bat { flex: none; display: flex; align-items: center; gap: 5px; letter-spacing: 0; text-transform: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .gk .bat .ic { font-size: 1.25em; stroke-width: 1.6; }
 .gt { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: calc(4 * var(--u)); }
 .gt b { font-size: max(17px, calc(29 * var(--u))); font-weight: 700; letter-spacing: -.025em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
@@ -359,6 +377,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .side .gcard { position: relative; flex: none; height: calc(218 * var(--u)); margin-top: auto; }
 .side .card.big { flex-grow: var(--h); max-height: calc(150 * var(--u) * var(--h)); }
 .side .gcard.cmp { height: calc(140 * var(--u)); }
+.side .gcard.xs { height: calc(96 * var(--u)); }
 
 /* own tiles: values (the first one large) or a Home Assistant card in the glass frame */
 .card.ct .lbl { overflow: hidden; text-overflow: ellipsis; }

@@ -15,7 +15,7 @@ Everything can be set in the floor plan editor. This page walks through it and i
    In a device's settings, **Actions** sets what tapping, holding and double tapping do – the same choices as everywhere in Home Assistant (toggle, more info, open a dashboard page or website, perform any action …). Inside Home Assistant this is Home Assistant's own action editor. *Default* keeps the card's own behaviour.
 7. **Layers**: switch built-in layers on or off, or create your own, e.g. *Night = Light + Covers + front door lock + window contacts*.
 8. **Tiles**: weather, inside climate, front door – and **your own tiles**: a few values of your choice (the first one large, e.g. power now + energy today), **buttons** like the ones on the plan (each switches a device of your choice or runs its own action, e.g. *open a dashboard page*; a larger tile holds more buttons) or **any Home Assistant card** (camera, graph, thermostat, a card from HACS …) in a glass frame. They find a free corner of the plan like the others; drag them to place them yourself.
-   The **layer card** (the overview with *Mode* and *All off*) can be *compact*, the **layer bar** *vertical* or *horizontal*. Laptop and phone are arranged separately (*Arranging for* at the top of the list): on a phone the layer card sits below the plan and the layer bar at the bottom of the screen until you put them into the plan.
+   The **layer card** (the overview with *Mode* and *All off*) comes in three sizes – *normal*, *small* (round buttons beside the state), *smaller* (without the strip as well) – and leaves out what does not fit; the **layer bar** is *vertical* or *horizontal*. Laptop and phone are arranged separately (*Arranging for* at the top of the list): on a phone the layer card sits below the plan and the layer bar at the bottom of the screen until you put them into the plan.
 9. Click **Done**, then **Save**.
 
 ## Modes
@@ -101,13 +101,13 @@ modes_label: Dashboard mode
 layout: auto               # auto | desktop | mobile
 fit: screen                # screen (fill the visible height) | width
 widgets:                   # laptop: optional fixed positions of the tiles (normally automatic)
-  card: { rect: [0, 660, 580, 900], compact: true }   # the layer card; a bare [x1, y1, x2, y2] is fine too
+  card: { rect: [0, 660, 580, 900], size: small }     # the layer card: normal | small | mini; a bare [x1, y1, x2, y2] is fine too
   bar: { direction: horizontal }                      # the layer bar: vertical (default) | horizontal
   energy: [580, 660, 760, 900]                        # own tiles by their id
 mobile:
   rotate: auto             # auto | 0 | 90 | -90
   widgets:                 # phone: its own places, in the turned plan (the editor sets them)
-    card: { place: plan, compact: true }   # below (default) | plan – a rect puts it into the plan as well
+    card: { place: plan, size: mini }      # below (default) | plan – a rect puts it into the plan as well
     bar: { place: plan, direction: vertical }   # bottom (default) | plan; horizontal by default
 ```
 

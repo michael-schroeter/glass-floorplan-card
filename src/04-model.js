@@ -133,8 +133,10 @@ const tileBtnCap = (size) => 3 * size[0] * size[1];
 /* a tile that takes a whole row of the phone's tiles under the plan */
 const tileBig = (x) => !!x.card || x.size[0] > 1 || (!!x.btns && x.size[1] > 1);
 
+/* the sizes of the layer card: as always, small (round buttons beside the state), mini (no strip either) */
+const CARD_SIZES = ['normal', 'small', 'mini'];
 /* Where a tile goes in one view (laptop: `widgets`, phone: `mobile.widgets`): a rectangle [x1, y1, x2, y2], false (hidden)
- * or { rect, …options } – the layer card: compact, place (phone: below | plan); the layer bar: direction (vertical |
+ * or { rect, …options } – the layer card: size (normal | small | mini), place (phone: below | plan); the layer bar: direction (vertical |
  * horizontal), place (phone: bottom | plan). Positions on a phone are in its own (turned) plan. */
 function widgetOpt(W, k) {
   const v = W?.[k];
@@ -299,7 +301,7 @@ function placeWidgets(M, mobile) {
   const opt = (k) => widgetOpt(cfgW, k), oc = opt('card'), ob = opt('bar');
   // the layer card and the layer bar of this view: on a phone they sit below the plan / at the bottom of the screen
   // unless they are put into the plan; the bar stands upright on a laptop and lies on a phone unless told otherwise
-  M.wopt = { compact: !!oc.compact, barH: mobile ? ob.direction !== 'vertical' : ob.direction === 'horizontal' };
+  M.wopt = { size: CARD_SIZES.includes(oc.size) ? oc.size : 'normal', barH: mobile ? ob.direction !== 'vertical' : ob.direction === 'horizontal' };
   const out = { card: null, weather: null, indoor: null, door: null, bar: null, side: null };
   const tiles = ['weather', 'indoor', 'door'].filter((k) => (k === 'weather' ? M.weather : k === 'indoor' ? M.indoor.length : M.door) && !opt(k).off)
     .concat(M.tiles.map((x) => x.id));
@@ -364,15 +366,25 @@ function placeWidgets(M, mobile) {
   // phones draw the tiles with fixed pixel fonts: they need more room in design units
   const TILE = du(mobile ? { w: 290, h: 225, minW: 240, minH: 186, maxW: 380, maxH: 280 }
     : { w: 209, h: 118, minW: 158, minH: 92, maxW: 300, maxH: 150 });
-  const cmp = M.wopt.compact;
-  const CARD = du(mobile ? (cmp ? { w: 520, h: 215, minW: 440, minH: 205, maxW: 640 } : { w: 760, h: 370, minW: 640, minH: 350, maxW: 900 })
-    : cmp ? { w: 360, h: 132, minW: 305, minH: 126, maxW: 440 } : { w: 446, h: 190, minW: 318, minH: 176, maxW: 560 });
+  // the layer card in its three sizes (a phone draws it in fixed pixels: more design units)
+  const CARD = du({
+    normal: mobile ? { w: 760, h: 370, minW: 640, minH: 350, maxW: 900 } : { w: 446, h: 190, minW: 318, minH: 176, maxW: 560 },
+    small: mobile ? { w: 520, h: 215, minW: 440, minH: 205, maxW: 640 } : { w: 360, h: 132, minW: 305, minH: 126, maxW: 440 },
+    mini: mobile ? { w: 460, h: 155, minW: 400, minH: 145, maxW: 560 } : { w: 300, h: 92, minW: 270, minH: 88, maxW: 380 },
+  }[M.wopt.size]);
   // the bar's buttons have a minimum size in pixels: on a phone that is more design units
   const nL = Math.max(1, M.layers.length), bu = mobile ? 86 : 64, bt = mobile ? 100 : 76;
   const BAR = du(M.wopt.barH ? { w: nL * bu + 12, h: bt } : { w: bt, h: nL * bu + 12 });
 
   for (const k of ['card', 'weather', 'indoor', 'door', ...M.tiles.map((x) => x.id)]) if (opt(k).rect) out[k] = opt(k).rect;
   if (ob.rect && M.layers.length > 1) out.bar = ob.rect;
+  // what was placed by hand is taken: the automatic ones go around it
+  for (const R of Object.values(out)) {
+    if (!R) continue;
+    const i1 = clamp(Math.floor((R[0] - B[0]) / cw), 0, nx), i2 = clamp(Math.ceil((R[2] - B[0]) / cw), 0, nx);
+    const j1 = clamp(Math.floor((R[1] - B[1]) / ch), 0, ny), j2 = clamp(Math.ceil((R[3] - B[1]) / ch), 0, ny);
+    if (i2 > i1 && j2 > j1) mark({ i: i1, j: j1, w: i2 - i1, h: j2 - j1 });
+  }
 
   // layer card: prefers the bottom right
   let cardC = null;

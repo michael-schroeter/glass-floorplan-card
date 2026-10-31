@@ -181,7 +181,7 @@ Object.assign(GfcEditor.prototype, {
       if (k === 'bar' && (M?.layers.length || 0) < 2) continue;
       const o = this._widGet(k), inPlan = !!M?.widgets?.[k];
       const where = phone && !inPlan ? t(k === 'card' ? 'ed_placeBelow' : 'ed_placeBottom') : t(o.rect ? 'ed_placedByYou' : 'ed_auto');
-      const what = k === 'card' ? t(o.compact ? 'ed_cardCompact' : 'ed_cardFull') : phone && !inPlan ? '' : t(M?.wopt?.barH ? 'ed_barH' : 'ed_barV');
+      const what = k === 'card' ? t(`ed_card_${M?.wopt?.size || 'normal'}`) : phone && !inPlan ? '' : t(M?.wopt?.barH ? 'ed_barH' : 'ed_barV');
       const row = this._el(`<span class="ei">${icon(k === 'card' ? 'widget' : 'layers')}</span><div><b>${esc(t(`ed_tile_${k}`))}</b><small>${esc([what, where].filter(Boolean).join(' · '))}</small></div><span class="ego">${icon('chevR')}</span>`, 'erow');
       row.style.cursor = 'pointer';
       row.classList.toggle('on', s?.t === 'wid' && s.k === k);
@@ -204,7 +204,7 @@ Object.assign(GfcEditor.prototype, {
       })));
     }
     if (k === 'card') {
-      I.append(this._fieldEl(t('ed_cardSize'), this._segEl([['full', t('ed_cardFull')], ['compact', t('ed_cardCompact')]], o.compact ? 'compact' : 'full', (x) => set({ compact: x === 'compact' }))));
+      I.append(this._fieldEl(t('ed_cardSize'), this._segEl(CARD_SIZES.map((z) => [z, t(`ed_card_${z}`)]), CARD_SIZES.includes(o.size) ? o.size : 'normal', (x) => set({ size: x === 'normal' ? null : x }))));
       I.append(this._el(`<p class="small">${esc(t('ed_cardHelp'))}</p>`));
     } else if (!phone || inPlan || o.place === 'plan') {
       // turning the bar keeps its middle where it is
@@ -550,8 +550,8 @@ Object.assign(STR.en, {
   ed_arrangeFor: 'Arranging for', ed_viewsApart: 'Laptop and phone are arranged separately – what you change here is only for this view.',
   ed_cardAndBar: 'Layer card & layer bar', ed_infoTiles: 'Tiles', ed_placedByYou: 'placed by you',
   ed_cardWhat: 'The overview of the layer shown, with “Mode” and “All off”.', ed_barWhat: 'Switches between the layers.',
-  ed_cardSize: 'Size', ed_cardFull: 'Normal', ed_cardCompact: 'Compact',
-  ed_cardHelp: 'Compact: the state with round buttons for mode and “All off” – it needs much less room.',
+  ed_cardSize: 'Size', ed_card_normal: 'Normal', ed_card_small: 'Small', ed_card_mini: 'Smaller',
+  ed_cardHelp: 'Small: the state with round buttons for mode and “All off”. Smaller: without the strip below as well. With little room the card leaves out what it can do without, so everything stays legible.',
   ed_place: 'Place', ed_placeBelow: 'Below the plan', ed_placeBottom: 'Bottom of the screen', ed_placePlan: 'In the plan',
   ed_barDir: 'Direction', ed_barV: 'Vertical', ed_barH: 'Horizontal',
   ed_cardBelowLead: 'It sits below the plan, where your thumb is – put it into the plan to place it yourself.',
@@ -591,8 +591,8 @@ Object.assign(STR.de, {
   ed_arrangeFor: 'Anordnen für', ed_viewsApart: 'Laptop und Handy werden getrennt angeordnet – was du hier änderst, gilt nur für diese Ansicht.',
   ed_cardAndBar: 'Ebenen-Karte & Ebenen-Leiste', ed_infoTiles: 'Kacheln', ed_placedByYou: 'von dir platziert',
   ed_cardWhat: 'Die Übersicht der gezeigten Ebene, mit „Mode“ und „Alle aus“.', ed_barWhat: 'Wechselt zwischen den Ebenen.',
-  ed_cardSize: 'Größe', ed_cardFull: 'Normal', ed_cardCompact: 'Kompakt',
-  ed_cardHelp: 'Kompakt: der Zustand mit runden Knöpfen für Mode und „Alle aus“ – braucht viel weniger Platz.',
+  ed_cardSize: 'Größe', ed_card_normal: 'Normal', ed_card_small: 'Klein', ed_card_mini: 'Kleiner',
+  ed_cardHelp: 'Klein: der Zustand mit runden Knöpfen für Mode und „Alle aus“. Kleiner: zusätzlich ohne den Streifen darunter. Bei wenig Platz lässt die Karte weg, was sie nicht braucht – so bleibt alles lesbar.',
   ed_place: 'Platz', ed_placeBelow: 'Unter dem Plan', ed_placeBottom: 'Unten am Bildschirm', ed_placePlan: 'Im Plan',
   ed_barDir: 'Ausrichtung', ed_barV: 'Senkrecht', ed_barH: 'Waagerecht',
   ed_cardBelowLead: 'Sie liegt unter dem Plan, wo der Daumen ist – in den Plan gesetzt, platzierst du sie selbst.',

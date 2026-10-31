@@ -60,6 +60,10 @@ const STYLES_M = `
 .m .gbtn { height: 46px; border-radius: 15px; font-size: 15px; }
 .m .gcard.cmp .gbtn { width: 42px; height: 42px; border-radius: 50%; }
 .m .gcard.cmp .gbtns { gap: 8px; }
+.m .gcard.cmp .gt b { font-size: 19px; }
+.m .gcard.xs { padding: 11px 13px 11px 16px; border-radius: 20px; }
+.m .gcard.xs .gbtn { width: 38px; height: 38px; }
+.m .gcard.xs .gt b { font-size: 17px; }
 /* switching layers: the card fades in without a blur filter (cheaper on phones) */
 .m .gcard > .gv { animation-name: fadeinm; }
 @keyframes fadeinm { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
@@ -148,7 +152,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const avail = this._ev ? this._ev.h : preview ? 0 : Math.max(360, Math.floor(window.innerHeight - Math.max(0, top) - (this._inEditMode() ? 64 : 0)));
     // the layer card below the plan and the tab bar at the bottom – unless they were put into the plan
     const below = !!this._gcard && !M.widgets.card, dock = M.layers.length > 1 && !M.widgets.bar;
-    const gH = below ? (M.wopt.compact ? 92 : 156) : 0, tabsH = dock ? 78 + this._safeB : 16, sy = 4;
+    const gH = below ? { normal: 156, small: 92, mini: 66 }[M.wopt.size] : 0, tabsH = dock ? 78 + this._safeB : 16, sy = 4;
     // tiles that did not fit into the plan: rows under it
     const rows = this._sideEl ? this._sideRows || 1 : 0, rowH = rows ? rows * 96 + (rows - 1) * 8 : 0;
     let pu = (W - 2 * pad) / S.w;
@@ -176,6 +180,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     this._placeKnob(true);
     this._fitLabels();
     this._fitBtnTiles();
+    this._fitGcard();
     this._declutter();
   },
 
