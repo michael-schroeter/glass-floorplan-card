@@ -7,7 +7,7 @@
  * Map: OpenStreetMap through an Overpass API – fetched once, simplified to metres and kept for 30 days. Vehicles: the radar of
  * the public VBB / BVG interface every 30 s while the map is shown. Its positions are estimated from timetable and live
  * delays between the stops – the subway's even more so, it runs under the street: dashed and quieter. */
-const TM_V = 2;
+const TM_V = 3;
 const TM_KEEP = 30 * 864e5;
 const TM_KEY = 'glass-floorplan-card:map:';
 /* half a street from its centre line to the houses (metres): the gap between the blocks */
@@ -68,25 +68,20 @@ function tmClip(P, R) {
   return out;
 }
 /* The polygon moved in by its own distance from every edge (inside = left of the edge in these numbers). An edge that
- * turns over has vanished and goes; a corner sharper than the rest is cut short. */
+ * turns over has vanished and goes. */
 function tmInset(P, W) {
   let E = P.map((a, i) => {
     const b = P[(i + 1) % P.length], l = tmLen(a, b) || 1e-9, e = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
     return { a, e, n: [-e[1], e[0]], w: W[i], l };
   });
-  const lim = 8 * Math.max(...W);
   for (let guard = 0; guard < 80 && E.length >= 3; guard++) {
     const n = E.length, V = [];
     for (let i = 0; i < n; i++) {
       const A = E[(i - 1 + n) % n], B = E[i], cr = A.e[0] * B.e[1] - A.e[1] * B.e[0];
       const pa = [A.a[0] + A.n[0] * A.w, A.a[1] + A.n[1] * A.w], pb = [B.a[0] + B.n[0] * B.w, B.a[1] + B.n[1] * B.w];
       if (Math.abs(cr) < 0.06) { V.push([pb]); continue; }
-      const t = ((pb[0] - pa[0]) * B.e[1] - (pb[1] - pa[1]) * B.e[0]) / cr, v = [pa[0] + A.e[0] * t, pa[1] + A.e[1] * t];
-      const o = B.a, d = tmLen(o, v);
-      if (d <= lim) { V.push([v]); continue; }
-      // a very sharp tip: cut off square to its bisector at `lim` from the corner
-      const m = [(v[0] - o[0]) / d, (v[1] - o[1]) / d], cut = (q, e) => { const de = e[0] * m[0] + e[1] * m[1], tt = Math.abs(de) > 1e-6 ? (lim - ((q[0] - o[0]) * m[0] + (q[1] - o[1]) * m[1])) / de : 0; return [q[0] + e[0] * tt, q[1] + e[1] * tt]; };
-      V.push([cut(pa, A.e), cut(pb, B.e)]);
+      const t = ((pb[0] - pa[0]) * B.e[1] - (pb[1] - pa[1]) * B.e[0]) / cr;
+      V.push([[pa[0] + A.e[0] * t, pa[1] + A.e[1] * t]]);
     }
     let worst = -1;
     for (let i = 0; i < n; i++) {
@@ -207,7 +202,9 @@ function tmChain(pieces) {
   for (let k = 0; k < pieces.length; k++) {
     let w = pieces[k];
     if (cur && w.length > 3 && eq(w[0], w[w.length - 1])) {
-      const ring = w.slice(0, -1), n = ring.length, at = (p) => ring.findIndex((q) => eq(q, p)), i = at(cur[cur.length - 1]), nx = pieces[k + 1];
+      const ring = w.slice(0, -1), n = ring.length, at = (p) => ring.findIndex((q) => eq(q, p));
+      if (fresh && at(cur[cur.length - 1]) < 0 && at(cur[0]) >= 0) cur.reverse();
+      const i = at(cur[cur.length - 1]), nx = pieces[k + 1];
       if (i >= 0) {
         let j = nx ? [at(nx[0]), at(nx[nx.length - 1])].find((x) => x >= 0 && x !== i) ?? -1 : -1;
         if (j < 0) j = i;
@@ -376,6 +373,8 @@ const STYLES_T = `
 .root[data-type="departures_map"] .bg .g1, .root[data-type="departures_map"] .bg .g2 { opacity: calc(var(--warm) * .18); }
 .root[data-type="departures_map"] .bg .g3 { opacity: .85; }
 .root[data-type="departures_map"] .bg .dots { opacity: 0; }
+/* the layer bar over a map: the same glass, a little denser (the streets would show through) */
+.root[data-type="departures_map"] .tabs { background: linear-gradient(165deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .05)), rgba(24, 25, 30, .74); }
 
 .tview { position: absolute; inset: 0; z-index: 2; overflow: hidden; opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility 0s linear .3s;
   --tm-u: 1px; }
@@ -388,18 +387,18 @@ const STYLES_T = `
   mask-composite: intersect; }
 .root[data-type="departures_map"] .tview .tm-svg { animation: tmin .9s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes tmin { from { opacity: 0; transform: scale(1.015); } to { opacity: 1; transform: none; } }
-.tm-svg .bk { fill: url(#tmg); stroke: rgba(255, 255, 255, .12); stroke-width: 1; }
+.tm-svg .bk { fill: url(#tmg); stroke: rgba(255, 255, 255, .085); stroke-width: 1; }
 .tm-svg .bk.g { fill: url(#tmgg); stroke: rgba(130, 220, 150, .18); }
 .tm-svg .bk.w, .tm-svg .wa { fill: url(#tmgw); stroke: rgba(120, 180, 255, .22); stroke-width: 1; }
 .tm-svg .gr { fill: rgba(70, 190, 105, .08); stroke: rgba(130, 220, 150, .12); stroke-width: 1; }
 .tm-svg .mj { fill: none; stroke: rgba(255, 255, 255, .04); stroke-linecap: round; stroke-linejoin: round; }
 .tm-svg .rl { fill: none; stroke: rgba(255, 255, 255, .08); stroke-width: 1; }
 /* the lines are structure: thin and quiet – colour at full strength only where a vehicle comes in to a stop */
-.tm-svg .rt { fill: none; stroke-width: calc(1.8 * var(--tm-u)); opacity: .5; stroke-linecap: round; stroke-linejoin: round; }
-.tm-svg .rt.ug { stroke-width: calc(1.6 * var(--tm-u)); stroke-dasharray: calc(4 * var(--tm-u)) calc(5 * var(--tm-u)); opacity: .45; }
+.tm-svg .rt { fill: none; stroke-width: calc(1.4 * var(--tm-u)); opacity: .42; stroke-linecap: round; stroke-linejoin: round; }
+.tm-svg .rt.ug { stroke-width: calc(1.4 * var(--tm-u)); stroke-dasharray: calc(4 * var(--tm-u)) calc(5 * var(--tm-u)); opacity: .42; }
 .tm-lit path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.tm-lit path.gl { stroke-width: calc(8 * var(--tm-u)); opacity: .16; }
-.tm-lit path.co { stroke-width: calc(2.6 * var(--tm-u)); opacity: .95; }
+.tm-lit path.gl { stroke-width: calc(8 * var(--tm-u)); opacity: .28; }
+.tm-lit path.co { stroke-width: calc(3 * var(--tm-u)); opacity: 1; }
 .tm-lit path.ug.co { stroke-dasharray: calc(4 * var(--tm-u)) calc(4 * var(--tm-u)); opacity: .8; }
 
 /* layers: map, lit ways, vehicles, the bands of heading and footer, then the stops – the answer is never covered */
@@ -407,14 +406,15 @@ const STYLES_T = `
 .tm-vs { z-index: 2; }
 .tm-scr { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
 .tm-scr.t { top: 0; height: 70px; background: linear-gradient(rgba(8, 9, 12, .78), rgba(8, 9, 12, 0)); }
-.tm-scr.b { bottom: 0; height: 64px; background: linear-gradient(rgba(8, 9, 12, 0), rgba(8, 9, 12, .82)); }
+.tm-scr.b { bottom: 0; height: 64px; background: linear-gradient(rgba(8, 9, 12, 0), rgba(8, 9, 12, .86) 70%); }
+.m .tm-scr.b { height: 84px; background: linear-gradient(rgba(8, 9, 12, 0), rgba(8, 9, 12, .92) 60%); }
 .tm-ov { z-index: 3; }
 .tm-ov, .tm-vs { position: absolute; inset: 0; pointer-events: none; }
 .tm-ov > *, .tm-vs > *, .tm-hs > * { position: absolute; left: 0; top: 0; }
 
 /* a stop by the street: its name quiet, a small glass light on each side, a chip of what comes next beside it */
-.tm-sl { font-size: max(12.5px, calc(13.5 * var(--tm-u))); font-weight: 600; letter-spacing: -.01em; white-space: nowrap; color: rgba(235, 235, 245, .82);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, .75); }
+.tm-sl { font-size: max(12.5px, calc(13 * var(--tm-u))); font-weight: 500; white-space: nowrap; color: rgba(235, 235, 245, .66);
+  text-shadow: 0 0 6px rgba(0, 0, 0, .85), 0 1px 10px rgba(0, 0, 0, .6); }
 .tm-pt { width: calc(12 * var(--tm-u)); height: calc(12 * var(--tm-u)); margin: calc(-6 * var(--tm-u)) 0 0 calc(-6 * var(--tm-u)); border-radius: 50%;
   background: rgba(255, 255, 255, .18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .38), 0 2px 6px rgba(0, 0, 0, .4); }
 .tm-pt::after { content: ''; position: absolute; inset: 30%; border-radius: 50%; background: rgba(255, 255, 255, .9); }
@@ -428,9 +428,10 @@ const STYLES_T = `
 .tm-pf .ar, .tm-h .ar { display: grid; place-items: center; width: calc(18 * var(--tm-u)); height: calc(18 * var(--tm-u)); }
 .tm-ln { display: flex; align-items: baseline; gap: calc(6 * var(--tm-u)); transition: opacity .4s ease; }
 .tm-ln + .tm-ln { margin-left: calc(4 * var(--tm-u)); }
-/* the next one first and in full; the ones after it quieter */
-.tm-pf .tm-ln:not(.hero) { opacity: .62; }
-.tm-pf .tm-ln:not(.hero) .tm-mn { font-size: max(13px, calc(15 * var(--tm-u))); }
+/* the next one first and in full; the ones after it smaller, their minutes grey (like the board's 'then') */
+.tm-pf .tm-ln:not(.hero) .tm-bd { transform: scale(.86); }
+.tm-pf .tm-ln:not(.hero) .tm-mn { font-size: max(13px, calc(15 * var(--tm-u))); color: rgba(235, 235, 245, .58); }
+.tm-pf .tm-ln:not(.hero) .tm-mn.late { color: rgba(var(--orange), .8); }
 .tm-bd { display: inline-grid; place-items: center; min-width: calc(36 * var(--tm-u)); height: calc(20 * var(--tm-u)); padding: 0 calc(6 * var(--tm-u)); box-sizing: border-box;
   border-radius: calc(6 * var(--tm-u)); background: var(--lb); color: var(--lf); font-size: max(11px, calc(12 * var(--tm-u))); font-weight: 700; letter-spacing: -.01em; align-self: center;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .16); }
@@ -444,14 +445,13 @@ const STYLES_T = `
 .tm-pf.st .tm-row { display: flex; align-items: center; gap: calc(7 * var(--tm-u)); height: calc(30 * var(--tm-u)); }
 .tm-pf.st .tm-row + .tm-row { border-top: 1px solid rgba(255, 255, 255, .08); }
 .tm-pf.st .tm-row .tm-ln + .tm-ln { margin-left: calc(6 * var(--tm-u)); }
-/* a vehicle further out: quietly at the edge where it will come in */
-.tm-h { display: flex; align-items: center; gap: calc(5 * var(--tm-u)); height: calc(24 * var(--tm-u)); padding: 0 calc(9 * var(--tm-u)) 0 calc(5 * var(--tm-u));
-  border-radius: calc(12 * var(--tm-u)); white-space: nowrap; font-variant-numeric: tabular-nums; opacity: .88; }
-.tm-h .ar { width: calc(15 * var(--tm-u)); }
-.tm-h .ic { font-size: calc(12 * var(--tm-u)); stroke: rgba(255, 255, 255, .6); }
-.tm-h .tm-bd { min-width: calc(30 * var(--tm-u)); height: calc(17 * var(--tm-u)); font-size: max(10px, calc(10.5 * var(--tm-u))); }
-.tm-h .tm-mn { font-size: max(12px, calc(13 * var(--tm-u))); font-weight: 600; color: rgba(235, 235, 245, .8); }
-.tm-h .tm-mn small { font-size: max(10px, calc(10.5 * var(--tm-u))); }
+/* a vehicle further out: quiet words where it will come in, a tick in its colour on the line there */
+.tm-h { display: flex; align-items: baseline; gap: calc(4 * var(--tm-u)); white-space: nowrap; font-size: max(12px, calc(12.5 * var(--tm-u))); font-weight: 600;
+  color: rgba(235, 235, 245, .66); font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(0, 0, 0, .9), 0 1px 10px rgba(0, 0, 0, .7); }
+.tm-h b { font-weight: 700; letter-spacing: -.01em; }
+.tm-h .late { color: rgba(var(--orange), .9); }
+.tm-tk { width: calc(12 * var(--tm-u)); height: calc(3 * var(--tm-u)); margin: calc(-1.5 * var(--tm-u)) 0 0 calc(-6 * var(--tm-u)); border-radius: 2px;
+  background: rgb(var(--c)); box-shadow: 0 0 calc(8 * var(--tm-u)) rgba(var(--c), .7); }
 
 /* a vehicle: a lit glass disc in its line's colour, made like the lamps; a white pointer on its rim where it goes */
 .tm-v { will-change: transform; transition: opacity .7s ease; --vr: calc(16 * var(--tm-u)); }
@@ -488,6 +488,8 @@ const STYLES_T = `
 .tm-foot a:hover { color: var(--t2); }
 .tm-leg { display: flex; align-items: center; gap: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tm-leg i { flex: none; width: 18px; height: 0; border-top: 2px dashed rgba(255, 255, 255, .5); }
+.tm-leg b { font-weight: inherit; }
+.tm-leg em { flex: none; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--orange)); }
 .tm-msg { position: absolute; z-index: 4; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 12px 18px; border-radius: 16px; font-size: 15px; font-weight: 500; color: var(--t2);
   background: rgba(20, 21, 26, .8); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
 .tm-msg:empty { display: none; }
@@ -500,6 +502,11 @@ Object.assign(GlassFloorplanCard.prototype, {
   _tmSync() {
     if (!this._tmOn()) { this._tmStop(); return; }
     this._tmDom();
+    const now = Date.now();
+    for (const [id, x] of this._tmVeh || []) {
+      const last = x.track ? x.track[x.track.length - 1][0] : x.raw ? x.raw[x.raw.length - 1][0] : 0;
+      if (now - last > 90e3) { x.el?.remove(); this._tmVeh.delete(id); }
+    }
     this._tmLoad();
     this._tmLayout();
     if (!this._tmI) this._tmI = setInterval(() => this._tmRadar(), 30e3);
@@ -529,9 +536,9 @@ Object.assign(GlassFloorplanCard.prototype, {
         c.busy = true;
         c.tried = Date.now();
         tmFetch(`${D.api}/stops/${encodeURIComponent(s.id)}`, null, 15e3).then((r) => {
-          // an unknown stop is not asked for again
-          if (r.status >= 400 && r.status < 500) { c.bad = true; return null; }
-          return r.ok ? r.json() : Promise.reject(new Error(String(r.status)));
+          // an unknown stop is not asked for again (a busy server is, after the pause)
+          if (r.status === 400 || r.status === 404) { c.bad = true; return null; }
+          return r.ok ? r.j : Promise.reject(new Error(String(r.status)));
         }).then((j) => {
           const l = j && (j.location || j);
           if (!l || !Number.isFinite(l.latitude)) return;
@@ -575,15 +582,15 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (L.busy || (L.geo && Date.now() - L.at < TM_KEEP) || Date.now() < L.wait) { if (!L.geo) this._tmMsg(t(L.err ? 'tmOffline' : 'tmLoading')); return; }
     L.busy = true;
     if (!L.geo) this._tmMsg(t('tmLoading'));
-    tmFetch(D.map.overpass, { method: 'POST', body: new URLSearchParams({ data: tmQuery(c, half, refs, open) }) }, 100e3)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    tmFetch(D.map.overpass, { method: 'POST', body: new URLSearchParams({ data: tmQuery(c, half, refs, open) }) }, 120e3)
+      .then((r) => (r.ok ? r.j : Promise.reject(new Error(String(r.status)))))
       .then((j) => {
         if (L.key !== key) return;
         // a busy server answers with what it got so far and a remark: try again later
         if (/error|timed out|out of memory/i.test(j.remark || '')) throw new Error(j.remark);
         const g = tmBuild(j, c, half), whole = !refs.length || g.routes.length;
-        Object.assign(L, { geo: g, at: whole ? Date.now() : Date.now() - TM_KEEP + 600e3, err: false, tries: 0 });
-        if (whole) tmKeep3(key, { at: L.at, g });
+        Object.assign(L, { geo: g, at: whole ? Date.now() : Date.now() - TM_KEEP + 864e5, err: false, tries: 0 });
+        tmKeep3(key, { at: L.at, g });
         this._tmGeo(g);
       })
       .catch(() => {
@@ -622,6 +629,7 @@ Object.assign(GlassFloorplanCard.prototype, {
    * else the stop's own position */
   _tmAnchors(si, ref) {
     const s = this._M.dep.stops[si], seen = new Map();
+    if (s.at) return [s.at];
     for (const d of this._depC?.[this._depKey(s)]?.list || []) if (d.line === ref && d.at) seen.set(d.at.map((v) => v.toFixed(4)).join(), d.at);
     const own = this._tmStopsLL()[si];
     return seen.size ? [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0])).map((x) => x[1]) : own ? [own] : [];
@@ -662,7 +670,7 @@ Object.assign(GlassFloorplanCard.prototype, {
         const As = this._tmAnchors(si, r.ref).map((a) => G.pr.xy(...a)), A = As[0] || S;
         const near = r.stopP.map((p) => [p, Math.min(...As.map((q) => tmLen(p, q)))]).filter((x) => x[1] < 160).sort((a, b) => a[1] - b[1])[0];
         r.lines.forEach((L, li) => {
-          const o = tmOn(L, near ? near[0] : A);
+          const o = near ? tmOn(L, near[0]) : As.map((a) => tmOn(L, a)).sort((x, y) => x.d - y.d)[0] || tmOn(L, A);
           if (o.d > (near ? 35 : 70)) return;
           const a = L.P[o.i - 1], b = L.P[o.i];
           plats.push({ si, ri, li, s: o.s, rs: L.o + o.s, ref: r.ref, prod: r.prod, ug: r.mode === 'subway', pt: tmAtS(L, o.s).p, ang: Math.atan2(b[1] - a[1], b[0] - a[0]) });
@@ -673,6 +681,13 @@ Object.assign(GlassFloorplanCard.prototype, {
       for (const p of plats) {
         const g = sides.find((x) => (p.ug ? x.ug && x.refs[0] === p.ref : !x.ug && tmLen(x.pt, p.pt) < 40 && Math.abs(Math.atan2(Math.sin(x.ang - p.ang), Math.cos(x.ang - p.ang))) < 0.9));
         if (g) { g.plats.push(p); if (!g.refs.includes(p.ref)) g.refs.push(p.ref); } else sides.push({ si, plats: [p], refs: [p.ref], pt: p.pt, ang: p.ang, ug: p.ug });
+      }
+      for (const g of sides.filter((x) => x.ug)) {
+        g.dirs = [];
+        for (const p of g.plats) {
+          const d = g.dirs.find((x) => Math.abs(Math.atan2(Math.sin(x.ang - p.ang), Math.cos(x.ang - p.ang))) < 0.9);
+          if (d) d.plats.push(p); else g.dirs.push({ ang: p.ang, plats: [p], ref: p.ref, prod: p.prod });
+        }
       }
       return { si, S, sides, plats };
     }).filter(Boolean);
@@ -714,7 +729,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     // a phone shows less around the stops (bigger, calmer), a laptop the full radius
     const ll = M.dep.stops.flatMap((s, si) => { const refs = this._tmLinesOf(s); return refs.length ? refs.flatMap((ref) => this._tmAnchors(si, ref)) : [this._tmStopsLL()[si]]; }).filter(Boolean).map((p) => G.pr.xy(...p)), r = M.dep.map.radius * (this._m ? 0.6 : 1);
     if (!ll.length) return;
-    const fb = [Math.min(...ll.map((p) => p[0])) - r, Math.min(...ll.map((p) => p[1])) - r, Math.max(...ll.map((p) => p[0])) + r, Math.max(...ll.map((p) => p[1])) + r];
+    const rx = this._m ? r * 0.55 : r, fb = [Math.min(...ll.map((p) => p[0])) - rx, Math.min(...ll.map((p) => p[1])) - r, Math.max(...ll.map((p) => p[0])) + rx, Math.max(...ll.map((p) => p[1])) + r];
     const k = clamp(Math.min((F[2] - F[0]) / (fb[2] - fb[0]), (F[3] - F[1]) / (fb[3] - fb[1])), 0.12, 3);
     const view = { k, ox: (F[0] + F[2]) / 2 - ((fb[0] + fb[2]) / 2) * k, oy: (F[1] + F[3]) / 2 - ((fb[1] + fb[3]) / 2) * k, W, H, u };
     // drawn only while shown (and again when the screen, the map or the lines change)
@@ -774,12 +789,14 @@ Object.assign(GlassFloorplanCard.prototype, {
     // little further). Under the street the direction does not matter: one dashed line per line.
     const refs = [...new Set(this._M.dep.stops.flatMap((s) => this._tmLinesOf(s)))], drawnUg = new Set();
     this._tmScr = new Map();
+    this._tmOffs = new Map();
     const core = [];
     G.routes.forEach((rt, ri) => {
       if (!refs.includes(rt.ref)) return;
       const look = this._tmLook(rt.ref, rt.prod), lane = refs.filter((x) => this._tmLook(x, rt.prod).prod === look.prod).indexOf(rt.ref), ug = rt.mode === 'subway';
       const off = ug ? 0 : (4.5 + Math.max(0, lane) * 3.2) * u, draw = !ug || !drawnUg.has(rt.ref);
       if (ug) drawnUg.add(rt.ref);
+      this._tmOffs.set(ri, off);
       rt.lines.forEach((L, li) => {
         const P = X(L.P), Q = off ? tmOffset(P, off) : P;
         this._tmScr.set(`${ri}:${li}`, { P: Q, S: L.S });
@@ -815,19 +832,29 @@ Object.assign(GlassFloorplanCard.prototype, {
     for (const st of this._tmPl || []) {
       const s = D.stops[st.si], name = esc(s.name || s.id || ''), up = st.sides.filter((g) => !g.ug), down = st.sides.filter((g) => g.ug);
       for (const g of up) {
-        const p = this._tmX(g.pt), dx = -Math.sin(g.ang), dy = Math.cos(g.ang), off = 24 * u, id = `${st.si}-${this._tmSides.length}`;
+        // the light at the kerb of its carriageway (right of the line as it is drawn), the chip further out on that side
+        const c = this._tmX(g.pt), dx = -Math.sin(g.ang), dy = Math.cos(g.ang), k = (this._tmOffs?.get(g.plats[0].ri) || 0) + 6 * u, p = [c[0] + dx * k, c[1] + dy * k];
+        const off = 18 * u, id = `${st.si}-${this._tmSides.length}`;
         html += `<i class="tm-pt" style="transform:translate(${p[0].toFixed(1)}px,${p[1].toFixed(1)}px)"></i>`;
+        g.kerb = p;
         this._tmSides.push({ g, ax: p[0] + dx * off, ay: p[1] + dy * off, dx, dy, id });
         chips += `<div class="tm-pf" data-side="${id}" style="visibility:hidden"></div>`;
       }
       let stn = null;
       if (down.length) {
         stn = this._tmX(down.reduce((a, g) => [a[0] + g.pt[0] / down.length, a[1] + g.pt[1] / down.length], [0, 0]));
+        const lines = [...new Set(down.flatMap((g) => g.plats.map((x) => `${x.ri}:${x.li}`)))].map((k) => this._tmScr.get(k)?.P).filter(Boolean);
+        let best = null;
+        for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) for (let a = 1; a < lines[i].length; a++) for (let b = 1; b < lines[j].length; b++) {
+          const X = tmCross(lines[i][a - 1], lines[i][a], lines[j][b - 1], lines[j][b]);
+          if (X && tmLen(X, stn) < 50 * u && (!best || tmLen(X, stn) < tmLen(best, stn))) best = X;
+        }
+        if (best) stn = best;
         html += `<i class="tm-pt ug" style="transform:translate(${stn[0].toFixed(1)}px,${stn[1].toFixed(1)}px)"></i>`;
         const rows = down.map((g) => { const id = `${st.si}-${this._tmSides.length}`; this._tmSides.push({ g, row: true, id }); return `<div class="tm-row" data-side="${id}"></div>`; }).join('');
         chips += `<div class="tm-pf st" data-stn="${st.si}" style="visibility:hidden"><div class="tm-sh">${name}</div>${rows}</div>`;
       }
-      const pts = up.map((g) => this._tmX(g.pt));
+      const pts = up.map((g) => g.kerb);
       this._tmStops.push({ si: st.si, stn, pts: pts.length ? pts : stn ? [] : [this._tmX(st.S)] });
       if (!stn || up.length) html += `<span class="tm-sl" data-stop="${st.si}">${name}</span>`;
     }
@@ -841,7 +868,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     const r = (this._tmR = this._tmR || {});
     if (r.busy || Date.now() - (r.tried || 0) < 25e3) return;
     // which lines to look for comes from the departures of a stop without a line filter: wait for its first answer
-    if (D.stops.some((s) => !s.lines.length && !this._depState(s).ok)) return;
+    if (D.stops.some((s) => s.id && !s.lines.length && !this._depState(s).ok)) return;
     // the part of the map in view and a margin
     const m = 0.15, a = G.pr.ll((-V.ox - V.W * m) / V.k, (-V.oy - V.H * m) / V.k), b = G.pr.ll((V.W * (1 + m) - V.ox) / V.k, (V.H * (1 + m) - V.oy) / V.k);
     const prods = new Set(D.stops.flatMap((s) => this._tmLinesOf(s).map((ref) => this._tmLook(ref, G.routes.find((x) => x.ref === ref)?.prod || 'bus').prod)));
@@ -850,7 +877,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     r.busy = true;
     r.tried = Date.now();
     tmFetch(`${D.api}/radar?north=${f(a[0])}&west=${f(a[1])}&south=${f(b[0])}&east=${f(b[1])}&results=256&duration=30&frames=3&polylines=true&${flags}`, null, 15e3)
-      .then((x) => (x.ok ? x.json() : Promise.reject(new Error(String(x.status)))))
+      .then((x) => (x.ok ? x.j : Promise.reject(new Error(String(x.status)))))
       .then((j) => { r.at = Date.now(); r.err = false; this._tmMoves(Array.isArray(j) ? j : j.movements || [], r.at); })
       .catch(() => { r.err = true; })
       .finally(() => { r.busy = false; this._tmShow(); });
@@ -915,7 +942,17 @@ Object.assign(GlassFloorplanCard.prototype, {
   /* the minutes of a trip at one of the stops, and which side of the street it stops at */
   _tmPlatOf(st, d) {
     const G = this._tmG, cand = st.plats.filter((p) => p.ref === d.line);
-    if (cand.length < 2) return cand[0] || null;
+    if (!cand.length) return null;
+    if (cand.length === 1) {
+      // one side only (the other direction is not in the map data): not for a departure that clearly runs the other way
+      const p = cand[0], L = G.routes[p.ri].lines[p.li];
+      if (d.pos) { const o = tmOn(L, G.pr.xy(...d.pos)); if (o.d < 40 && o.s > p.s + 60) return null; }
+      if (d.to) {
+        const P = G.pr.xy(...d.to), dn = tmAtS(L, p.s + 600).p, S = p.pt, a = [P[0] - S[0], P[1] - S[1]], b = [dn[0] - S[0], dn[1] - S[1]];
+        if ((a[0] * b[0] + a[1] * b[1]) / ((Math.hypot(...a) * Math.hypot(...b)) || 1) < -0.5) return null;
+      }
+      return p;
+    }
     const v = this._tmVeh?.get(d.trip);
     if (v && v.ri >= 0) { const p = cand.find((x) => x.ri === v.ri && x.li === v.li) || cand.find((x) => x.ri === v.ri); if (p) return p; }
     const cos = (a, b) => ((a[0] * b[0] + a[1] * b[1]) / ((Math.hypot(...a) * Math.hypot(...b)) || 1));
@@ -959,9 +996,6 @@ Object.assign(GlassFloorplanCard.prototype, {
     live.lastElementChild.textContent = fresh ? t('depLive') : ats.length ? t('depAsOf', new Date(Math.min(...ats)).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })) : t('depLoadingShort');
     if (!G || !V) return;
     if (this._tmSig() !== this._tmDrawn) { this._tmVKey = null; this._tmLayout(); return; }
-    const leg = v.querySelector('.tm-leg'), ug = G.routes.some((x) => x.mode === 'subway' && D.stops.some((s) => this._tmLinesOf(s).includes(x.ref)));
-    const lh = ug ? `<i></i>${esc(t(this._m ? 'tmUndergroundShort' : 'tmUnderground'))}` : '';
-    if (leg.dataset.h !== lh) { leg.dataset.h = lh; leg.innerHTML = lh; }
     // the trips at the stops: minutes and side
     this._tmEta = new Map();
     const bySide = new Map();
@@ -977,7 +1011,22 @@ Object.assign(GlassFloorplanCard.prototype, {
       }
     }
     // without a fresh radar the departures tell where the vehicles are (once, they move on with the next)
-    if (!(r.at && now - r.at < 70e3)) for (const [, es] of this._tmEta) { const e = es[0]; if (e.d.pos && e.d.t - now < 20 * 60e3) this._tmObs(e.d.trip, e.d.line, e.d.product, [[now, ...G.pr.xy(...e.d.pos)]], [G.pr.xy(...e.d.pos), e.p.pt], now, e.p.ri); }
+    if (!(r.at && now - r.at < 70e3)) {
+      for (const [, es] of this._tmEta) {
+        const e = es[0], at = this._depC?.[this._depKey(D.stops[e.st.si])]?.at || now;
+        if (e.d.pos && e.d.t - now < 20 * 60e3) this._tmObs(e.d.trip, e.d.line, e.d.product, [[at, ...G.pr.xy(...e.d.pos)]], [G.pr.xy(...e.d.pos), e.p.pt], now, e.p.ri);
+      }
+    }
+    this._tmNext = new Set();
+    for (const [g, list] of bySide) for (const key of g.ug ? g.dirs : g.refs) {
+      const nx = list.filter((x) => (g.ug ? key.plats.includes(x.p) : x.d.line === key) && !x.d.cancelled && x.d.t > now - 30e3).sort((a, b) => a.d.t - b.d.t)[0];
+      if (nx) this._tmNext.add(nx.d.trip);
+    }
+    // the legend: the dashed subway when one is shown, orange = late when a late one is shown
+    const leg = v.querySelector('.tm-leg'), ug = G.routes.some((x) => x.mode === 'subway' && D.stops.some((s) => this._tmLinesOf(s).includes(x.ref)));
+    const anyLate = [...bySide.values()].some((l) => l.some((e) => !e.d.cancelled && e.d.delay >= DEP_LATE && e.d.t - now < 60 * 60e3));
+    const lh = `${ug ? `<i></i>${esc(t(this._m ? 'tmUndergroundShort' : 'tmUnderground'))}` : ''}${anyLate ? `<b class="lt">${ug ? ' · ' : ''}</b><em></em>${esc(t('tmLate'))}` : ''}`;
+    if (leg.dataset.h !== lh) { leg.dataset.h = lh; leg.innerHTML = lh; }
     const unit = t('min'), mins = (ms) => { const m = Math.floor((ms - now) / 60000); return m < 1 ? null : m; };
     const mnHtml = (d) => { const m = mins(d.t); return `<span class="tm-mn${d.delay >= DEP_LATE ? ' late' : ''}">${m == null ? esc(t('depNow')) : `${m}<small>${esc(unit)}</small>`}</span>`; };
     const order = (a, b) => (DEP_ORDER.indexOf(this._tmLook(a, 'bus').prod) - DEP_ORDER.indexOf(this._tmLook(b, 'bus').prod)) || a.localeCompare(b, undefined, { numeric: true });
@@ -991,8 +1040,8 @@ Object.assign(GlassFloorplanCard.prototype, {
       const byTime = (items) => items.sort((a, b) => (a.nx ? a.nx.d.t : Infinity) - (b.nx ? b.nx.d.t : Infinity)).map((x, i) => ({ ...x, hero: i === 0 && !!x.nx }));
       const html = el.g.ug
         // a subway line in its station's plate: the badge, then each direction with its arrow
-        ? `${this._tmBadge(el.g.refs[0], this._tmLook(el.g.refs[0], el.g.plats[0].prod))}${byTime(el.g.plats.map((p) => ({ p, nx: next((e) => e.p === p) })))
-          .map((x) => `<span class="tm-ln${x.hero ? ' hero' : ''}">${arrow(x.p.ang)}${x.nx ? mnHtml(x.nx.d) : none}</span>`).join('')}`
+        ? `${this._tmBadge(el.g.refs[0], this._tmLook(el.g.refs[0], el.g.plats[0].prod))}${el.g.dirs.slice().sort((a, b) => tmOrder(a.ang) - tmOrder(b.ang))
+          .map((dr) => { const nx = next((e) => dr.plats.includes(e.p)); return `<span class="tm-ln hero">${arrow(dr.ang)}${nx ? mnHtml(nx.d) : none}</span>`; }).join('')}`
         // a side of the street: where it goes, then every line stopping there
         : `${arrow(el.g.ang)}${byTime(el.g.refs.map((ref) => ({ ref, nx: next((e) => e.d.line === ref) })))
           .map((x) => `<span class="tm-ln${x.hero ? ' hero' : ''}">${this._tmBadge(x.ref, this._tmLook(x.ref, el.g.plats[0].prod))}${x.nx ? mnHtml(x.nx.d) : none}</span>`).join('')}`;
@@ -1021,7 +1070,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       if (!plate) continue;
       const at = st.stn, w = plate.offsetWidth, H = plate.offsetHeight;
       const busy = (x0, y0) => this._tmLinePts.reduce((n, p) => n + (p[0] > x0 - 4 && p[0] < x0 + w + 4 && p[1] > y0 - 4 && p[1] < y0 + H + 4), 0)
-        + 60 * taken.filter((b) => x0 - 6 < b[2] && x0 + w + 6 > b[0] && y0 - 6 < b[3] && y0 + H + 6 > b[1]).length;
+        + 60 * taken.concat(this._tmBox.keep).filter((b) => x0 - 6 < b[2] && x0 + w + 6 > b[0] && y0 - 6 < b[3] && y0 + H + 6 > b[1]).length;
       const opts = [[at[0] + 16 * u, at[1] - H / 2], [at[0] - 16 * u - w, at[1] - H / 2], [at[0] + 12 * u, at[1] + 14 * u], [at[0] + 12 * u, at[1] - 14 * u - H],
         [at[0] - 12 * u - w, at[1] + 14 * u], [at[0] - 12 * u - w, at[1] - 14 * u - H], [at[0] - w / 2, at[1] - 16 * u - H], [at[0] - w / 2, at[1] + 16 * u]]
         .filter((o) => o[0] >= E[0] && o[0] + w <= E[2] && o[1] >= E[1] && o[1] + H <= E[3]);
@@ -1031,7 +1080,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       taken.push(box);
     }
     this._tmLabelsApart();
-    this._tmHints(bySide, mnHtml);
+    this._tmHints(bySide);
     this._tmKick();
   },
   /* chips beside the street that would overlap move apart (the shorter way), away from names, lights and a station's
@@ -1040,15 +1089,24 @@ Object.assign(GlassFloorplanCard.prototype, {
     const S = (this._tmSides || []).filter((e) => e.box && !e.row), all = S.concat(this._tmPlates || []), B = this._tmBox, rb = this._root.getBoundingClientRect(), sc = rb.width / B.W || 1;
     const fixed = [...this._tview.querySelectorAll('.tm-sl, .tm-pt')].map((n) => { const b = n.getBoundingClientRect(); return [(b.left - rb.left) / sc, (b.top - rb.top) / sc, (b.right - rb.left) / sc, (b.bottom - rb.top) / sc]; })
       .concat((this._tmPlates || []).map((e) => e.box), B.keep);
-    const push = (a, b, both) => {
+    // a chip by the street gives way only along its street (it stays on its side of the road)
+    const shift = (e, b, d, away) => {
+      const t = e?.dx != null ? [e.dy, -e.dx] : null;
+      if (!t) { b[0] += d[0]; b[2] += d[0]; b[1] += d[1]; b[3] += d[1]; return; }
+      let k = d[0] * t[0] + d[1] * t[1];
+      if (Math.abs(k) < 1) k = Math.hypot(d[0], d[1]) * (Math.sign(away[0] * t[0] + away[1] * t[1]) || 1);
+      b[0] += t[0] * k; b[2] += t[0] * k; b[1] += t[1] * k; b[3] += t[1] * k;
+    };
+    const push = (ea, a, eb, b, both) => {
       const ox = Math.min(a[2], b[2]) - Math.max(a[0], b[0]) + 6, oy = Math.min(a[3], b[3]) - Math.max(a[1], b[1]) + 6;
       if (ox <= 0 || oy <= 0) return false;
-      const ax = ox < oy ? 0 : 1, d = ((ax ? oy : ox) / (both ? 2 : 1)), sg = Math.sign(b[ax] + b[ax + 2] - a[ax] - a[ax + 2]) || 1;
-      b[ax] += d * sg; b[ax + 2] += d * sg;
-      if (both) { a[ax] -= d * sg; a[ax + 2] -= d * sg; }
+      const ax = ox < oy ? 0 : 1, d = (ax ? oy : ox) / (both ? 2 : 1), sg = Math.sign(b[ax] + b[ax + 2] - a[ax] - a[ax + 2]) || 1;
+      const away = [(b[0] + b[2] - a[0] - a[2]) / 2, (b[1] + b[3] - a[1] - a[3]) / 2], dv = ax ? [0, d * sg] : [d * sg, 0];
+      shift(eb, b, dv, away);
+      if (both) shift(ea, a, [-dv[0], -dv[1]], [-away[0], -away[1]]);
       return true;
     };
-    // inside the card while they move (so a chip at the edge gives way up or down instead)
+    // inside the card while they move
     const inside = (b) => {
       const w = b[2] - b[0], h = b[3] - b[1], x = clamp(b[0], B.E[0], B.E[2] - w), y = clamp(b[1], B.E[1], B.E[3] - h);
       b.splice(0, 4, x, y, x + w, y + h);
@@ -1057,8 +1115,8 @@ Object.assign(GlassFloorplanCard.prototype, {
     for (let it = 0; it < 16; it++) {
       let moved = false;
       for (let i = 0; i < S.length; i++) {
-        for (let j = i + 1; j < S.length; j++) moved = push(S[i].box, S[j].box, true) || moved;
-        for (const f of fixed) moved = push(f, S[i].box, false) || moved;
+        for (let j = i + 1; j < S.length; j++) moved = push(S[i], S[i].box, S[j], S[j].box, true) || moved;
+        for (const f of fixed) moved = push(null, f, S[i], S[i].box, false) || moved;
       }
       S.forEach((e) => inside(e.box));
       if (!moved) break;
@@ -1068,22 +1126,22 @@ Object.assign(GlassFloorplanCard.prototype, {
       e.node.style.visibility = '';
     }
   },
-  /* the next vehicle of each line and side that is not on the map yet: at the edge where its route comes in */
-  _tmHints(bySide, mnHtml) {
-    const box = this._tview.querySelector('.tm-hs'), B = this._tmBox, now = Date.now();
+  /* The next vehicle of each line and side that is not on the map yet: quiet words where its route comes in – '142 · 7 Min.' –
+   * and a short tick in the line's colour on the line there (where the route's data begin inside the view: at that end).
+   * A vehicle is either a disc on the map or such a hint, never both. Never over a chip, a vehicle, the heading or the bar. */
+  _tmHints(bySide) {
+    const box = this._tview.querySelector('.tm-hs'), B = this._tmBox, now = Date.now(), u = this._tmView.u;
     if (!box || !B) return;
     this._tmFrame();
-    const F = B.E, inF = (p) => p[0] >= F[0] && p[0] <= F[2] && p[1] >= F[1] && p[1] <= F[3], onCard = (p) => p[0] > 0 && p[0] < B.W && p[1] > 0 && p[1] < B.H;
+    const F = B.E, inF = (p) => p[0] >= F[0] && p[0] <= F[2] && p[1] >= F[1] && p[1] <= F[3];
     const hints = [];
-    for (const [g, list] of bySide) for (const key of g.ug ? g.plats : g.refs) {
-      const ref = g.ug ? key.ref : key, mine = (x) => (g.ug ? x.p === key : x.d.line === ref);
+    for (const [g, list] of bySide) for (const key of g.ug ? g.dirs : g.refs) {
+      const ref = g.ug ? key.ref : key, mine = (x) => (g.ug ? key.plats.includes(x.p) : x.d.line === ref);
       const e = list.filter((x) => mine(x) && !x.d.cancelled && x.d.t > now + 30e3 && x.d.t - now < (this._m ? 10 : 15) * 60e3).sort((x, y) => x.d.t - y.d.t)[0];
-      if (!e) continue;
-      const vh = this._tmVeh.get(e.d.trip);
-      if (vh?.xy && onCard(vh.xy)) continue;
+      if (!e || this._tmVeh.get(e.d.trip)?.shown) continue;
       const sc = this._tmScr.get(`${e.p.ri}:${e.p.li}`);
       if (!sc) continue;
-      // walk back along the route from the stop until it leaves the view
+      // back along the route from the stop until it leaves the view – or to where its data begin
       const at = tmAtS(sc, e.p.s);
       let q = null, ang = 0, b = at.p;
       for (let i = at.i - 1; i >= 0; b = sc.P[i], i--) {
@@ -1096,38 +1154,28 @@ Object.assign(GlassFloorplanCard.prototype, {
           break;
         }
       }
-      if (!q) {
-        // the route data begin inside the view: on along its first stretch, backwards, to the edge
-        const a = sc.P[0], b = sc.P[1], dl = tmLen(a, b) || 1, dir = [(b[0] - a[0]) / dl, (b[1] - a[1]) / dl];
-        const ts = [(F[0] - a[0]) / -dir[0], (F[2] - a[0]) / -dir[0], (F[1] - a[1]) / -dir[1], (F[3] - a[1]) / -dir[1]].filter((x) => Number.isFinite(x) && x >= 0);
-        const tt = ts.length ? Math.min(...ts) : 0;
-        q = [a[0] - dir[0] * tt, a[1] - dir[1] * tt];
-        ang = Math.atan2(dir[1], dir[0]);
-      }
-      hints.push({ q, ang, e, ref });
+      if (!q) { q = sc.P[0]; ang = Math.atan2(sc.P[1][1] - q[1], sc.P[1][0] - q[0]); }
+      const look = this._tmLook(ref, e.p.prod), m = Math.floor((e.d.t - now) / 60000);
+      hints.push({ q, ang, c: look.glow.map((v) => Math.round(v + (255 - v) * 0.3)).join(','), ref, txt: m < 1 ? t('depNow') : `${m} ${t('min')}`, late: e.d.delay >= DEP_LATE });
     }
-    // hints at the same spot share a chip
-    const groups = [];
-    for (const h of hints) { const g = groups.find((x) => tmLen(x.q, h.q) < 60 && Math.cos(x.ang - h.ang) > 0.5); if (g) g.list.push(h); else groups.push({ q: h.q, ang: h.ang, list: [h] }); }
-    const hh = groups.map((g) => {
-      const items = g.list.sort((a, b) => a.e.d.t - b.e.d.t).map((h) => `<span class="tm-ln">${this._tmBadge(h.ref, this._tmLook(h.ref, h.e.p.prod))}${mnHtml(h.e.d)}</span>`).join('');
-      return `<div class="tm-h" data-x="${g.q[0].toFixed(1)}" data-y="${g.q[1].toFixed(1)}"><span class="ar">${icon('arrowR').replace('<svg', `<svg style="transform:rotate(${((g.ang * 180) / Math.PI).toFixed(0)}deg)"`)}</span>${items}</div>`;
-    }).join('');
+    const hh = hints.map((h) => `<i class="tm-tk" style="--c:${h.c};transform:translate(${h.q[0].toFixed(1)}px,${h.q[1].toFixed(1)}px) rotate(${((h.ang * 180) / Math.PI).toFixed(0)}deg)"></i>`
+      + `<div class="tm-h" data-x="${h.q[0].toFixed(1)}" data-y="${h.q[1].toFixed(1)}" data-a="${h.ang.toFixed(3)}"><b style="color:rgb(${h.c})">${esc(h.ref)}</b><span${h.late ? ' class="late"' : ''}>· ${esc(h.txt)}</span></div>`).join('');
     if (box.dataset.h !== hh) { box.dataset.h = hh; box.innerHTML = hh; }
-    // the chips of the stops are there first
+    // what is there first: the stops' chips and plates, the vehicles on the map with their minutes
     const placed = (this._tmSides || []).filter((e) => e.box && !e.row).concat(this._tmPlates || []).map((e) => [e.box[0] - 4, e.box[1] - 4, e.box[2] + 4, e.box[3] + 4]);
-    for (const el of box.children) {
-      const w = el.offsetWidth, h = el.offsetHeight;
-      let x = clamp(+el.dataset.x - w / 2, F[0], F[2] - w), y = clamp(+el.dataset.y - h / 2, F[1], F[3] - h);
-      // along its edge past the heading, the layer bar and the hints already there
+    for (const v of this._tmVeh.values()) if (v.shown && v.xy) { const r = 18 * u; placed.push([v.xy[0] - r, v.xy[1] - r, v.xy[0] + r, v.xy[1] + r]); }
+    for (const el of box.querySelectorAll('.tm-h')) {
+      const w = el.offsetWidth, h = el.offsetHeight, a = +el.dataset.a;
+      // a little inwards from the tick, along the line
+      let x = clamp(+el.dataset.x + Math.cos(a) * (w / 2 + 10) - w / 2, F[0], F[2] - w), y = clamp(+el.dataset.y + Math.sin(a) * (h / 2 + 10) - h / 2, F[1], F[3] - h);
       const side = Math.min(x - F[0], F[2] - w - x) < Math.min(y - F[1], F[3] - h - y) ? 'v' : 'h';
-      for (let it = 0; it < 6; it++) {
+      for (let it = 0; it < 8; it++) {
         const o = B.keep.concat(placed).find((q) => x < q[2] && x + w > q[0] && y < q[3] && y + h > q[1]);
         if (!o) break;
         if (side === 'v') y = o[3] + 6 + h <= F[3] ? o[3] + 6 : o[1] - 6 - h;
         else x = o[2] + 6 + w <= F[2] ? o[2] + 6 : o[0] - 6 - w;
       }
-      placed.push([x, y, x + w, y + h]);
+      placed.push([x - 4, y - 2, x + w + 4, y + h + 2]);
       el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
     }
   },
@@ -1138,6 +1186,8 @@ Object.assign(GlassFloorplanCard.prototype, {
     const step = () => {
       if (!this._tmOn() || document.hidden) { this._tmRaf = null; return; }
       this._tmRaf = requestAnimationFrame(step);
+      if (performance.now() - (this._tmFT || 0) < 30) return;
+      this._tmFT = performance.now();
       this._tmFrame();
       // while the map is really on screen (frames run only then) it asks for news itself – timers of a covered or
       // background browser window are slowed down; both requests keep their own pace
@@ -1150,7 +1200,9 @@ Object.assign(GlassFloorplanCard.prototype, {
   _tmFrame() {
     const box = this._tview?.querySelector('.tm-vs'), G = this._tmG, V = this._tmView;
     if (!box || !G || !V || !this._tmScr) return;
-    const now = Date.now(), u = V.u, lit = now - (this._tmLitT || 0) > 400 ? [] : null;
+    const now = Date.now(), u = V.u, lit = now - (this._tmLitT || 0) > 400 ? [] : null, r = 17 * u, keep = this._tmBox?.keep || [];
+    // a disc only where it is whole and free (not under the heading, the footer, the layer bar) – else a hint at the edge
+    const safe = (p) => p[0] - r > 4 && p[0] + r < V.W - 4 && p[1] - r > 4 && p[1] + r < V.H - 4 && !keep.some((k) => p[0] + r > k[0] && p[0] - r < k[2] && p[1] + r > k[1] && p[1] - r < k[3]);
     let boxes = null;
     for (const [id, v] of this._tmVeh) {
       let p = null, ang = v.ang || 0, s = null;
@@ -1178,7 +1230,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       const out = !p || (v.miss && now > last) || v.miss > 2 || now - last > 90e3;
       const gone = !e, ahead = e && vrs != null && e.p.ri === v.ri ? e.p.rs - vrs : null;
       // its way to the stop lights up in its colour
-      if (lit && ahead != null && ahead > 0 && e.p.li === v.li) {
+      if (lit && ahead != null && ahead > 0 && e.p.li === v.li && this._tmNext?.has(id)) {
         const sc = this._tmScr.get(`${v.ri}:${v.li}`), a = sc && tmAtS(sc, s), b = sc && tmAtS(sc, e.p.s);
         if (sc && b.i >= a.i) {
           const d = `M${[a.p, ...sc.P.slice(a.i, b.i), b.p].map((q) => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join('L')}`, c = `rgb(${this._tmLook(v.ref, v.prod).glow.join(',')})`, ug = v.prod === 'subway' ? ' ug' : '';
@@ -1211,10 +1263,12 @@ Object.assign(GlassFloorplanCard.prototype, {
       const deg = Math.round((v.ang * 180) / Math.PI);
       if (deg !== v.deg) { v.deg = deg; v.arEl.style.transform = `rotate(${deg}deg)`; }
       v.el.classList.toggle('gone', gone);
-      // off the card: not drawn (its minutes would hang at the edge)
-      v.el.classList.toggle('off', p[0] < -20 || p[1] < -20 || p[0] > V.W + 20 || p[1] > V.H + 20);
-      // the minutes beside it – not once it is close to its stop: the chip there says it
-      const m = e ? Math.floor((e.d.t - now) / 60000) : null, txt = e && !(ahead != null && ahead < 160) ? (m < 1 ? t('depNow') : t('tmIn', m)) : '';
+      v.shown = safe(p);
+      v.el.classList.toggle('off', !v.shown);
+      // the minutes beside it – not once it is close to its stop or due: the chip there says it ('jetzt' only there; still
+      // far away, its 'now' is one minute)
+      const m = e ? Math.floor((e.d.t - now) / 60000) : null, far = ahead == null || ahead > 250;
+      const txt = e && !(ahead != null && ahead < 160) && (m >= 1 || far) ? t('tmIn', Math.max(1, m)) : '';
       if (txt !== v.txt) { v.txt = txt; v.etEl.textContent = txt; v.etW = v.etEl.offsetWidth; v.etH = v.etEl.offsetHeight; }
       // the minutes beside the marker – on the side away from the edge and clear of the stops' chips (there the chip says it)
       if (txt) {
@@ -1251,10 +1305,22 @@ function tmTrack(T, now) {
   for (let i = 1; i < T.length; i++) if (now <= T[i][0]) { const a = T[i - 1], b = T[i]; return a[1] + ((b[1] - a[1]) * (now - a[0])) / ((b[0] - a[0]) || 1); }
   return T[T.length - 1][1];
 }
-/* a fetch that gives up after `ms` (a request that hangs would block its next one for good) */
+/* where two segments cross (or null) */
+function tmCross(a, b, c, d) {
+  const r = [b[0] - a[0], b[1] - a[1]], q = [d[0] - c[0], d[1] - c[1]], den = r[0] * q[1] - r[1] * q[0];
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den, v = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+  return t >= 0 && t <= 1 && v >= 0 && v <= 1 ? [a[0] + r[0] * t, a[1] + r[1] * t] : null;
+}
+/* a direction's place in a row: west before east, north before south */
+const tmOrder = (a) => (Math.abs(Math.cos(a)) >= Math.abs(Math.sin(a)) ? (Math.cos(a) < 0 ? 0 : 1) : Math.sin(a) < 0 ? 2 : 3);
+/* a JSON request that gives up after `ms`, reading the answer included (a request that hangs would block its next one
+ * for good) → { ok, status, j } */
 function tmFetch(url, opt, ms) {
   const ab = typeof AbortController === 'function' ? new AbortController() : null, tm = ab && setTimeout(() => ab.abort(), ms);
-  return fetch(url, { ...(opt || {}), ...(ab ? { signal: ab.signal } : {}) }).finally(() => clearTimeout(tm));
+  return fetch(url, { ...(opt || {}), ...(ab ? { signal: ab.signal } : {}) })
+    .then((r) => (r.ok ? r.json().then((j) => ({ ok: true, status: r.status, j })) : { ok: false, status: r.status, j: null }))
+    .finally(() => clearTimeout(tm));
 }
 /* the browser's store keeps the three newest maps (Home Assistant shares it); older than 30 days go */
 function tmKeep3(key, val) {
@@ -1271,11 +1337,11 @@ function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h <
 
 Object.assign(STR.en, {
   layer_departures_map: 'Map', tmIn: (m) => `in ${m} min`, tmLoading: 'Loading the map …', tmOffline: 'Map data not reachable – trying again shortly',
-  tmNoStops: 'The live map needs stops with an id', tmAttr: '© OpenStreetMap contributors', tmUnderground: 'Subway under the street · position estimated',
-  tmUndergroundShort: 'Subway · position estimated', tmBadStop: 'A stop of the map is not known to the timetable',
+  tmNoStops: 'The live map needs stops with an id', tmAttr: '© OpenStreetMap contributors', tmUnderground: 'Subway underground · train positions estimated',
+  tmUndergroundShort: 'Subway · positions estimated', tmLate: 'late', tmBadStop: 'A stop of the map is not known to the timetable',
 });
 Object.assign(STR.de, {
   layer_departures_map: 'Karte', tmIn: (m) => `in ${m} Min.`, tmLoading: 'Karte wird geladen …', tmOffline: 'Kartendaten nicht erreichbar – neuer Versuch gleich',
-  tmNoStops: 'Die Live-Karte braucht Haltestellen mit id', tmAttr: '© OpenStreetMap-Mitwirkende', tmUnderground: 'U-Bahn unter der Straße · Position geschätzt',
-  tmUndergroundShort: 'U-Bahn · Position geschätzt', tmBadStop: 'Eine Haltestelle der Karte kennt der Fahrplan nicht',
+  tmNoStops: 'Die Live-Karte braucht Haltestellen mit id', tmAttr: '© OpenStreetMap-Mitwirkende', tmUnderground: 'U-Bahn unterirdisch · Zuglage geschätzt',
+  tmUndergroundShort: 'U-Bahn · Zuglage geschätzt', tmLate: 'verspätet', tmBadStop: 'Eine Haltestelle der Karte kennt der Fahrplan nicht',
 });

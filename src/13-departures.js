@@ -176,8 +176,12 @@ Object.assign(GlassFloorplanCard.prototype, {
   _depShow() {
     const type = this._layer()?.type;
     if (this._dview && type === 'departures') this._depView();
-    // the map follows every change of the home's devices only every two seconds (the departures and the radar update it anyway)
-    if (type === 'departures_map' && Date.now() - (this._tmShown || 0) > 2e3) this._tmShow();
+    // the map follows the changes of the home's devices at most every two seconds – a call in between comes a little later
+    if (type === 'departures_map') {
+      const wait = 2e3 - (Date.now() - (this._tmShown || 0));
+      if (wait <= 0) this._tmShow();
+      else if (!this._tmLater) this._tmLater = setTimeout(() => { this._tmLater = null; if (this._layer()?.type === 'departures_map') this._tmShow(); }, wait);
+    }
   },
   /* what the view hides cannot be reached with the keyboard either */
   _depInert(on) {
