@@ -6209,6 +6209,8 @@ Object.assign(GlassFloorplanCard.prototype, {
     if (!this._tmOn() || !D || !V || !G || document.hidden) return;
     const r = (this._tmR = this._tmR || {});
     if (r.busy || Date.now() - (r.tried || 0) < 25e3) return;
+    // which lines to look for comes from the departures of a stop without a line filter: wait for its first answer
+    if (D.stops.some((s) => !s.lines.length && !this._depState(s).ok)) return;
     // the part of the map in view and a margin
     const m = 0.15, a = G.pr.ll((-V.ox - V.W * m) / V.k, (-V.oy - V.H * m) / V.k), b = G.pr.ll((V.W * (1 + m) - V.ox) / V.k, (V.H * (1 + m) - V.oy) / V.k);
     const prods = new Set(D.stops.flatMap((s) => this._tmLinesOf(s).map((ref) => this._tmLook(ref, G.routes.find((x) => x.ref === ref)?.prod || 'bus').prod)));
