@@ -487,7 +487,6 @@ const STYLES_T = `
 .tm-pf:active { scale: .97; }
 /* a vehicle passing under a chip: the chip steps back so the vehicle shows */
 .tm-pf.under { opacity: .3; }
-.tm-pf.st.under { opacity: .62; }
 .tm-pf:focus-visible { outline: 2px solid rgba(var(--blue), .9); outline-offset: 2px; }
 .tm-pf .ic, .tm-h .ic { font-size: calc(15 * var(--tm-u)); stroke: rgba(255, 255, 255, .85); stroke-width: 2.4; }
 .tm-pf .ar, .tm-h .ar { display: grid; place-items: center; width: calc(18 * var(--tm-u)); height: calc(18 * var(--tm-u)); }
@@ -1600,9 +1599,10 @@ Object.assign(GlassFloorplanCard.prototype, {
     }
     const html = lit.join(''), svg = this._tview.querySelector('.tm-lit');
     if (svg && html !== this._tmLitH) { this._tmLitH = html; svg.innerHTML = html; }
-    // a chip a vehicle passes under (more than its rim) steps back for it
+    // a chip a vehicle passes under (more than its rim) steps back for it (a station's plate stays: it is the answer there,
+    // and its rows over a disc would only blur into each other)
     const discs = [...this._tmVeh.values()].filter((x) => x.shown && x.xy).map((x) => x.xy), m = r / 2;
-    for (const c of (this._tmSides || []).filter((x) => x.box && !x.row).concat(this._tmPlates || [])) {
+    for (const c of (this._tmSides || []).filter((x) => x.box && !x.row)) {
       const under = discs.some((p) => p[0] > c.box[0] - m && p[0] < c.box[2] + m && p[1] > c.box[1] - m && p[1] < c.box[3] + m);
       if (under !== !!c.under) { c.under = under; c.node?.classList.toggle('under', under); }
     }
