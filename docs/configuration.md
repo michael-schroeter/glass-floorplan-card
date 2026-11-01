@@ -63,6 +63,7 @@ departures:
 | `radius` | Metres around the stops that are always in view (default 300; a phone shows a little less) |
 | `overpass` | Overpass server for the map (default `https://overpass-api.de/api/interpreter`) |
 | `attribution` | Another source note than “© OpenStreetMap contributors” (only for other map data) |
+| `center` | The middle of the view: `home` (Home Assistant's home location) or `[lat, lon]`; without it the middle between the stops. The stops stay in view; the map data are still asked for around the stops |
 
 - Only stops with an `id` are on the map. `at: [lat, lon]` on a stop moves it, if the timetable's position is off.
 - The map data come from [OpenStreetMap](https://www.openstreetmap.org/copyright) through the Overpass API: the browser asks once for the area around your stops (so the Overpass server sees that area) and keeps the result for 30 days. The vehicles are where the departures (every 30 s while the map is shown) say they are; the card moves them on so that each reaches the stop at its time – nothing else is fetched.

@@ -522,6 +522,8 @@ function normDepartures(d) {
   const map = m && stops.some((s) => s.id) ? {
     radius: clamp(+m.radius || 300, 120, 1500), overpass: String(m.overpass || 'https://overpass-api.de/api/interpreter'),
     attribution: m.attribution ? String(m.attribution) : null,
+    // the middle of the view: Home Assistant's home, a point [lat, lon], else between the stops
+    center: m.center === 'home' ? 'home' : normPt(m.center),
   } : null;
   return { stops, api: String(d.api || 'https://v6.vbb.transport.rest').replace(/\/$/, ''), per: clamp(Math.round(+d.per || 3), 1, 5), map };
 }
