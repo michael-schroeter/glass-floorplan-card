@@ -70,7 +70,7 @@ function exampleConfig(lang = 'en') {
     departures: {
       api: 'https://transit.demo.invalid',
       stops: [{ id: 'linden_square', name: N('Linden Square', 'Lindenplatz') }, { id: 'town_hall', name: N('Town Hall', 'Rathaus') }],
-      map: { overpass: 'https://overpass.demo.invalid/api/interpreter', attribution: N('Made-up town – no real map data', 'Erfundene Stadt – keine echten Kartendaten') },
+      map: { overpass: N('https://overpass.demo.invalid/api/interpreter', 'https://overpass.demo.invalid/api/interpreter?lang=de'), attribution: N('Made-up town – no real map data', 'Erfundene Stadt – keine echten Kartendaten') },
     },
   };
 }

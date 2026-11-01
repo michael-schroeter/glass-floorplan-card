@@ -49,7 +49,7 @@ The layer appears by itself; if you list your `layers`, add `departures` there.
 
 ### Live map
 
-A second view of the same stops: the streets around them drawn like the floor plan – blocks as glass tiles, parks and water tinted – with the lines of the stops, each direction on its own side of the street, and every bus and train live on its way. Each side of a stop shows what comes next there (the arrow is the direction of travel on that side); a station under the street gets one plate with a row per line. Vehicles still out of view wait as a hint at the edge where they will come in.
+A second view of the same stops: the streets around them drawn like the floor plan – blocks as glass tiles, parks and water tinted, the nearby streets named – with the lines of the stops, each direction on its own side of the street, and every bus and train live on its way. Each side of a stop shows what comes next there (the arrow is the direction of travel on that side); a station under the street gets one plate with a row per direction – its arrow, where it goes and the minutes. Vehicles still out of view wait as a hint at the edge where they will come in. Tap a stop's minutes for the next three departures of every line and direction there.
 
 ```yaml
 departures:
@@ -65,7 +65,7 @@ departures:
 | `attribution` | Another source note than “© OpenStreetMap contributors” (only for other map data) |
 
 - Only stops with an `id` are on the map. `at: [lat, lon]` on a stop moves it, if the timetable's position is off.
-- The map data come from [OpenStreetMap](https://www.openstreetmap.org/copyright) through the Overpass API: the browser asks once for the area around your stops (so the Overpass server sees that area) and keeps the result for 30 days. Vehicles come from the radar of the same VBB interface, every 30 s while the map is shown.
+- The map data come from [OpenStreetMap](https://www.openstreetmap.org/copyright) through the Overpass API: the browser asks once for the area around your stops (so the Overpass server sees that area) and keeps the result for 30 days. The vehicles are where the departures (every 30 s while the map is shown) say they are; the card moves them on so that each reaches the stop at its time – nothing else is fetched.
 - Positions are estimated from the timetable and live delays between stops (no GPS); the subway's even more so – its line is dashed.
 - The layer appears by itself; with your own `layers` list add `departures_map`.
 
