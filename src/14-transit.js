@@ -415,12 +415,12 @@ const STYLES_T = `
 /* a stop by the street: its name quiet, a small glass light on each side, a chip of what comes next beside it */
 .tm-sl { font-size: max(12.5px, calc(13 * var(--tm-u))); font-weight: 500; white-space: nowrap; color: rgba(235, 235, 245, .66);
   text-shadow: 0 0 6px rgba(0, 0, 0, .85), 0 1px 10px rgba(0, 0, 0, .6); }
-.tm-pt { width: calc(12 * var(--tm-u)); height: calc(12 * var(--tm-u)); margin: calc(-6 * var(--tm-u)) 0 0 calc(-6 * var(--tm-u)); border-radius: 50%;
+.tm-pt { width: calc(9 * var(--tm-u)); height: calc(9 * var(--tm-u)); margin: calc(-4.5 * var(--tm-u)) 0 0 calc(-4.5 * var(--tm-u)); border-radius: 50%;
   background: rgba(255, 255, 255, .18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .38), 0 2px 6px rgba(0, 0, 0, .4); }
-.tm-pt::after { content: ''; position: absolute; inset: 30%; border-radius: 50%; background: rgba(255, 255, 255, .9); }
-.tm-pt.ug { background: rgba(255, 255, 255, .06); box-shadow: none; outline: 1px dashed rgba(255, 255, 255, .5); outline-offset: -1px; }
+.tm-pt::after { content: ''; position: absolute; inset: 22%; border-radius: 50%; background: rgba(255, 255, 255, .92); box-shadow: 0 0 calc(6 * var(--tm-u)) rgba(255, 255, 255, .45); }
+.tm-pt.ug::after { background: rgba(255, 255, 255, .75); box-shadow: none; }
 /* one glass token for every chip on the map – the tiles' material, a little denser without the blur */
-.tm-pf, .tm-h, .tm-ve { background: linear-gradient(160deg, rgba(48, 48, 56, .9), rgba(22, 23, 28, .93));
+.tm-pf, .tm-ve { background: linear-gradient(160deg, rgba(42, 45, 60, .92), rgba(20, 22, 31, .94));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .09), 0 6px 16px rgba(0, 0, 0, .32); }
 .tm-pf { display: flex; align-items: center; gap: calc(7 * var(--tm-u)); height: calc(30 * var(--tm-u)); padding: 0 calc(10 * var(--tm-u)) 0 calc(7 * var(--tm-u));
   border-radius: calc(15 * var(--tm-u)); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -446,10 +446,11 @@ const STYLES_T = `
 .tm-pf.st .tm-row + .tm-row { border-top: 1px solid rgba(255, 255, 255, .08); }
 .tm-pf.st .tm-row .tm-ln + .tm-ln { margin-left: calc(6 * var(--tm-u)); }
 /* a vehicle further out: quiet words where it will come in, a tick in its colour on the line there */
-.tm-h { display: flex; align-items: baseline; gap: calc(4 * var(--tm-u)); white-space: nowrap; font-size: max(12px, calc(12.5 * var(--tm-u))); font-weight: 600;
-  color: rgba(235, 235, 245, .66); font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(0, 0, 0, .9), 0 1px 10px rgba(0, 0, 0, .7); }
-.tm-h b { font-weight: 700; letter-spacing: -.01em; }
-.tm-h .late { color: rgba(var(--orange), .9); }
+.tm-h { display: flex; align-items: center; gap: calc(5 * var(--tm-u)); white-space: nowrap; font-size: max(10.5px, calc(11 * var(--tm-u))); font-weight: 600;
+  color: rgba(235, 235, 245, .62); font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(8, 9, 12, .95), 0 1px 10px rgba(8, 9, 12, .8); }
+.tm-h .tm-bd { min-width: calc(30 * var(--tm-u)); height: calc(16 * var(--tm-u)); font-size: max(10px, calc(10.5 * var(--tm-u))); opacity: .88; text-shadow: none; }
+.tm-h i { font-size: max(12px, calc(13 * var(--tm-u))); margin: 0 calc(1 * var(--tm-u)) 0 0; color: rgba(235, 235, 245, .9); }
+.tm-h .late i { color: rgb(var(--orange)); }
 .tm-tk { width: calc(12 * var(--tm-u)); height: calc(3 * var(--tm-u)); margin: calc(-1.5 * var(--tm-u)) 0 0 calc(-6 * var(--tm-u)); border-radius: 2px;
   background: rgb(var(--c)); box-shadow: 0 0 calc(8 * var(--tm-u)) rgba(var(--c), .7); }
 
@@ -464,7 +465,8 @@ const STYLES_T = `
 .tm-vp::after { content: ''; position: absolute; left: calc(var(--vr) + 1 * var(--tm-u)); top: calc(-6 * var(--tm-u)); width: calc(9 * var(--tm-u)); height: calc(12 * var(--tm-u));
   background: rgba(255, 255, 255, .95); clip-path: polygon(0 0, 100% 50%, 0 100%); filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .7)); }
 .tm-ve { position: absolute; left: 0; top: 0; transform: translate(calc(var(--vr) + 9 * var(--tm-u)), -50%); padding: calc(3 * var(--tm-u)) calc(9 * var(--tm-u));
-  border-radius: calc(11 * var(--tm-u)); white-space: nowrap; font-size: max(12px, calc(13 * var(--tm-u))); font-weight: 650; color: var(--t1); font-variant-numeric: tabular-nums; }
+  border-radius: calc(11 * var(--tm-u)); white-space: nowrap; font-size: max(11px, calc(11.5 * var(--tm-u))); font-weight: 600; color: var(--t2); font-variant-numeric: tabular-nums; }
+.tm-ve b, .tm-h i { font-style: normal; font-size: max(13.5px, calc(15 * var(--tm-u))); font-weight: 700; letter-spacing: -.02em; color: var(--t1); margin: 0 calc(2 * var(--tm-u)); }
 .tm-ve.l { transform: translate(calc(-100% - var(--vr) - 9 * var(--tm-u)), -50%); }
 .tm-ve:empty, .tm-ve.x { display: none; }
 /* leaving (no stop of these ahead of it): a quiet dot that drifts off */
@@ -473,9 +475,7 @@ const STYLES_T = `
 .tm-v.gone .tm-vp, .tm-v.gone .tm-ve { opacity: 0; }
 .tm-v.gone.out, .tm-v.off { opacity: 0; }
 /* under the street the position is estimated: a dashed rim */
-.tm-v.ug .tm-vd { outline: 1.5px dashed rgba(var(--lc), .95); outline-offset: calc(2.5 * var(--tm-u)); }
-.tm-v.ug .tm-vp::after { left: calc(var(--vr) + 4.5 * var(--tm-u)); }
-.tm-v.ug.gone .tm-vd { outline-color: transparent; }
+
 
 /* the heading as on the departures board: a quiet label, live beside it */
 .tm-head { position: absolute; z-index: 4; display: flex; align-items: center; gap: 14px; height: 30px; padding: 0 14px 0 6px; pointer-events: none; }
@@ -718,6 +718,9 @@ Object.assign(GlassFloorplanCard.prototype, {
     const h = v.querySelector('.tm-head'), foot = v.querySelector('.tm-foot');
     if (h) Object.assign(h.style, { left: `${RF[0] + pad}px`, top: `${RF[1] + pad}px` });
     if (foot) Object.assign(foot.style, { left: `${R[0] + pad + 2}px`, right: `${W - R[2] + pad}px`, bottom: `${H - R[3] + 8}px` });
+    // the footer's soft band right above a docked tab bar
+    const sb = v.querySelector('.tm-scr.b');
+    if (sb) sb.style.bottom = `${Math.max(0, H - R[3] - 6)}px`;
     // the edge of the card for the vehicles still out of view, and what everything there keeps clear of
     const E = [R[0] + 14, R[1] + 14, R[2] - 14, R[3] - (this._m ? 46 : 32)];
     const hb = h?.getBoundingClientRect(), ob = foot?.getBoundingClientRect(), rb = this._root.getBoundingClientRect(), sc = rb.width / W || 1;
@@ -806,7 +809,7 @@ Object.assign(GlassFloorplanCard.prototype, {
     for (const el of [svg, this._tview.querySelector('.tm-lit')]) { el.setAttribute('width', W); el.setAttribute('height', H); el.setAttribute('viewBox', `0 0 ${W} ${H}`); }
     this._tmLitH = null;
     svg.innerHTML = `<defs>
-      <linearGradient id="tmg" x1="0" y1="0" x2=".45" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset=".55" stop-color="#fff" stop-opacity=".058"/><stop offset="1" stop-color="#fff" stop-opacity=".045"/></linearGradient>
+      <linearGradient id="tmg" x1="0" y1="0" x2=".45" y2="1"><stop offset="0" stop-color="rgb(196,206,255)" stop-opacity=".1"/><stop offset=".55" stop-color="rgb(180,192,250)" stop-opacity=".06"/><stop offset="1" stop-color="rgb(170,182,245)" stop-opacity=".045"/></linearGradient>
       <linearGradient id="tmgg" x1="0" y1="0" x2=".45" y2="1"><stop offset="0" stop-color="rgb(110,210,135)" stop-opacity=".2"/><stop offset="1" stop-color="rgb(70,170,100)" stop-opacity=".12"/></linearGradient>
       <linearGradient id="tmgw" x1="0" y1="0" x2=".45" y2="1"><stop offset="0" stop-color="rgb(90,160,255)" stop-opacity=".2"/><stop offset="1" stop-color="rgb(40,100,220)" stop-opacity=".11"/></linearGradient>
     </defs>${out}${core.join('')}`;
@@ -1121,6 +1124,19 @@ Object.assign(GlassFloorplanCard.prototype, {
       S.forEach((e) => inside(e.box));
       if (!moved) break;
     }
+    // still in each other's way: away from the street (outwards on its own side – never across it)
+    const over = (a, b) => a[0] < b[2] + 4 && a[2] + 4 > b[0] && a[1] < b[3] + 4 && a[3] + 4 > b[1];
+    for (let it = 0; it < 6; it++) {
+      let moved = false;
+      for (const e of S) {
+        if (e.dx == null || !S.some((o) => o !== e && over(o.box, e.box)) && !fixed.some((f) => over(f, e.box))) continue;
+        const k = 8;
+        e.box[0] += e.dx * k; e.box[2] += e.dx * k; e.box[1] += e.dy * k; e.box[3] += e.dy * k;
+        inside(e.box);
+        moved = true;
+      }
+      if (!moved) break;
+    }
     for (const e of all) {
       e.node.style.transform = `translate(${e.box[0].toFixed(1)}px,${e.box[1].toFixed(1)}px)`;
       e.node.style.visibility = '';
@@ -1156,27 +1172,31 @@ Object.assign(GlassFloorplanCard.prototype, {
       }
       if (!q) { q = sc.P[0]; ang = Math.atan2(sc.P[1][1] - q[1], sc.P[1][0] - q[0]); }
       const look = this._tmLook(ref, e.p.prod), m = Math.floor((e.d.t - now) / 60000);
-      hints.push({ q, ang, c: look.glow.map((v) => Math.round(v + (255 - v) * 0.3)).join(','), ref, txt: m < 1 ? t('depNow') : `${m} ${t('min')}`, late: e.d.delay >= DEP_LATE });
+      hints.push({ q, ang, look, c: look.glow.map((v) => Math.round(v + (255 - v) * 0.3)).join(','), ref, txt: m < 1 ? `<i>${esc(t('depNow'))}</i>` : `<i>${m}</i>${esc(t('min'))}`, late: e.d.delay >= DEP_LATE });
     }
     const hh = hints.map((h) => `<i class="tm-tk" style="--c:${h.c};transform:translate(${h.q[0].toFixed(1)}px,${h.q[1].toFixed(1)}px) rotate(${((h.ang * 180) / Math.PI).toFixed(0)}deg)"></i>`
-      + `<div class="tm-h" data-x="${h.q[0].toFixed(1)}" data-y="${h.q[1].toFixed(1)}" data-a="${h.ang.toFixed(3)}"><b style="color:rgb(${h.c})">${esc(h.ref)}</b><span${h.late ? ' class="late"' : ''}>· ${esc(h.txt)}</span></div>`).join('');
+      + `<div class="tm-h" data-x="${h.q[0].toFixed(1)}" data-y="${h.q[1].toFixed(1)}" data-a="${h.ang.toFixed(3)}">${this._tmBadge(h.ref, h.look)}<span${h.late ? ' class="late"' : ''}>${h.txt}</span></div>`).join('');
     if (box.dataset.h !== hh) { box.dataset.h = hh; box.innerHTML = hh; }
-    // what is there first: the stops' chips and plates, the vehicles on the map with their minutes
-    const placed = (this._tmSides || []).filter((e) => e.box && !e.row).concat(this._tmPlates || []).map((e) => [e.box[0] - 4, e.box[1] - 4, e.box[2] + 4, e.box[3] + 4]);
+    // what is there first: the stops' chips, plates, names and lights, the vehicles on the map with their minutes
+    const rb = this._root.getBoundingClientRect(), sc = rb.width / B.W || 1;
+    const placed = (this._tmSides || []).filter((e) => e.box && !e.row).concat(this._tmPlates || []).map((e) => [e.box[0] - 4, e.box[1] - 4, e.box[2] + 4, e.box[3] + 4])
+      .concat([...this._tview.querySelectorAll('.tm-sl, .tm-pt')].map((n) => { const b = n.getBoundingClientRect(); return [(b.left - rb.left) / sc - 4, (b.top - rb.top) / sc - 4, (b.right - rb.left) / sc + 4, (b.bottom - rb.top) / sc + 4]; }));
     for (const v of this._tmVeh.values()) if (v.shown && v.xy) { const r = 18 * u; placed.push([v.xy[0] - r, v.xy[1] - r, v.xy[0] + r, v.xy[1] + r]); }
     for (const el of box.querySelectorAll('.tm-h')) {
-      const w = el.offsetWidth, h = el.offsetHeight, a = +el.dataset.a;
-      // a little inwards from the tick, along the line
-      let x = clamp(+el.dataset.x + Math.cos(a) * (w / 2 + 10) - w / 2, F[0], F[2] - w), y = clamp(+el.dataset.y + Math.sin(a) * (h / 2 + 10) - h / 2, F[1], F[3] - h);
-      const side = Math.min(x - F[0], F[2] - w - x) < Math.min(y - F[1], F[3] - h - y) ? 'v' : 'h';
-      for (let it = 0; it < 8; it++) {
-        const o = B.keep.concat(placed).find((q) => x < q[2] && x + w > q[0] && y < q[3] && y + h > q[1]);
-        if (!o) break;
-        if (side === 'v') y = o[3] + 6 + h <= F[3] ? o[3] + 6 : o[1] - 6 - h;
-        else x = o[2] + 6 + w <= F[2] ? o[2] + 6 : o[0] - 6 - w;
+      const w = el.offsetWidth, h = el.offsetHeight, a = +el.dataset.a, qx = +el.dataset.x, qy = +el.dataset.y;
+      // just inside the tick, along the line
+      const x0 = clamp(qx + Math.cos(a) * (w / 2 + 8) - w / 2, F[0], F[2] - w), y0 = clamp(qy + Math.sin(a) * (h / 2 + 8) - h / 2, F[1], F[3] - h);
+      const side = Math.min(x0 - F[0], F[2] - w - x0) < Math.min(y0 - F[1], F[3] - h - y0) ? 'v' : 'h', hit = (x, y) => B.keep.concat(placed).some((q) => x < q[2] && x + w > q[0] && y < q[3] && y + h > q[1]);
+      let spot = null;
+      for (const d of [0, 10, -10, 20, -20, 30, -30, 40, -40]) {
+        const x = side === 'h' ? clamp(x0 + d, F[0], F[2] - w) : x0, y = side === 'v' ? clamp(y0 + d, F[1], F[3] - h) : y0;
+        if (!hit(x, y)) { spot = [x, y]; break; }
       }
-      placed.push([x - 4, y - 2, x + w + 4, y + h + 2]);
-      el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
+      // no free spot near its tick: the tick alone says it
+      el.style.visibility = spot ? '' : 'hidden';
+      if (!spot) continue;
+      placed.push([spot[0] - 4, spot[1] - 2, spot[0] + w + 4, spot[1] + h + 2]);
+      el.style.transform = `translate(${spot[0].toFixed(1)}px,${spot[1].toFixed(1)}px)`;
     }
   },
 
@@ -1267,9 +1287,9 @@ Object.assign(GlassFloorplanCard.prototype, {
       v.el.classList.toggle('off', !v.shown);
       // the minutes beside it – not once it is close to its stop or due: the chip there says it ('jetzt' only there; still
       // far away, its 'now' is one minute)
-      const m = e ? Math.floor((e.d.t - now) / 60000) : null, far = ahead == null || ahead > 250;
-      const txt = e && !(ahead != null && ahead < 160) && (m >= 1 || far) ? t('tmIn', Math.max(1, m)) : '';
-      if (txt !== v.txt) { v.txt = txt; v.etEl.textContent = txt; v.etW = v.etEl.offsetWidth; v.etH = v.etEl.offsetHeight; }
+      const m = e ? Math.floor((e.d.t - now) / 60000) : null;
+      const txt = e && !(ahead != null && ahead < 160) && m >= 1 ? tmIn(m) : '';
+      if (txt !== v.txt) { v.txt = txt; v.etEl.innerHTML = txt; v.etW = v.etEl.offsetWidth; v.etH = v.etEl.offsetHeight; }
       // the minutes beside the marker – on the side away from the edge and clear of the stops' chips (there the chip says it)
       if (txt) {
         const off = 25 * u, w = v.etW || 60, h = v.etH || 20, chips = boxes || (boxes = (this._tmSides || []).filter((x) => x.box && !x.row).concat(this._tmPlates || []).map((x) => x.box));
@@ -1305,6 +1325,8 @@ function tmTrack(T, now) {
   for (let i = 1; i < T.length; i++) if (now <= T[i][0]) { const a = T[i - 1], b = T[i]; return a[1] + ((b[1] - a[1]) * (now - a[0])) / ((b[0] - a[0]) || 1); }
   return T[T.length - 1][1];
 }
+/* 'in 4 min' with the numeral as on the chips */
+const tmIn = (m) => t('tmIn', `<b>${m}</b>`);
 /* where two segments cross (or null) */
 function tmCross(a, b, c, d) {
   const r = [b[0] - a[0], b[1] - a[1]], q = [d[0] - c[0], d[1] - c[1]], den = r[0] * q[1] - r[1] * q[0];
@@ -1336,12 +1358,12 @@ function tmKeep3(key, val) {
 function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 
 Object.assign(STR.en, {
-  layer_departures_map: 'Map', tmIn: (m) => `in ${m} min`, tmLoading: 'Loading the map …', tmOffline: 'Map data not reachable – trying again shortly',
+  layer_departures_map: 'Map', tmIn: (m) => `in ${m}min`, tmLoading: 'Loading the map …', tmOffline: 'Map data not reachable – trying again shortly',
   tmNoStops: 'The live map needs stops with an id', tmAttr: '© OpenStreetMap contributors', tmUnderground: 'Subway underground · train positions estimated',
   tmUndergroundShort: 'Subway · positions estimated', tmLate: 'late', tmBadStop: 'A stop of the map is not known to the timetable',
 });
 Object.assign(STR.de, {
-  layer_departures_map: 'Karte', tmIn: (m) => `in ${m} Min.`, tmLoading: 'Karte wird geladen …', tmOffline: 'Kartendaten nicht erreichbar – neuer Versuch gleich',
+  layer_departures_map: 'Karte', tmIn: (m) => `in ${m}Min.`, tmLoading: 'Karte wird geladen …', tmOffline: 'Kartendaten nicht erreichbar – neuer Versuch gleich',
   tmNoStops: 'Die Live-Karte braucht Haltestellen mit id', tmAttr: '© OpenStreetMap-Mitwirkende', tmUnderground: 'U-Bahn unterirdisch · Zuglage geschätzt',
   tmUndergroundShort: 'U-Bahn · Zuglage geschätzt', tmLate: 'verspätet', tmBadStop: 'Eine Haltestelle der Karte kennt der Fahrplan nicht',
 });
