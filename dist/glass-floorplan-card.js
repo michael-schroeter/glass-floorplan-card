@@ -6732,7 +6732,7 @@ Object.assign(GlassFloorplanCard.prototype, {
       if (!plate) continue;
       const at = st.stn, w = plate.offsetWidth, H = plate.offsetHeight;
       const busy = (x0, y0) => this._tmLinePts.reduce((n, p) => n + (p[0] > x0 - 4 && p[0] < x0 + w + 4 && p[1] > y0 - 4 && p[1] < y0 + H + 4 ? p[2] : 0), 0)
-        + 0.5 * (this._tmKeyPts || []).reduce((n, p) => n + (p[0] > x0 - 8 && p[0] < x0 + w + 8 && p[1] > y0 - 8 && p[1] < y0 + H + 8), 0)
+        + 3 * (this._tmKeyPts || []).reduce((n, p) => n + (p[0] > x0 - 8 && p[0] < x0 + w + 8 && p[1] > y0 - 8 && p[1] < y0 + H + 8), 0)
         + 60 * taken.concat(this._tmBox.keep).filter((b) => x0 - 6 < b[2] && x0 + w + 6 > b[0] && y0 - 6 < b[3] && y0 + H + 6 > b[1]).length;
       const opts = [[at[0] + 16 * u, at[1] - H / 2], [at[0] - 16 * u - w, at[1] - H / 2], [at[0] + 12 * u, at[1] + 14 * u], [at[0] + 12 * u, at[1] - 14 * u - H],
         [at[0] - 12 * u - w, at[1] + 14 * u], [at[0] - 12 * u - w, at[1] - 14 * u - H], [at[0] - w / 2, at[1] - 16 * u - H], [at[0] - w / 2, at[1] + 16 * u]]
