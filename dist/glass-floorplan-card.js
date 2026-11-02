@@ -6022,6 +6022,7 @@ const STYLES_T = `
 
 /* the next departures of a stop, opened from its chip: like a card of the board, the next three of each direction */
 .pop.tmp { width: min(600px, calc(100% - 48px)); }
+.pop.tmp.tms { width: min(540px, calc(100% - 48px)); }
 .tm-pop { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 16px; margin-top: 14px; }
 .tm-pop hr { grid-column: 1 / -1; height: 1px; margin: 6px 0; border: 0; background: rgba(255, 255, 255, .08); }
 .tm-pop > .tm-bd { grid-column: 1; grid-row: span var(--r); align-self: start; min-width: 50px; height: 28px; margin-top: 12px; padding: 0 7px; border-radius: 8px; font-size: 15px; }
@@ -6899,10 +6900,10 @@ Object.assign(GlassFloorplanCard.prototype, {
     const name = s.name || s.id;
     this._showPop((upd) => {
       const v = mk('div', 'pv'), body = mk('div', 'tm-pop');
-      v.append(this._head(name, t('tmNext3')), body);
+      v.append(this._head(name, t(side && !side.row ? 'tmNext3Side' : 'tmNext3')), body);
       upd.push(() => { const h = this._tmPopHtml(si, side?.id); if (body.dataset.h !== h) { body.dataset.h = h; body.innerHTML = h; } });
       return v;
-    }, { from: node.closest('.tm-pf') || node, cls: 'tmp', label: name, kind: `tm:${si}` });
+    }, { from: node.closest('.tm-pf') || node, cls: side && !side.row ? 'tmp tms' : 'tmp', label: name, kind: `tm:${si}` });
   },
   _tmPopHtml(si, first) {
     const now = Date.now(), unit = t('min'), by = this._tmBySide || new Map(), all = (this._tmSides || []).filter((x) => x.g.si === si);
@@ -6910,7 +6911,8 @@ Object.assign(GlassFloorplanCard.prototype, {
     // the tapped side (or the station, its lines) first
     const tapped = all.find((x) => x.id === first), ugFirst = !tapped || tapped.row;
     const rank = (x) => (x === tapped ? 0 : !!x.row === ugFirst ? 1 : 2);
-    const sides = all.map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0]);
+    // a side of the street: only that side (the other one has its own chip); a station: all its lines
+    const sides = tapped && !tapped.row ? [tapped] : all.map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0]);
     // a line in one direction: its badge (beside all its directions), arrow and destination, the next three
     const row = (ref, prod, ang, es, rows, p) => {
       const list = es.filter((e) => e.d.t > now - 30e3).sort((a, b) => a.d.t - b.d.t), go = list.filter((e) => !e.d.cancelled).slice(0, 3);
@@ -7114,13 +7116,13 @@ Object.assign(STR.en, {
   layer_departures_map: 'Map', tmIn: (m) => `in ${m}min`, tmLoading: 'Loading the map …', tmOffline: 'Map data not reachable – trying again shortly',
   tmNoStops: 'The live map needs stops with an id', tmAttr: '© OpenStreetMap contributors', tmUnderground: 'Subway underground · train positions estimated',
   tmUndergroundShort: 'Subway · positions estimated', tmLate: 'late', tmBadStop: 'A stop of the map is not known to the timetable',
-  tmNext3: 'The next three each way', tmOnlyTo: (c, d) => `${c} only to ${d}`,
+  tmNext3: 'The next three each way', tmNext3Side: 'This side · the next three of each line', tmOnlyTo: (c, d) => `${c} only to ${d}`,
 });
 Object.assign(STR.de, {
   layer_departures_map: 'Karte', tmIn: (m) => `in ${m}Min.`, tmLoading: 'Karte wird geladen …', tmOffline: 'Kartendaten nicht erreichbar – neuer Versuch gleich',
   tmNoStops: 'Die Live-Karte braucht Haltestellen mit id', tmAttr: '© OpenStreetMap-Mitwirkende', tmUnderground: 'U-Bahn unterirdisch · Zuglage geschätzt',
   tmUndergroundShort: 'U-Bahn · Zuglage geschätzt', tmLate: 'verspätet', tmBadStop: 'Eine Haltestelle der Karte kennt der Fahrplan nicht',
-  tmNext3: 'Die nächsten drei je Richtung', tmOnlyTo: (c, d) => `${c} nur bis ${d}`,
+  tmNext3: 'Die nächsten drei je Richtung', tmNext3Side: 'Diese Straßenseite · die nächsten drei je Linie', tmOnlyTo: (c, d) => `${c} nur bis ${d}`,
 });
 
 /* ================================================================== Floor plan editor: styles (same glass language as the card) */
