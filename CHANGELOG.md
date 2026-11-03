@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1
+
+Fixes and small improvements – nothing to change in your configuration.
+
+**Fixed**
+- **Door opener**: the door now swings open the moment it is pressed. Before, when the browser's clock ran a moment behind Home Assistant's, it stayed closed until the page was reloaded (the front door's green line as well)
+
+**Changed**
+- A device assigned to a window or door (door opener, lock, switch, contact) now shows only there, without an extra round button – the front door tile's button too, when its opener is on the door. The setting is called *Assign to window / door (open/closed sensor)*
+
+**Editor**
+- Door opener, doorbell and window contact are picked like *Add entity*: search, by area or by label, folding groups, "none" and a check on the current one
+
 ## 0.3.0
 
 Everything from v0.2.0 keeps working – updating adds to your card, your floor plan stays as it is.
