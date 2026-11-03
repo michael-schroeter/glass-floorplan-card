@@ -89,6 +89,12 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
   set('fan.bedroom_fan', 'off', { friendly_name: N('Ceiling fan', 'Ventilator'), percentage: 0, supported_features: 1 });
   for (const id of ['binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan']) reg(id, { device_id: `dev_${id}` });
   S['binary_sensor.living_room_window'].last_changed = iso(now - 25 * 60e3);
+  // a contact at the front door and a window handle that can be tilted (both show on their window / the door)
+  set('binary_sensor.front_door_contact', 'off', { friendly_name: N('Front door', 'Haustür'), device_class: 'door' });
+  reg('binary_sensor.front_door_contact', { device_id: 'dev_door_contact', area_id: 'hallway' });
+  set('sensor.bedroom_window_handle', ev ? 'tilted' : 'closed', { friendly_name: N('Bedroom window', 'Fenster Schlafzimmer'), device_class: 'enum', options: ['closed', 'tilted', 'open'] });
+  reg('sensor.bedroom_window_handle', { device_id: 'dev_bedroom_handle', area_id: 'bedroom' });
+  S['sensor.bedroom_window_handle'].last_changed = iso(now - 70 * 60e3);
   set('switch.coffee_machine', 'off', { friendly_name: N('Coffee machine', 'Kaffeemaschine'), device_class: 'outlet' });
   reg('switch.coffee_machine', { device_id: 'dev_coffee', area_id: 'kitchen' });
 

@@ -255,7 +255,8 @@ class GlassFloorplanCard extends HTMLElement {
       ? `<i class="pas" style="left:${G.px(s[0])}%;width:${G.pw(s[2] - s[0])}%;top:calc(${G.py(s[1])}% - var(--gap) / 2 + var(--u));height:calc(var(--gap) - 2 * var(--u))"></i>`
       : `<i class="pas" style="top:${G.py(s[1])}%;height:${G.ph(s[3] - s[1])}%;left:calc(${G.px(s[0])}% - var(--gap) / 2 + var(--u));width:calc(var(--gap) - 2 * var(--u))"></i>`)).join('');
 
-    const markers = M.ents.filter((e) => e.at && e.plan && e.kind !== 'vacuum').map((e) => this._markerHtml(e)).join('')
+    // window and door contacts sit on their window (15-openings), not as a button
+    const markers = M.ents.filter((e) => e.at && e.plan && e.kind !== 'vacuum' && !e.win).map((e) => this._markerHtml(e)).join('')
       + (M.door?.at ? `<button class="dev door" data-e="__door" data-k="door" style="${G.at(M.door.at)}" aria-label="${esc(M.door.name || t('frontDoor'))}"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${icon('door')}</button>` : '');
     const vac = M.vac ? `<svg class="trail" viewBox="${S.x} ${S.y} ${S.w} ${S.h}" preserveAspectRatio="none"><polyline class="t1" points=""/><polyline class="t2" points=""/></svg>
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';
@@ -275,7 +276,7 @@ class GlassFloorplanCard extends HTMLElement {
   <div class="lay">
     <div class="stage">
       <div class="glows">${glows}</div>
-      ${pas}${rooms}${wins}${vac}${markers}${dock ? '' : bar}
+      ${pas}${rooms}${wins}${this._openingsHtml(G)}${vac}${markers}${dock ? '' : bar}
       ${Wd.card ? `<div class="gcard${cmp}" style="${G.tile(Wd.card)}"></div>` : ''}
       <div class="tip"></div>
     </div>
@@ -570,6 +571,7 @@ class GlassFloorplanCard extends HTMLElement {
       el.addEventListener('pointerenter', () => this._showTip(el, this._name(e), this._valueText(e)));
       el.addEventListener('pointerleave', () => this._hideTip());
     }
+    this._wireOpenings();
     for (const [k, el] of Object.entries(this._roomEls)) {
       el.addEventListener('click', () => this._roomTap(k));
       el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); this._roomTap(k); } });
@@ -773,6 +775,8 @@ class GlassFloorplanCard extends HTMLElement {
   _stateText(eid, st) {
     const d = domainOf(eid), a = st?.attributes || {};
     if (unavailable(st)) return t('offline');
+    // a window handle: open / tilted / closed in the card's words
+    if (d === 'sensor' && openingSensor(eid, st)) { const o = openState(eid, st); return o === 'tilt' ? t('tilted') : t(o === 'open' ? 'bs_window_on' : 'bs_window_off'); }
     if (d === 'sensor' || (d === 'input_number' || d === 'number')) {
       const v = num(st);
       if (v == null) return String(st.state);
@@ -924,6 +928,7 @@ class GlassFloorplanCard extends HTMLElement {
       if (!el) { if (e.kind === 'cover') this._updCoverWindows(e); continue; }
       this._updDevEl(e, el);
     }
+    this._updOpenings();
     // front door: shows as opened for a minute
     const door = this._mk.__door, M = this._M;
     if (M.door) {

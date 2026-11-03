@@ -61,6 +61,29 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .win.v.cv::after { transform: scaleY(calc(1 - var(--op, 1))); }
 .root[data-type="cover"] .win.cv { opacity: 1; }
 .root[data-type="cover"] .win.cv::after { opacity: 1; }
+/* window / door contacts: an open window's frame glows orange and its sash swings into the room (--a degrees, --sg = way in);
+ * a tilted one shows its sash a little inside, parallel to the frame (seen from above) */
+.wsn { position: absolute; z-index: 5; --hit: max(14px, calc(22 * var(--u))); height: var(--hit); margin: calc(var(--hit) / -2) 0 0; padding: 0; border: 0; background: none;
+  cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; --sw: max(1.5px, calc(2.6 * var(--u))); }
+.wsn.v { width: var(--hit); margin: 0 0 0 calc(var(--hit) / -2); }
+.wsn .wl, .wsn .sa { position: absolute; border-radius: 4px; background: rgb(var(--orange)); opacity: 0; pointer-events: none;
+  box-shadow: 0 0 calc(8 * var(--u)) rgba(var(--orange), .7), 0 0 calc(22 * var(--u)) rgba(var(--orange), .28); }
+.wsn .wl { left: 0; right: 0; top: 50%; height: max(2px, calc(3.4 * var(--u))); transform: translateY(-50%); transition: opacity .5s ease; }
+.wsn.v .wl { left: 50%; right: auto; top: 0; bottom: 0; height: auto; width: max(2px, calc(3.4 * var(--u))); transform: translateX(-50%); }
+.wsn.dr .wl { height: max(3px, calc(4.6 * var(--u))); }
+.wsn.v.dr .wl { height: auto; width: max(3px, calc(4.6 * var(--u))); }
+.wsn .sa { left: 0; top: calc(50% - var(--sw) / 2); width: 100%; height: var(--sw); transform-origin: 0 50%;
+  transform: translate(var(--tx, 0px), var(--ty, 0px)) rotate(calc(var(--sg) * var(--a, 0) * 1deg)); transition: transform var(--sp-ms) var(--sp), opacity .35s ease; }
+.wsn.two .sa { width: 50%; }
+.wsn .sa.b { left: auto; right: 0; transform-origin: 100% 50%; transform: translate(var(--tx, 0px), var(--ty, 0px)) rotate(calc(var(--sg) * var(--a, 0) * -1deg)); }
+.wsn.v .sa { left: calc(50% - var(--sw) / 2); top: 0; width: var(--sw); height: 100%; transform-origin: 50% 0; }
+.wsn.v.two .sa { height: 50%; }
+.wsn.v .sa.b { top: auto; bottom: 0; transform-origin: 50% 100%; }
+.wsn[data-st="open"] .wl, .wsn[data-st="open"] .sa { opacity: 1; }
+.wsn[data-st="tilt"] .wl, .wsn[data-st="tilt"] .sa { opacity: .85; }
+.wsn[data-st="tilt"] { --ty: calc(var(--sg) * 7 * var(--u)); }
+.wsn.v[data-st="tilt"] { --ty: 0px; --tx: calc(var(--sg) * -7 * var(--u)); }
+.wsn:focus-visible { outline: 2px solid rgba(var(--blue), .9); outline-offset: 2px; border-radius: 6px; }
 
 .room { position: absolute; z-index: 1; border-radius: calc(15 * var(--u)); overflow: hidden; cursor: pointer; outline: none;
   background: linear-gradient(165deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02) 55%, rgba(255, 255, 255, .015)), rgba(16, 16, 20, .42);

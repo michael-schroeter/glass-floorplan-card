@@ -593,8 +593,13 @@ class GfcEditor extends HTMLElement {
     // device markers: exactly over the buttons the live card shows in its current layer (tap → settings) –
     // none while the plan itself is built
     const onCard = (el) => { const b = !el || el.classList.contains('hid') || this._bare() ? null : this._cardBox(el); return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]]; };
+    // a window / door contact: on the middle of its window
+    const onWin = (eid) => {
+      const el = !this._bare() && [...(card?.shadowRoot?.querySelectorAll('.wsn') || [])].find((x) => x.dataset.s.split(' ').includes(eid)), b = el && this._cardBox(el);
+      return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, 30 * F.k];
+    };
     if (!this._bare()) c.entities.forEach((e, i) => {
-      const on = sel?.t === 'ent' && sel.i === i, m = e.at && onCard(card?._mk?.[e.entity]);
+      const on = sel?.t === 'ent' && sel.i === i, m = e.at && (onCard(card?._mk?.[e.entity]) || onWin(e.entity));
       // a selected device without a button there (plan: false, another layer) is shown where it is
       const [x, y, w] = m || (on && e.at ? [...this.P(e.at[0], e.at[1]), 34 * F.k] : []);
       if (x == null) return;
@@ -805,7 +810,9 @@ class GfcEditor extends HTMLElement {
     if (k === 'mk') {
       const m = el.dataset.m;
       pick(m ? { t: m } : { t: 'ent', i: +el.dataset.i }, 'devices');
-      const at = m === 'door' ? this._c.door.at : m === 'dock' ? this._c.vacuum.dock : this._c.entities[+el.dataset.i].at;
+      // a contact on a window is dragged from its window (where its handle is)
+      const e0 = !m && this._c.entities[+el.dataset.i], win = e0 && this._winOf(e0.entity);
+      const at = m === 'door' ? this._c.door.at : m === 'dock' ? this._c.vacuum.dock : win ? openingSpot(win, 0) : e0.at;
       this._d = { ...base, mode: 'move-mk', orig: [...at], tap: true };
       return;
     }
@@ -985,6 +992,7 @@ class GfcEditor extends HTMLElement {
     }
     if (d.mode === 'pan' && !d.moved && d.deselect) { if (this._s) { this._s = null; this._panel(); } this._draw(); return; }
     if (d.moved && d.mode === 'move-furn') this._reparentFurn();
+    if (d.moved && d.mode === 'move-mk' && this._s?.t === 'ent') this._snapToWindow(this._selObj());
     if (d.moved) { this._draw(); this._panel(); }
   }
 
@@ -1201,10 +1209,13 @@ class GfcEditor extends HTMLElement {
       // an area in two rooms: free spots in the bigger one
       if (ids.length) todo.push([c.rooms.filter((r) => r.area === a).sort((x, y) => rectArea(y.rect) - rectArea(x.rect)), ids.sort()]);
     }
-    if (!todo.length) return 0;
+    const contacts = this._contactSpots(areas, have);
+    if (!todo.length && !contacts.length) return 0;
     this._snap();
-    const taken = c.entities.filter((e) => e.at).map((e) => e.at);
+    // window and door contacts straight onto their window / the front door
     let n = 0;
+    for (const [id, at] of contacts) { c.entities.push({ entity: id, at }); n++; }
+    const taken = c.entities.filter((e) => e.at).map((e) => e.at);
     for (const [rooms, ids] of todo) {
       const hints = this._matchHints(rooms, ids);
       // the spots a file names are taken first, free spots go around them
@@ -1230,6 +1241,31 @@ class GfcEditor extends HTMLElement {
     }
     if (n && !quiet) this._toast(t('ed_autoPlaced', n));
     return n;
+  }
+  /* free windows (and the front door) of these areas' rooms for their contacts that are not on the plan yet:
+   * a door contact prefers the front door, a window contact never takes it. [[entity, at] …] */
+  _contactSpots(areas, have) {
+    const h = this._hs() || {}, M = this._model();
+    if (!M?.openings?.length || !h.states) return [];
+    const used = new Set(M.openings.filter((o) => o.sens.length)), out = [];
+    for (const a of areas) {
+      const rooms = new Set(M.rooms.filter((r) => r.area === a).map((r) => r.id)), ops = M.openings.filter((o) => o.rooms.some((k) => rooms.has(k)));
+      for (const id of Object.keys(h.states).filter((x) => !have.has(x) && autoContact(h, x) && this._areaOf(x) === a).sort()) {
+        const dc = h.states[id].attributes?.device_class, door = dc === 'door' || dc === 'garage_door';
+        const free = ops.filter((o) => !used.has(o) && !(dc === 'window' && o.door)).sort((x, y) => (door ? y.door - x.door : x.door - y.door));
+        if (!free.length) continue;
+        used.add(free[0]);
+        out.push([id, openingSpot(free[0])]);
+      }
+    }
+    return out;
+  }
+  /* the window / front door a device shows on (in the configuration's coordinates) */
+  _winOf(eid) { return this._model()?.ents.find((x) => x.entity === eid)?.win || null; }
+  /* a contact on a window sits right inside it – then it stays on that window */
+  _snapToWindow(e) {
+    const w = e && this._winOf(e.entity);
+    if (w) e.at = openingSpot(w);
   }
   /* hints of a floor plan file in these rooms (a lamp, the TV … with a position) → devices of the same kind; where there
    * are several, fitting names and lamp shapes decide. Used hints are gone. */

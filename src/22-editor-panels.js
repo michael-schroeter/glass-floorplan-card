@@ -399,10 +399,36 @@ Object.assign(GfcEditor.prototype, {
       const m = h ? (seg[0] + seg[2]) / 2 : (seg[1] + seg[3]) / 2;
       this._setOpening(s, h ? [r0(m - v / 2), seg[1], r0(m + v / 2), seg[3]] : [seg[0], r0(m - v / 2), seg[2], r0(m + v / 2)]);
     }, { num: true, type: 'number' }), true));
+    if (s.k !== 'door') this._openSensorField(I, seg);
     const row = mk('div', 'ebtns');
     row.append(this._delBtn(t('ed_delete'), () => this._deleteSel()));
     I.append(row);
     I.append(this._el(`<p class="small">${esc(t('ed_open_move'))}</p>`));
+  },
+  /* the contact of a window / the front door: the contacts of the room's area first; another one replaces it */
+  _openSensorField(I, seg) {
+    const M = this._model(), o = M?.openings.find((x) => JSON.stringify(x.s) === JSON.stringify(seg)), hs = this._hs()?.states || {};
+    if (!o) return;
+    const area = M.byRoom[o.room]?.area, ids = Object.keys(hs).filter((id) => openingSensor(id, hs[id]) || o.sens.includes(id));
+    const name = (id) => this._fname(id), mine = ids.filter((id) => area && this._areaOf(id) === area).sort((x, y) => name(x).localeCompare(name(y), LOCALE));
+    const rest = ids.filter((id) => !mine.includes(id)).sort((x, y) => name(x).localeCompare(name(y), LOCALE));
+    I.append(this._fieldEl(t('ed_openSensor'), this._drop([['', t('ed_none')], ...[...mine, ...rest].map((id) => [id, `${name(id)} (${id})`])], o.sens[0] || '', (v) => {
+      const c = this._c;
+      for (const id of o.sens) {
+        if (id === v) continue;
+        // a contact that is in a layer of its own stays there as a button, otherwise it leaves the plan
+        const i = c.entities.findIndex((x) => x.entity === id);
+        if (i < 0) continue;
+        if ((c.layers || []).some((l) => l && typeof l === 'object' && [].concat(l.entities || []).includes(id))) c.entities[i].opening = false;
+        else c.entities.splice(i, 1);
+      }
+      if (!v) return;
+      let e = c.entities.find((x) => x.entity === v);
+      if (!e) { e = { entity: v }; c.entities.push(e); }
+      if (openingSensor(v, hs[v])) delete e.opening; else e.opening = true;
+      e.at = openingSpot(o);
+    })));
+    I.append(this._el(`<p class="small">${esc(t(o.sens.length ? 'ed_openSensorOn' : 'ed_openSensorHelp'))}</p>`));
   },
 
   /* ---------------------------------------------------------------- devices */
@@ -689,6 +715,18 @@ Object.assign(GfcEditor.prototype, {
       grid.append(b);
     }
     I.append(this._fieldEl(t('ed_icon'), grid));
+    // window / door contact: on its window – automatic, always or never
+    const d = domainOf(e.entity);
+    if (d === 'binary_sensor' || d === 'sensor' || (d === 'cover' && ['window', 'door', 'garage', 'gate'].includes(st?.attributes?.device_class))) {
+      const v = e.opening === true ? 'on' : e.opening === false ? 'off' : 'auto', w = M?.ents.find((x) => x.entity === e.entity)?.win;
+      I.append(this._fieldEl(t('ed_onWindow'), this._segEl([['auto', t('ed_auto')], ['on', t('ed_onWin_on')], ['off', t('ed_onWin_off')]], v, (x) => this._change(() => {
+        if (x === 'auto') delete e.opening; else e.opening = x === 'on';
+        this._snapToWindow(e);
+      }, { keepSel: true }))));
+      const msg = w ? t('ed_onWin_at', w.door ? t('ed_onWin_door') : t('ed_onWin_window', M.byRoom[w.room]?.name || ''))
+        : v === 'off' ? t('ed_onWin_offHelp') : v === 'auto' && !openingSensor(e.entity, st) ? t('ed_onWin_notContact') : t('ed_onWin_noWin');
+      I.append(this._el(`<p class="small">${esc(msg)}</p>`));
+    }
     if (kind === 'light') {
       I.append(this._el(`<h3>${esc(t('ed_lampOptions'))}</h3>`));
       I.append(this._fieldEl(t('ed_watt'), this._inp(e.watt ?? '', (v) => { if (v > 0) e.watt = v; else delete e.watt; }, { num: true, type: 'number', placeholder: '–' }), true));

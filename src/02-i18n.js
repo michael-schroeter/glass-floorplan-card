@@ -6,7 +6,7 @@ const pl = (n, one, many) => (n === 1 ? one : many);
 const STR = {
   en: {
     layer: 'Layer', layer_light: 'Light', layer_climate: 'Climate', layer_cover: 'Covers', layer_vacuum: 'Vacuum',
-    on: 'On', off: 'Off', open: 'Open', close: 'Close', offline: 'Offline', running: 'Running', ready: 'Ready', standby: 'Standby',
+    on: 'On', off: 'Off', open: 'Open', close: 'Close', offline: 'Offline', tilted: 'Tilted', running: 'Running', ready: 'Ready', standby: 'Standby',
     playing: 'Playing', paused: 'Paused', approx: 'approx.', min: 'min', all: 'All', none: 'None', now: 'Now', today: 'Today', never: 'Never', last: 'Last',
     error: (m) => `Error: ${m}`, notReachable: (n) => `${n} is not reachable`, notReachableShort: 'Not reachable', offOrUnreachable: 'Off or not reachable',
     activated: (n) => `“${n}” activated`, started: (n) => `“${n}” started`,
@@ -69,7 +69,7 @@ const STR = {
   },
   de: {
     layer: 'Ebene', layer_light: 'Licht', layer_climate: 'Klima', layer_cover: 'Rollläden', layer_vacuum: 'Roboter',
-    on: 'An', off: 'Aus', open: 'Öffnen', close: 'Schließen', offline: 'Offline', running: 'Läuft', ready: 'Bereit', standby: 'Standby',
+    on: 'An', off: 'Aus', open: 'Öffnen', close: 'Schließen', offline: 'Offline', tilted: 'Gekippt', running: 'Läuft', ready: 'Bereit', standby: 'Standby',
     playing: 'Spielt', paused: 'Pausiert', approx: 'ca.', min: 'Min.', all: 'Alle', none: 'Keine', now: 'Jetzt', today: 'Heute', never: 'Noch nie', last: 'Zuletzt',
     error: (m) => `Fehler: ${m}`, notReachable: (n) => `${n} ist nicht erreichbar`, notReachableShort: 'Nicht erreichbar', offOrUnreachable: 'Aus oder nicht erreichbar',
     activated: (n) => `„${n}“ aktiviert`, started: (n) => `„${n}“ gestartet`,

@@ -57,6 +57,8 @@ function exampleConfig(lang = 'en') {
       { entity: 'lock.front_door', at: [1140, 490], tap_action: { action: 'toggle', confirmation: true } },
       { entity: 'binary_sensor.living_room_window', at: [50, 600] },
       { entity: 'binary_sensor.kitchen_window', at: [50, 220] },
+      { entity: 'binary_sensor.front_door_contact', at: [1160, 470] },
+      { entity: 'sensor.bedroom_window_handle', at: [700, 40] },
       { entity: 'binary_sensor.hallway_motion', at: [970, 490] },
       { entity: 'fan.bedroom_fan', at: [700, 300] },
     ],
@@ -65,7 +67,7 @@ function exampleConfig(lang = 'en') {
     weather: 'weather.home',
     tiles: [{ id: 'energy', name: N('Energy', 'Energie'), icon: 'bolt', entities: ['sensor.home_power', { entity: 'sensor.energy_today', name: N('Today', 'Heute') }] }],
     layers: ['light', 'climate', 'cover', 'vacuum',
-      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }, 'departures', 'departures_map'],
+      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.front_door_contact', 'sensor.bedroom_window_handle', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }, 'departures', 'departures_map'],
     // two made-up stops in a made-up town nearby: departures, vehicles and map come from the demo's simulator (demo/transit.js)
     departures: {
       api: 'https://transit.demo.invalid',

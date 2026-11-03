@@ -10,13 +10,21 @@ Everything can be set in the floor plan editor. This page walks through it and i
 2. In the card editor, click **Open floor plan editor**. It shows your card live, at the size of your screen (switch between *Laptop* and *Phone* at the top). Tapping a lamp there opens its settings instead of switching it.
 3. **Template**: pick one of three ways – load a picture of your floor plan (**1 · Scale**: measure one wall, **2 · Rooms**: **Find rooms automatically** or trace them), import a file from the [Claude skill](claude-skill.md), or start with one room per Home Assistant area. **Next** at the bottom of every step leads on. **Start over** (bottom left) empties everything. The editor opens again the way you left it. A template picture only shows once you choose it, and it stays in this browser.
 4. **Rooms**: rooms named like an area are linked by themselves (on import and when you type a name, also across languages: *Living* ↔ *Wohnzimmer*); drag any other area onto its room. A linked room takes the area's name – rename it as you like, linking again names it again. Without a template, drag a room to move it and draw new ones on free space. While you build the plan (template, rooms, furniture, windows) devices stay hidden.
-5. **Furniture**, **Windows & doors**: optional, purely for the looks. *Add typical furniture* fills empty rooms by their kind (bed, sofa and TV, kitchen, bath …).
+5. **Furniture**, **Windows & doors**: optional, purely for the looks. *Add typical furniture* fills empty rooms by their kind (bed, sofa and TV, kitchen, bath …). Tap a window or the front door to pick its **contact** – see [Window and door contacts](#window-and-door-contacts).
 6. **Devices**: every linked area's devices are in their room already (once – what you remove stays away; lamps and the TV where a floor plan file says). Drag to move, tap for settings, drag more from the list. Under *More entities* any other entity can join a built-in layer (search, by area or label). The front door opener and doorbell are set under **Tiles**.
    In a device's settings, **Actions** sets what tapping, holding and double tapping do – the same choices as everywhere in Home Assistant (toggle, more info, open a dashboard page or website, perform any action …). Inside Home Assistant this is Home Assistant's own action editor. *Default* keeps the card's own behaviour.
 7. **Layers**: switch built-in layers on or off, or create your own, e.g. *Night = Light + Covers + front door lock + window contacts*.
 8. **Tiles**: weather, inside climate, front door – and **your own tiles**: a few values of your choice (the first one large, e.g. power now + energy today), **buttons** like the ones on the plan (each switches a device of your choice or runs its own action, e.g. *open a dashboard page*; a larger tile holds more buttons) or **any Home Assistant card** (camera, graph, thermostat, a card from HACS …) in a glass frame. They find a free corner of the plan like the others; drag them to place them yourself.
    The **layer card** (the overview with *Mode* and *All off*) comes in three sizes – *normal*, *small* (round buttons beside the state), *smaller* (without the strip as well) – and leaves out what does not fit; the **layer bar** is *vertical* or *horizontal*. Laptop and phone are arranged separately (*Arranging for* at the top of the list): on a phone the layer card sits below the plan and the layer bar at the bottom of the screen until you put them into the plan.
 9. Click **Done**, then **Save**.
+
+## Window and door contacts
+
+A window or door contact shows **on its window**, not as a button: when the window is open, its frame glows orange and the sash swings into the room (a wide window as two sashes, the front door wide open). A tilted window shows its sash a little inside, parallel to the frame. This works in every layer. Tap the window for the contact's details.
+
+- **Automatic**: a `binary_sensor` with the device class `window`, `door`, `garage_door` or `opening`, or a handle sensor that reports `open` / `tilted` / `closed`, sits on the drawn window (or front door) nearest to it in its room. A door contact prefers the front door, a window contact a window. When the editor places the devices of your areas, it puts contacts straight onto a free window of their room.
+- **By hand**: in the editor, tap a window and choose its *Contact*, or drag a contact onto another window. In a device's settings, *On a window* is *Automatic*, *On* (any entity, e.g. a sensor without a device class, onto the nearest window) or *Off* (a normal button in its layers). In YAML that is `opening: true` / `opening: false`.
+- A contact in a room without a drawn window stays a button. Draw the window under **Windows & doors** and it moves there.
 
 ## Modes
 
@@ -104,6 +112,7 @@ entities:
   - { entity: media_player.living_room_tv, at: [210, 392] }
   - { entity: climate.living_room, at: [250, 630] }
   - { entity: cover.living_room_left, at: [50, 500] }
+  - { entity: binary_sensor.living_room_window, at: [15, 500] }   # a contact: shows on the nearest window of its room
   - entity: lock.front_door
     at: [1140, 490]
     tap_action: { action: toggle, confirmation: true }   # Home Assistant's action schema
@@ -165,6 +174,7 @@ mobile:
 | `beams` | 1–6 light cones (spots) instead of a round glow |
 | `reach` | Glow radius in cm |
 | `plan: false` | No button on the plan (glow and pop-up tile only) |
+| `opening` | Window and door contacts: shown on the nearest window / front door of their room automatically. `true` puts any entity there, `false` keeps it a button. |
 | `tap_action`, `hold_action`, `double_tap_action` | What tapping, holding and double tapping the button do, in [Home Assistant's action schema](https://www.home-assistant.io/dashboards/actions/): `toggle`, `more-info`, `navigate`, `url`, `perform-action`, `assist`, `fire-dom-event`, `none`, each with an optional `confirmation`. Without them: a tap switches lamps and switches, moves covers, runs scenes and opens the room for everything else; holding opens the room. A hold action also applies in the room pop-up (instead of the device page). |
 
 | Tile option | Meaning |

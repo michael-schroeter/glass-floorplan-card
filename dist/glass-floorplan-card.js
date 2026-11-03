@@ -118,7 +118,7 @@ const pl = (n, one, many) => (n === 1 ? one : many);
 const STR = {
   en: {
     layer: 'Layer', layer_light: 'Light', layer_climate: 'Climate', layer_cover: 'Covers', layer_vacuum: 'Vacuum',
-    on: 'On', off: 'Off', open: 'Open', close: 'Close', offline: 'Offline', running: 'Running', ready: 'Ready', standby: 'Standby',
+    on: 'On', off: 'Off', open: 'Open', close: 'Close', offline: 'Offline', tilted: 'Tilted', running: 'Running', ready: 'Ready', standby: 'Standby',
     playing: 'Playing', paused: 'Paused', approx: 'approx.', min: 'min', all: 'All', none: 'None', now: 'Now', today: 'Today', never: 'Never', last: 'Last',
     error: (m) => `Error: ${m}`, notReachable: (n) => `${n} is not reachable`, notReachableShort: 'Not reachable', offOrUnreachable: 'Off or not reachable',
     activated: (n) => `“${n}” activated`, started: (n) => `“${n}” started`,
@@ -181,7 +181,7 @@ const STR = {
   },
   de: {
     layer: 'Ebene', layer_light: 'Licht', layer_climate: 'Klima', layer_cover: 'Rollläden', layer_vacuum: 'Roboter',
-    on: 'An', off: 'Aus', open: 'Öffnen', close: 'Schließen', offline: 'Offline', running: 'Läuft', ready: 'Bereit', standby: 'Standby',
+    on: 'An', off: 'Aus', open: 'Öffnen', close: 'Schließen', offline: 'Offline', tilted: 'Gekippt', running: 'Läuft', ready: 'Bereit', standby: 'Standby',
     playing: 'Spielt', paused: 'Pausiert', approx: 'ca.', min: 'Min.', all: 'Alle', none: 'Keine', now: 'Jetzt', today: 'Heute', never: 'Noch nie', last: 'Zuletzt',
     error: (m) => `Fehler: ${m}`, notReachable: (n) => `${n} ist nicht erreichbar`, notReachableShort: 'Nicht erreichbar', offOrUnreachable: 'Aus oder nicht erreichbar',
     activated: (n) => `„${n}“ aktiviert`, started: (n) => `„${n}“ gestartet`,
@@ -490,6 +490,29 @@ function kindOf(eid, st) {
   return 'other';
 }
 
+/* Window and door contacts: a binary sensor of a window / door, or a sensor that says open / tilted / closed (window handles) */
+const OPENING_CLASSES = ['window', 'door', 'garage_door', 'opening'];
+const OPEN_WORDS = ['open', 'opened', 'opening', 'on', 'true', 'offen', 'geöffnet', 'auf'];
+const TILT_WORDS = ['tilted', 'tilt', 'tilted_open', 'vent', 'ventilating', 'gekippt', 'kipp'];
+function openingSensor(eid, st) {
+  const d = domainOf(eid), a = st?.attributes || {};
+  if (d === 'binary_sensor') return OPENING_CLASSES.includes(a.device_class);
+  if (d !== 'sensor') return false;
+  // a handle can be tilted; "open" / "closed" alone only counts for a sensor named like a window or a door
+  const words = [st?.state, ...(Array.isArray(a.options) ? a.options : [])].map((v) => String(v).toLowerCase());
+  if (words.some((w) => TILT_WORDS.includes(w))) return true;
+  return words.some((w) => w === 'open' || w === 'closed') && /window|fenster|door|t(ü|ue)r|handle|griff/.test(`${eid} ${a.friendly_name || ''}`.toLowerCase());
+}
+/* 'open' | 'tilt' | 'closed' | 'na' */
+function openState(eid, st) {
+  if (unavailable(st)) return 'na';
+  const d = domainOf(eid), s = String(st.state).toLowerCase();
+  if (d === 'binary_sensor') return s === 'on' ? 'open' : 'closed';
+  if (d === 'cover') return s === 'closed' ? 'closed' : 'open';
+  if (TILT_WORDS.includes(s)) return 'tilt';
+  return OPEN_WORDS.includes(s) ? 'open' : 'closed';
+}
+
 const normPt = (a) => (Array.isArray(a) && a.length >= 2 && a.slice(0, 2).every((v) => Number.isFinite(+v)) ? [+a[0], +a[1]] : null);
 function normRect(a) {
   if (!Array.isArray(a) || a.length < 4) return null;
@@ -543,6 +566,8 @@ function normEntity(e) {
     entity: e.entity, at: normPt(e.at), room: e.room != null ? String(e.room) : null, name: e.name || null, icon: e.icon || null,
     watt: +e.watt || null, power: e.power || null, kelvin: +e.kelvin || null, beams: Math.max(0, Math.min(6, e.beams | 0)),
     plan: e.plan !== false, reach: +e.reach || null, color: Array.isArray(e.color) ? e.color.map(Number) : null, ...actionsOf(e),
+    // on a window / the front door: automatic (null), always (true) or never (false)
+    opening: e.opening === true || e.opening === false ? e.opening : null,
   };
 }
 /* Own tiles: a few values (the first one large), buttons like the devices on the plan, or any Home Assistant card in a
@@ -684,6 +709,7 @@ function finishModel(M, hass, mobile) {
   }
   if (M.door) M.door.room = roomFor(M.door.at, M.door.room);
   M.byRoom = byId;
+  assignOpenings(M, hass);
 
   // indoor climate: configured sensors, else every placed temperature / humidity source
   const ic = M.cfg.indoor;
@@ -728,6 +754,45 @@ function buildLayers(M) {
   return out;
 }
 const inLayer = (L, e) => !!L && (L.kinds.has(e.kind) || L.ents.has(e.entity));
+
+/* ---------------------------------------------------------------- Window and door contacts
+ * A contact shows on the window or front door nearest to it on the walls of its room (a door contact prefers the front door,
+ * a window contact a window) – in every layer, instead of a button. opening: true puts any device on the nearest one of the
+ * whole plan, opening: false keeps it a button.
+ * M.openings: [{ s, i (index in windows, -1 = front door), door, room + side (of the first room), rooms, sens }] */
+function assignOpenings(M, hass) {
+  const D = M.D;
+  const ops = M.windows.map((s, i) => ({ s, i, door: false })).concat(M.entrance ? [{ s: M.entrance, i: -1, door: true }] : []);
+  for (const o of ops) {
+    const w = wallOf(M, o.s);
+    o.room = w?.room.id || null; o.side = w?.side || null; o.sens = [];
+    // a window in a wall between two rooms belongs to both
+    o.rooms = M.rooms.filter((r) => wallOf({ D, rooms: [r] }, o.s)).map((r) => r.id);
+  }
+  M.openings = ops;
+  for (const e of M.ents) {
+    e.win = null;
+    if (e.opening === false || e.kind === 'light' || e.kind === 'media') continue;
+    const st = hass?.states?.[e.entity];
+    if (e.opening !== true && !openingSensor(e.entity, st)) continue;
+    const p = e.at || (M.byRoom[e.room] && center(M.byRoom[e.room].r));
+    if (!p) continue;
+    const dc = st?.attributes?.device_class, door = dc === 'door' || dc === 'garage_door';
+    let best = null, bd = Infinity;
+    for (const o of ops) {
+      if (e.opening !== true && !o.rooms.includes(e.room)) continue;
+      const d = segDist(o.s, p) + (door !== o.door && dc !== 'opening' ? 200 * D : 0);
+      if (d < bd) { bd = d; best = o; }
+    }
+    if (best) { best.sens.push(e.entity); e.win = best; }
+  }
+}
+
+/* where a contact on this window / front door is placed: a little inside the room, in the middle of it */
+function openingSpot(o, d = 15) {
+  const [x, y] = center(o.s), v = { t: [0, 1], b: [0, -1], l: [1, 0], r: [-1, 0] }[o.side] || [0, 0];
+  return [Math.round(x + v[0] * d), Math.round(y + v[1] * d)];
+}
 
 /* ---------------------------------------------------------------- Free-space layout for the info tiles
  * Tiles (weather, indoor, front door), the layer card and the layer bar go into empty corners of the plan –
@@ -1078,6 +1143,29 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .win.v.cv::after { transform: scaleY(calc(1 - var(--op, 1))); }
 .root[data-type="cover"] .win.cv { opacity: 1; }
 .root[data-type="cover"] .win.cv::after { opacity: 1; }
+/* window / door contacts: an open window's frame glows orange and its sash swings into the room (--a degrees, --sg = way in);
+ * a tilted one shows its sash a little inside, parallel to the frame (seen from above) */
+.wsn { position: absolute; z-index: 5; --hit: max(14px, calc(22 * var(--u))); height: var(--hit); margin: calc(var(--hit) / -2) 0 0; padding: 0; border: 0; background: none;
+  cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; --sw: max(1.5px, calc(2.6 * var(--u))); }
+.wsn.v { width: var(--hit); margin: 0 0 0 calc(var(--hit) / -2); }
+.wsn .wl, .wsn .sa { position: absolute; border-radius: 4px; background: rgb(var(--orange)); opacity: 0; pointer-events: none;
+  box-shadow: 0 0 calc(8 * var(--u)) rgba(var(--orange), .7), 0 0 calc(22 * var(--u)) rgba(var(--orange), .28); }
+.wsn .wl { left: 0; right: 0; top: 50%; height: max(2px, calc(3.4 * var(--u))); transform: translateY(-50%); transition: opacity .5s ease; }
+.wsn.v .wl { left: 50%; right: auto; top: 0; bottom: 0; height: auto; width: max(2px, calc(3.4 * var(--u))); transform: translateX(-50%); }
+.wsn.dr .wl { height: max(3px, calc(4.6 * var(--u))); }
+.wsn.v.dr .wl { height: auto; width: max(3px, calc(4.6 * var(--u))); }
+.wsn .sa { left: 0; top: calc(50% - var(--sw) / 2); width: 100%; height: var(--sw); transform-origin: 0 50%;
+  transform: translate(var(--tx, 0px), var(--ty, 0px)) rotate(calc(var(--sg) * var(--a, 0) * 1deg)); transition: transform var(--sp-ms) var(--sp), opacity .35s ease; }
+.wsn.two .sa { width: 50%; }
+.wsn .sa.b { left: auto; right: 0; transform-origin: 100% 50%; transform: translate(var(--tx, 0px), var(--ty, 0px)) rotate(calc(var(--sg) * var(--a, 0) * -1deg)); }
+.wsn.v .sa { left: calc(50% - var(--sw) / 2); top: 0; width: var(--sw); height: 100%; transform-origin: 50% 0; }
+.wsn.v.two .sa { height: 50%; }
+.wsn.v .sa.b { top: auto; bottom: 0; transform-origin: 50% 100%; }
+.wsn[data-st="open"] .wl, .wsn[data-st="open"] .sa { opacity: 1; }
+.wsn[data-st="tilt"] .wl, .wsn[data-st="tilt"] .sa { opacity: .85; }
+.wsn[data-st="tilt"] { --ty: calc(var(--sg) * 7 * var(--u)); }
+.wsn.v[data-st="tilt"] { --ty: 0px; --tx: calc(var(--sg) * -7 * var(--u)); }
+.wsn:focus-visible { outline: 2px solid rgba(var(--blue), .9); outline-offset: 2px; border-radius: 6px; }
 
 .room { position: absolute; z-index: 1; border-radius: calc(15 * var(--u)); overflow: hidden; cursor: pointer; outline: none;
   background: linear-gradient(165deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02) 55%, rgba(255, 255, 255, .015)), rgba(16, 16, 20, .42);
@@ -1967,7 +2055,8 @@ class GlassFloorplanCard extends HTMLElement {
       ? `<i class="pas" style="left:${G.px(s[0])}%;width:${G.pw(s[2] - s[0])}%;top:calc(${G.py(s[1])}% - var(--gap) / 2 + var(--u));height:calc(var(--gap) - 2 * var(--u))"></i>`
       : `<i class="pas" style="top:${G.py(s[1])}%;height:${G.ph(s[3] - s[1])}%;left:calc(${G.px(s[0])}% - var(--gap) / 2 + var(--u));width:calc(var(--gap) - 2 * var(--u))"></i>`)).join('');
 
-    const markers = M.ents.filter((e) => e.at && e.plan && e.kind !== 'vacuum').map((e) => this._markerHtml(e)).join('')
+    // window and door contacts sit on their window (15-openings), not as a button
+    const markers = M.ents.filter((e) => e.at && e.plan && e.kind !== 'vacuum' && !e.win).map((e) => this._markerHtml(e)).join('')
       + (M.door?.at ? `<button class="dev door" data-e="__door" data-k="door" style="${G.at(M.door.at)}" aria-label="${esc(M.door.name || t('frontDoor'))}"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${icon('door')}</button>` : '');
     const vac = M.vac ? `<svg class="trail" viewBox="${S.x} ${S.y} ${S.w} ${S.h}" preserveAspectRatio="none"><polyline class="t1" points=""/><polyline class="t2" points=""/></svg>
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';
@@ -1987,7 +2076,7 @@ class GlassFloorplanCard extends HTMLElement {
   <div class="lay">
     <div class="stage">
       <div class="glows">${glows}</div>
-      ${pas}${rooms}${wins}${vac}${markers}${dock ? '' : bar}
+      ${pas}${rooms}${wins}${this._openingsHtml(G)}${vac}${markers}${dock ? '' : bar}
       ${Wd.card ? `<div class="gcard${cmp}" style="${G.tile(Wd.card)}"></div>` : ''}
       <div class="tip"></div>
     </div>
@@ -2282,6 +2371,7 @@ class GlassFloorplanCard extends HTMLElement {
       el.addEventListener('pointerenter', () => this._showTip(el, this._name(e), this._valueText(e)));
       el.addEventListener('pointerleave', () => this._hideTip());
     }
+    this._wireOpenings();
     for (const [k, el] of Object.entries(this._roomEls)) {
       el.addEventListener('click', () => this._roomTap(k));
       el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); this._roomTap(k); } });
@@ -2485,6 +2575,8 @@ class GlassFloorplanCard extends HTMLElement {
   _stateText(eid, st) {
     const d = domainOf(eid), a = st?.attributes || {};
     if (unavailable(st)) return t('offline');
+    // a window handle: open / tilted / closed in the card's words
+    if (d === 'sensor' && openingSensor(eid, st)) { const o = openState(eid, st); return o === 'tilt' ? t('tilted') : t(o === 'open' ? 'bs_window_on' : 'bs_window_off'); }
     if (d === 'sensor' || (d === 'input_number' || d === 'number')) {
       const v = num(st);
       if (v == null) return String(st.state);
@@ -2636,6 +2728,7 @@ class GlassFloorplanCard extends HTMLElement {
       if (!el) { if (e.kind === 'cover') this._updCoverWindows(e); continue; }
       this._updDevEl(e, el);
     }
+    this._updOpenings();
     // front door: shows as opened for a minute
     const door = this._mk.__door, M = this._M;
     if (M.door) {
@@ -4424,8 +4517,9 @@ Object.assign(GlassFloorplanCard.prototype, {
       else if (PRESS_DOMAINS.includes(d)) { sub.textContent = txt; }
       else {
         sv.textContent = txt;
-        row.classList.toggle('on', d === 'binary_sensor' && isOn(st) && !['motion', 'occupancy', 'presence', 'connectivity', 'power', 'plug', 'running', 'light'].includes(st?.attributes?.device_class));
-        sub.textContent = st?.last_changed && d === 'binary_sensor' ? relTime(st.last_changed) : '';
+        const handle = d === 'sensor' && openingSensor(eid, st);
+        row.classList.toggle('on', (d === 'binary_sensor' && isOn(st) && !['motion', 'occupancy', 'presence', 'connectivity', 'power', 'plug', 'running', 'light'].includes(st?.attributes?.device_class)) || (handle && this._isAlert(eid)));
+        sub.textContent = st?.last_changed && (d === 'binary_sensor' || handle) ? relTime(st.last_changed) : '';
       }
       sub.hidden = !sub.textContent;
     });
@@ -4453,6 +4547,8 @@ Object.assign(GlassFloorplanCard.prototype, {
   /* open windows / doors, unlocked locks, leaks … */
   _isAlert(eid) {
     const st = this._hass.states[eid], d = domainOf(eid), dc = st?.attributes?.device_class;
+    // a window handle: open or tilted
+    if (d === 'sensor' && openingSensor(eid, st)) return ['open', 'tilt'].includes(openState(eid, st));
     if (d === 'binary_sensor') return isOn(st) && ['door', 'window', 'opening', 'garage_door', 'moisture', 'smoke', 'gas', 'carbon_monoxide', 'safety', 'problem', 'tamper', 'lock'].includes(dc);
     if (d === 'lock') return ['unlocked', 'open', 'jammed'].includes(st?.state);
     if (d === 'alarm_control_panel') return st?.state === 'triggered';
@@ -7125,6 +7221,65 @@ Object.assign(STR.de, {
   tmNext3: 'Die nächsten drei je Richtung', tmNext3Side: 'Diese Straßenseite · die nächsten drei je Linie', tmOnlyTo: (c, d) => `${c} nur bis ${d}`,
 });
 
+/* ================================================================== Window and door contacts on the plan
+ * A window or the front door with a contact (assignOpenings in the model) opens on the plan: its frame turns orange and the
+ * sash swings into the room – a wide window as two sashes, the front door wide; a tilted sash moves a little inwards.
+ * Shown in every layer of the plan. Tap: the contact's tap_action, else Home Assistant's dialog of the contact. */
+const SASH_DEG = { open: 34, door: 66 };
+
+Object.assign(GlassFloorplanCard.prototype, {
+  /* the contacts' elements, one per window / front door with a contact (G = the stage's geometry) */
+  _openingsHtml(G) {
+    const M = this._M;
+    return M.openings.filter((o) => o.sens.length).map((o) => {
+      const s = o.s, h = segH(s), len = h ? s[2] - s[0] : s[3] - s[1];
+      // on the line of the window (it hugs the outside of the glass tile)
+      const out = o.side === 't' || o.side === 'l' ? 1 : o.side ? -1 : 0, off = out ? ` + ${out} * (var(--gap) / 2 - 1.7 * var(--u))` : '';
+      const pos = h ? `left:${G.px(s[0])}%;width:${G.pw(len)}%;top:calc(${G.py(s[1])}%${off})` : `top:${G.py(s[1])}%;height:${G.ph(len)}%;left:calc(${G.px(s[0])}%${off})`;
+      // the sash turns into the room: clockwise on the top and the right wall
+      const sg = o.side === 'b' || o.side === 'l' ? -1 : 1, two = !o.door && len * M.scale > 125;
+      return `<button class="wsn${h ? '' : ' v'}${o.door ? ' dr' : ''}${two ? ' two' : ''}" data-s="${esc(o.sens.join(' '))}" style="${pos};--sg:${sg}">`
+        + `<i class="wl"></i><i class="sa"></i>${two ? '<i class="sa b"></i>' : ''}</button>`;
+    }).join('');
+  },
+
+  _wsnEnts(el) { return el.dataset.s.split(' ').map((id) => this._M.ents.find((e) => e.entity === id)).filter(Boolean); },
+  /* the contact that speaks for the window: an open one first */
+  _wsnMain(el) {
+    const l = this._wsnEnts(el);
+    return l.find((e) => openState(e.entity, this._st(e.entity)) === 'open') || l.find((e) => openState(e.entity, this._st(e.entity)) === 'tilt') || l[0];
+  },
+  _wireOpenings() {
+    for (const el of this.shadowRoot.querySelectorAll('.wsn')) {
+      const run = (k) => { const e = this._wsnMain(el); this._hideTip(); this._act(e[k], { entity: e.entity, el, name: this._name(e), own: () => this._openDevice(e.entity, el, true) }); };
+      this._press(el, () => run('tap'), () => run('hold'), this._wsnEnts(el).some((e) => e.dbl) && (() => run('dbl')));
+      // the tooltip above the middle of the window (an upright one would cover the room's name with it at its top end)
+      const mid = { getBoundingClientRect: () => { const r = el.getBoundingClientRect(), y = r.top + r.height / 2; return { left: r.left, right: r.right, width: r.width, top: y, bottom: y, height: 0 }; } };
+      el.addEventListener('pointerenter', () => { const e = this._wsnMain(el); this._showTip(mid, this._name(e), this._openText(e)); });
+      el.addEventListener('pointerleave', () => this._hideTip());
+    }
+  },
+  /* "Open · 25 min ago" */
+  _openText(e) {
+    const st = this._st(e.entity), s = openState(e.entity, st);
+    const txt = s === 'na' ? t('offline') : this._stateText(e.entity, st);
+    const ago = (s === 'open' || s === 'tilt') && relTime(st.last_changed);
+    return ago ? `${txt} · ${ago}` : txt;
+  },
+
+  _updOpenings() {
+    for (const el of this.shadowRoot.querySelectorAll('.wsn')) {
+      const sts = this._wsnEnts(el).map((e) => openState(e.entity, this._st(e.entity)));
+      const s = sts.includes('open') ? 'open' : sts.includes('tilt') ? 'tilt' : sts.every((x) => x === 'na') ? 'na' : 'closed';
+      const e = this._wsnMain(el);
+      el.setAttribute('aria-label', `${this._name(e)}: ${this._openText(e)}`);
+      if (el.dataset.st === s) continue;
+      el.dataset.st = s;
+      el.style.setProperty('--a', s === 'open' ? (el.classList.contains('dr') ? SASH_DEG.door : SASH_DEG.open) : 0);
+    }
+  },
+});
+
 /* ================================================================== Floor plan editor: styles (same glass language as the card) */
 const EDITOR_STYLES = `
 dialog.ed { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: #08090c; color: var(--t1); overflow: hidden; }
@@ -8014,8 +8169,13 @@ class GfcEditor extends HTMLElement {
     // device markers: exactly over the buttons the live card shows in its current layer (tap → settings) –
     // none while the plan itself is built
     const onCard = (el) => { const b = !el || el.classList.contains('hid') || this._bare() ? null : this._cardBox(el); return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0]]; };
+    // a window / door contact: on the middle of its window
+    const onWin = (eid) => {
+      const el = !this._bare() && [...(card?.shadowRoot?.querySelectorAll('.wsn') || [])].find((x) => x.dataset.s.split(' ').includes(eid)), b = el && this._cardBox(el);
+      return b && [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, 30 * F.k];
+    };
     if (!this._bare()) c.entities.forEach((e, i) => {
-      const on = sel?.t === 'ent' && sel.i === i, m = e.at && onCard(card?._mk?.[e.entity]);
+      const on = sel?.t === 'ent' && sel.i === i, m = e.at && (onCard(card?._mk?.[e.entity]) || onWin(e.entity));
       // a selected device without a button there (plan: false, another layer) is shown where it is
       const [x, y, w] = m || (on && e.at ? [...this.P(e.at[0], e.at[1]), 34 * F.k] : []);
       if (x == null) return;
@@ -8226,7 +8386,9 @@ class GfcEditor extends HTMLElement {
     if (k === 'mk') {
       const m = el.dataset.m;
       pick(m ? { t: m } : { t: 'ent', i: +el.dataset.i }, 'devices');
-      const at = m === 'door' ? this._c.door.at : m === 'dock' ? this._c.vacuum.dock : this._c.entities[+el.dataset.i].at;
+      // a contact on a window is dragged from its window (where its handle is)
+      const e0 = !m && this._c.entities[+el.dataset.i], win = e0 && this._winOf(e0.entity);
+      const at = m === 'door' ? this._c.door.at : m === 'dock' ? this._c.vacuum.dock : win ? openingSpot(win, 0) : e0.at;
       this._d = { ...base, mode: 'move-mk', orig: [...at], tap: true };
       return;
     }
@@ -8406,6 +8568,7 @@ class GfcEditor extends HTMLElement {
     }
     if (d.mode === 'pan' && !d.moved && d.deselect) { if (this._s) { this._s = null; this._panel(); } this._draw(); return; }
     if (d.moved && d.mode === 'move-furn') this._reparentFurn();
+    if (d.moved && d.mode === 'move-mk' && this._s?.t === 'ent') this._snapToWindow(this._selObj());
     if (d.moved) { this._draw(); this._panel(); }
   }
 
@@ -8622,10 +8785,13 @@ class GfcEditor extends HTMLElement {
       // an area in two rooms: free spots in the bigger one
       if (ids.length) todo.push([c.rooms.filter((r) => r.area === a).sort((x, y) => rectArea(y.rect) - rectArea(x.rect)), ids.sort()]);
     }
-    if (!todo.length) return 0;
+    const contacts = this._contactSpots(areas, have);
+    if (!todo.length && !contacts.length) return 0;
     this._snap();
-    const taken = c.entities.filter((e) => e.at).map((e) => e.at);
+    // window and door contacts straight onto their window / the front door
     let n = 0;
+    for (const [id, at] of contacts) { c.entities.push({ entity: id, at }); n++; }
+    const taken = c.entities.filter((e) => e.at).map((e) => e.at);
     for (const [rooms, ids] of todo) {
       const hints = this._matchHints(rooms, ids);
       // the spots a file names are taken first, free spots go around them
@@ -8651,6 +8817,31 @@ class GfcEditor extends HTMLElement {
     }
     if (n && !quiet) this._toast(t('ed_autoPlaced', n));
     return n;
+  }
+  /* free windows (and the front door) of these areas' rooms for their contacts that are not on the plan yet:
+   * a door contact prefers the front door, a window contact never takes it. [[entity, at] …] */
+  _contactSpots(areas, have) {
+    const h = this._hs() || {}, M = this._model();
+    if (!M?.openings?.length || !h.states) return [];
+    const used = new Set(M.openings.filter((o) => o.sens.length)), out = [];
+    for (const a of areas) {
+      const rooms = new Set(M.rooms.filter((r) => r.area === a).map((r) => r.id)), ops = M.openings.filter((o) => o.rooms.some((k) => rooms.has(k)));
+      for (const id of Object.keys(h.states).filter((x) => !have.has(x) && autoContact(h, x) && this._areaOf(x) === a).sort()) {
+        const dc = h.states[id].attributes?.device_class, door = dc === 'door' || dc === 'garage_door';
+        const free = ops.filter((o) => !used.has(o) && !(dc === 'window' && o.door)).sort((x, y) => (door ? y.door - x.door : x.door - y.door));
+        if (!free.length) continue;
+        used.add(free[0]);
+        out.push([id, openingSpot(free[0])]);
+      }
+    }
+    return out;
+  }
+  /* the window / front door a device shows on (in the configuration's coordinates) */
+  _winOf(eid) { return this._model()?.ents.find((x) => x.entity === eid)?.win || null; }
+  /* a contact on a window sits right inside it – then it stays on that window */
+  _snapToWindow(e) {
+    const w = e && this._winOf(e.entity);
+    if (w) e.at = openingSpot(w);
   }
   /* hints of a floor plan file in these rooms (a lamp, the TV … with a position) → devices of the same kind; where there
    * are several, fitting names and lamp shapes decide. Used hints are gone. */
@@ -9431,10 +9622,36 @@ Object.assign(GfcEditor.prototype, {
       const m = h ? (seg[0] + seg[2]) / 2 : (seg[1] + seg[3]) / 2;
       this._setOpening(s, h ? [r0(m - v / 2), seg[1], r0(m + v / 2), seg[3]] : [seg[0], r0(m - v / 2), seg[2], r0(m + v / 2)]);
     }, { num: true, type: 'number' }), true));
+    if (s.k !== 'door') this._openSensorField(I, seg);
     const row = mk('div', 'ebtns');
     row.append(this._delBtn(t('ed_delete'), () => this._deleteSel()));
     I.append(row);
     I.append(this._el(`<p class="small">${esc(t('ed_open_move'))}</p>`));
+  },
+  /* the contact of a window / the front door: the contacts of the room's area first; another one replaces it */
+  _openSensorField(I, seg) {
+    const M = this._model(), o = M?.openings.find((x) => JSON.stringify(x.s) === JSON.stringify(seg)), hs = this._hs()?.states || {};
+    if (!o) return;
+    const area = M.byRoom[o.room]?.area, ids = Object.keys(hs).filter((id) => openingSensor(id, hs[id]) || o.sens.includes(id));
+    const name = (id) => this._fname(id), mine = ids.filter((id) => area && this._areaOf(id) === area).sort((x, y) => name(x).localeCompare(name(y), LOCALE));
+    const rest = ids.filter((id) => !mine.includes(id)).sort((x, y) => name(x).localeCompare(name(y), LOCALE));
+    I.append(this._fieldEl(t('ed_openSensor'), this._drop([['', t('ed_none')], ...[...mine, ...rest].map((id) => [id, `${name(id)} (${id})`])], o.sens[0] || '', (v) => {
+      const c = this._c;
+      for (const id of o.sens) {
+        if (id === v) continue;
+        // a contact that is in a layer of its own stays there as a button, otherwise it leaves the plan
+        const i = c.entities.findIndex((x) => x.entity === id);
+        if (i < 0) continue;
+        if ((c.layers || []).some((l) => l && typeof l === 'object' && [].concat(l.entities || []).includes(id))) c.entities[i].opening = false;
+        else c.entities.splice(i, 1);
+      }
+      if (!v) return;
+      let e = c.entities.find((x) => x.entity === v);
+      if (!e) { e = { entity: v }; c.entities.push(e); }
+      if (openingSensor(v, hs[v])) delete e.opening; else e.opening = true;
+      e.at = openingSpot(o);
+    })));
+    I.append(this._el(`<p class="small">${esc(t(o.sens.length ? 'ed_openSensorOn' : 'ed_openSensorHelp'))}</p>`));
   },
 
   /* ---------------------------------------------------------------- devices */
@@ -9721,6 +9938,18 @@ Object.assign(GfcEditor.prototype, {
       grid.append(b);
     }
     I.append(this._fieldEl(t('ed_icon'), grid));
+    // window / door contact: on its window – automatic, always or never
+    const d = domainOf(e.entity);
+    if (d === 'binary_sensor' || d === 'sensor' || (d === 'cover' && ['window', 'door', 'garage', 'gate'].includes(st?.attributes?.device_class))) {
+      const v = e.opening === true ? 'on' : e.opening === false ? 'off' : 'auto', w = M?.ents.find((x) => x.entity === e.entity)?.win;
+      I.append(this._fieldEl(t('ed_onWindow'), this._segEl([['auto', t('ed_auto')], ['on', t('ed_onWin_on')], ['off', t('ed_onWin_off')]], v, (x) => this._change(() => {
+        if (x === 'auto') delete e.opening; else e.opening = x === 'on';
+        this._snapToWindow(e);
+      }, { keepSel: true }))));
+      const msg = w ? t('ed_onWin_at', w.door ? t('ed_onWin_door') : t('ed_onWin_window', M.byRoom[w.room]?.name || ''))
+        : v === 'off' ? t('ed_onWin_offHelp') : v === 'auto' && !openingSensor(e.entity, st) ? t('ed_onWin_notContact') : t('ed_onWin_noWin');
+      I.append(this._el(`<p class="small">${esc(msg)}</p>`));
+    }
     if (kind === 'light') {
       I.append(this._el(`<h3>${esc(t('ed_lampOptions'))}</h3>`));
       I.append(this._fieldEl(t('ed_watt'), this._inp(e.watt ?? '', (v) => { if (v > 0) e.watt = v; else delete e.watt; }, { num: true, type: 'number', placeholder: '–' }), true));
@@ -9976,6 +10205,8 @@ function exampleConfig(lang = 'en') {
       { entity: 'lock.front_door', at: [1140, 490], tap_action: { action: 'toggle', confirmation: true } },
       { entity: 'binary_sensor.living_room_window', at: [50, 600] },
       { entity: 'binary_sensor.kitchen_window', at: [50, 220] },
+      { entity: 'binary_sensor.front_door_contact', at: [1160, 470] },
+      { entity: 'sensor.bedroom_window_handle', at: [700, 40] },
       { entity: 'binary_sensor.hallway_motion', at: [970, 490] },
       { entity: 'fan.bedroom_fan', at: [700, 300] },
     ],
@@ -9984,7 +10215,7 @@ function exampleConfig(lang = 'en') {
     weather: 'weather.home',
     tiles: [{ id: 'energy', name: N('Energy', 'Energie'), icon: 'bolt', entities: ['sensor.home_power', { entity: 'sensor.energy_today', name: N('Today', 'Heute') }] }],
     layers: ['light', 'climate', 'cover', 'vacuum',
-      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }, 'departures', 'departures_map'],
+      { name: N('Night', 'Nacht'), icon: 'moon', show: ['light', 'cover'], entities: ['lock.front_door', 'binary_sensor.living_room_window', 'binary_sensor.kitchen_window', 'binary_sensor.front_door_contact', 'sensor.bedroom_window_handle', 'binary_sensor.hallway_motion', 'fan.bedroom_fan'] }, 'departures', 'departures_map'],
     // two made-up stops in a made-up town nearby: departures, vehicles and map come from the demo's simulator (demo/transit.js)
     departures: {
       api: 'https://transit.demo.invalid',
@@ -10004,6 +10235,12 @@ function autoDevice(h, id) {
   if (d === 'vacuum') return reg?.platform === 'roborock';
   if (['light', 'climate', 'cover', 'media_player'].includes(d)) return !Array.isArray(st.attributes?.entity_id);
   return d === 'sensor' && st.attributes?.device_class === 'temperature';
+}
+
+/* window and door contacts: they come onto the plan only where their room has a window (or the front door) for them */
+function autoContact(h, id) {
+  const st = h.states?.[id], reg = h.entities?.[id];
+  return !!st && !reg?.hidden && !reg?.entity_category && openingSensor(id, st);
 }
 
 /* A first floor plan from the Home Assistant areas: one room per area (with devices), packed edge to edge,
@@ -10179,11 +10416,16 @@ Object.assign(STR.en, {
   ed_duplicate: 'Duplicate', ed_delete: 'Delete',
   ed_furn_drag: 'Drag into a room or click', ed_typicalFurn: 'Add typical furniture', ed_typicalFurnHelp: (n) => `Bed, sofa, kitchen, bath … in ${n} ${pl(n, 'room', 'rooms')} without furniture – change it as you like afterwards.`, ed_furnished: (n, r) => `${n} pieces in ${r} ${pl(r, 'room', 'rooms')}`, ed_furn_lead: 'Purely for the looks: drag a piece into a room or tap it to add it to the selected room. Resize with the handles, R rotates.',
   ed_kind: 'Kind', ed_widthCm: 'Width (cm)', ed_depthCm: 'Depth (cm)', ed_rotate: 'Rotate', ed_moreFurniture: 'Add more',
-  ed_open_lead_window: 'Hover over an outer wall and click – the window snaps onto the wall. Windows let daylight in and show your covers.',
+  ed_open_lead_window: 'Hover over an outer wall and click – the window snaps onto the wall. Windows let daylight in, show your covers and – with a contact – whether they are open.',
   ed_open_lead_door: 'Click on the wall between two rooms. Passages are drawn as glass bridges and show the vacuum its way.',
   ed_open_lead_entrance: 'Click on the wall with your front door. It glows green when the door is opened.',
   ed_open_counts: (w, d, e) => `${w} ${pl(w, 'window', 'windows')} · ${d} ${pl(d, 'passage', 'passages')} · ${e ? 'front door set' : 'no front door'}`,
   ed_lengthCm: 'Length (cm)', ed_open_move: 'Drag it along the wall, the round handles change its length.',
+  ed_openSensor: 'Contact', ed_openSensorHelp: 'Pick its window or door contact – the window then opens on the plan, tilted ones a little. Contacts of the room’s area come first.',
+  ed_openSensorOn: 'Opens on the plan with its contact – in every layer. Tap it there for the contact’s details.',
+  ed_onWindow: 'On a window', ed_onWin_on: 'On', ed_onWin_off: 'Off', ed_onWin_at: (w) => `Shows on the ${w}: open, tilted or closed right there.`,
+  ed_onWin_window: (r) => (r ? `window of ${r}` : 'window'), ed_onWin_door: 'front door', ed_onWin_offHelp: 'Shown as a button in its layers.',
+  ed_onWin_notContact: 'Not a window or door contact – switch on to show it on the nearest window.', ed_onWin_noWin: 'No window in its room yet – draw one under “Windows & doors” and it shows there.',
   ed_ownLayer: 'Own layer', ed_dev_lead: 'The devices of your areas are in their rooms already. Drag them to move, tap them for settings – and drag more from the list onto the plan.', ed_dev_lead0: 'Pick a layer, then drag devices onto the plan. Lamps, sensors and switches get the symbol you choose.',
   ed_dev_noArea: (n) => `${n} ${pl(n, 'room', 'rooms')} without an area – their devices are still missing.`, ed_linkAreas: 'Link areas', ed_autoPlaced: (n) => `${n} ${pl(n, 'device', 'devices')} placed in their rooms`,
   ed_next: (s) => `Next: ${s}`, ed_doneHint: 'Layers, tiles and settings are optional – everything works as it is.',
@@ -10248,11 +10490,16 @@ Object.assign(STR.de, {
   ed_duplicate: 'Duplizieren', ed_delete: 'Löschen',
   ed_furn_drag: 'In einen Raum ziehen oder antippen', ed_typicalFurn: 'Typische Möbel einsetzen', ed_typicalFurnHelp: (n) => `Bett, Sofa, Küche, Bad … in ${n} ${pl(n, 'Raum', 'Räumen')} ohne Möbel – danach nach Belieben anpassen.`, ed_furnished: (n, r) => `${n} Möbel in ${r} ${pl(r, 'Raum', 'Räumen')}`, ed_furn_lead: 'Rein fürs Auge: Möbel in einen Raum ziehen oder antippen (landet im gewählten Raum). Größe über die Griffe, R dreht.',
   ed_kind: 'Art', ed_widthCm: 'Breite (cm)', ed_depthCm: 'Tiefe (cm)', ed_rotate: 'Drehen', ed_moreFurniture: 'Weitere hinzufügen',
-  ed_open_lead_window: 'Mit der Maus über eine Außenwand fahren und klicken – das Fenster rastet auf der Wand ein. Fenster lassen Tageslicht herein und zeigen die Rollläden.',
+  ed_open_lead_window: 'Mit der Maus über eine Außenwand fahren und klicken – das Fenster rastet auf der Wand ein. Fenster lassen Tageslicht herein, zeigen die Rollläden und – mit Kontakt – ob sie offen sind.',
   ed_open_lead_door: 'Auf die Wand zwischen zwei Räumen klicken. Durchgänge erscheinen als Glasbrücken und zeigen dem Saugroboter den Weg.',
   ed_open_lead_entrance: 'Auf die Wand mit deiner Haustür klicken. Sie leuchtet grün, wenn die Tür geöffnet wurde.',
   ed_open_counts: (w, d, e) => `${w} Fenster · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${e ? 'Haustür gesetzt' : 'keine Haustür'}`,
   ed_lengthCm: 'Länge (cm)', ed_open_move: 'Entlang der Wand ziehen, die runden Griffe ändern die Länge.',
+  ed_openSensor: 'Kontakt', ed_openSensorHelp: 'Wähle den Fenster- oder Türkontakt – das Fenster öffnet sich dann im Plan, gekippt nur ein wenig. Kontakte aus dem Bereich des Raums stehen oben.',
+  ed_openSensorOn: 'Öffnet sich im Plan mit seinem Kontakt – in jeder Ebene. Dort antippen zeigt den Kontakt.',
+  ed_onWindow: 'Am Fenster', ed_onWin_on: 'An', ed_onWin_off: 'Aus', ed_onWin_at: (w) => `Zeigt sich ${w}: offen, gekippt oder zu, direkt dort.`,
+  ed_onWin_window: (r) => (r ? `am Fenster (${r})` : 'am Fenster'), ed_onWin_door: 'an der Haustür', ed_onWin_offHelp: 'Erscheint als Knopf in seinen Ebenen.',
+  ed_onWin_notContact: 'Kein Fenster- oder Türkontakt – einschalten, um ihn am nächsten Fenster zu zeigen.', ed_onWin_noWin: 'In seinem Raum ist noch kein Fenster – zeichne eins unter „Fenster & Türen“, dann zeigt er sich dort.',
   ed_ownLayer: 'Eigene Ebene', ed_dev_lead: 'Die Geräte deiner Bereiche stehen schon in ihren Räumen. Ziehen zum Verschieben, antippen für Einstellungen – weitere aus der Liste auf den Plan ziehen.', ed_dev_lead0: 'Ebene wählen, dann Geräte auf den Plan ziehen. Lampen, Sensoren und Schalter bekommen das Symbol, das du auswählst.',
   ed_dev_noArea: (n) => `${n} ${pl(n, 'Raum', 'Räume')} ohne Bereich – ihre Geräte fehlen noch.`, ed_linkAreas: 'Bereiche zuordnen', ed_autoPlaced: (n) => `${n} ${pl(n, 'Gerät', 'Geräte')} in ihre Räume gesetzt`,
   ed_next: (s) => `Weiter: ${s}`, ed_doneHint: 'Ebenen, Kacheln und Optionen sind optional – es funktioniert schon so.',

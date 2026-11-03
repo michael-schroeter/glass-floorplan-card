@@ -60,6 +60,29 @@ function kindOf(eid, st) {
   return 'other';
 }
 
+/* Window and door contacts: a binary sensor of a window / door, or a sensor that says open / tilted / closed (window handles) */
+const OPENING_CLASSES = ['window', 'door', 'garage_door', 'opening'];
+const OPEN_WORDS = ['open', 'opened', 'opening', 'on', 'true', 'offen', 'geöffnet', 'auf'];
+const TILT_WORDS = ['tilted', 'tilt', 'tilted_open', 'vent', 'ventilating', 'gekippt', 'kipp'];
+function openingSensor(eid, st) {
+  const d = domainOf(eid), a = st?.attributes || {};
+  if (d === 'binary_sensor') return OPENING_CLASSES.includes(a.device_class);
+  if (d !== 'sensor') return false;
+  // a handle can be tilted; "open" / "closed" alone only counts for a sensor named like a window or a door
+  const words = [st?.state, ...(Array.isArray(a.options) ? a.options : [])].map((v) => String(v).toLowerCase());
+  if (words.some((w) => TILT_WORDS.includes(w))) return true;
+  return words.some((w) => w === 'open' || w === 'closed') && /window|fenster|door|t(ü|ue)r|handle|griff/.test(`${eid} ${a.friendly_name || ''}`.toLowerCase());
+}
+/* 'open' | 'tilt' | 'closed' | 'na' */
+function openState(eid, st) {
+  if (unavailable(st)) return 'na';
+  const d = domainOf(eid), s = String(st.state).toLowerCase();
+  if (d === 'binary_sensor') return s === 'on' ? 'open' : 'closed';
+  if (d === 'cover') return s === 'closed' ? 'closed' : 'open';
+  if (TILT_WORDS.includes(s)) return 'tilt';
+  return OPEN_WORDS.includes(s) ? 'open' : 'closed';
+}
+
 const normPt = (a) => (Array.isArray(a) && a.length >= 2 && a.slice(0, 2).every((v) => Number.isFinite(+v)) ? [+a[0], +a[1]] : null);
 function normRect(a) {
   if (!Array.isArray(a) || a.length < 4) return null;
@@ -113,6 +136,8 @@ function normEntity(e) {
     entity: e.entity, at: normPt(e.at), room: e.room != null ? String(e.room) : null, name: e.name || null, icon: e.icon || null,
     watt: +e.watt || null, power: e.power || null, kelvin: +e.kelvin || null, beams: Math.max(0, Math.min(6, e.beams | 0)),
     plan: e.plan !== false, reach: +e.reach || null, color: Array.isArray(e.color) ? e.color.map(Number) : null, ...actionsOf(e),
+    // on a window / the front door: automatic (null), always (true) or never (false)
+    opening: e.opening === true || e.opening === false ? e.opening : null,
   };
 }
 /* Own tiles: a few values (the first one large), buttons like the devices on the plan, or any Home Assistant card in a
@@ -254,6 +279,7 @@ function finishModel(M, hass, mobile) {
   }
   if (M.door) M.door.room = roomFor(M.door.at, M.door.room);
   M.byRoom = byId;
+  assignOpenings(M, hass);
 
   // indoor climate: configured sensors, else every placed temperature / humidity source
   const ic = M.cfg.indoor;
@@ -298,6 +324,45 @@ function buildLayers(M) {
   return out;
 }
 const inLayer = (L, e) => !!L && (L.kinds.has(e.kind) || L.ents.has(e.entity));
+
+/* ---------------------------------------------------------------- Window and door contacts
+ * A contact shows on the window or front door nearest to it on the walls of its room (a door contact prefers the front door,
+ * a window contact a window) – in every layer, instead of a button. opening: true puts any device on the nearest one of the
+ * whole plan, opening: false keeps it a button.
+ * M.openings: [{ s, i (index in windows, -1 = front door), door, room + side (of the first room), rooms, sens }] */
+function assignOpenings(M, hass) {
+  const D = M.D;
+  const ops = M.windows.map((s, i) => ({ s, i, door: false })).concat(M.entrance ? [{ s: M.entrance, i: -1, door: true }] : []);
+  for (const o of ops) {
+    const w = wallOf(M, o.s);
+    o.room = w?.room.id || null; o.side = w?.side || null; o.sens = [];
+    // a window in a wall between two rooms belongs to both
+    o.rooms = M.rooms.filter((r) => wallOf({ D, rooms: [r] }, o.s)).map((r) => r.id);
+  }
+  M.openings = ops;
+  for (const e of M.ents) {
+    e.win = null;
+    if (e.opening === false || e.kind === 'light' || e.kind === 'media') continue;
+    const st = hass?.states?.[e.entity];
+    if (e.opening !== true && !openingSensor(e.entity, st)) continue;
+    const p = e.at || (M.byRoom[e.room] && center(M.byRoom[e.room].r));
+    if (!p) continue;
+    const dc = st?.attributes?.device_class, door = dc === 'door' || dc === 'garage_door';
+    let best = null, bd = Infinity;
+    for (const o of ops) {
+      if (e.opening !== true && !o.rooms.includes(e.room)) continue;
+      const d = segDist(o.s, p) + (door !== o.door && dc !== 'opening' ? 200 * D : 0);
+      if (d < bd) { bd = d; best = o; }
+    }
+    if (best) { best.sens.push(e.entity); e.win = best; }
+  }
+}
+
+/* where a contact on this window / front door is placed: a little inside the room, in the middle of it */
+function openingSpot(o, d = 15) {
+  const [x, y] = center(o.s), v = { t: [0, 1], b: [0, -1], l: [1, 0], r: [-1, 0] }[o.side] || [0, 0];
+  return [Math.round(x + v[0] * d), Math.round(y + v[1] * d)];
+}
 
 /* ---------------------------------------------------------------- Free-space layout for the info tiles
  * Tiles (weather, indoor, front door), the layer card and the layer bar go into empty corners of the plan –

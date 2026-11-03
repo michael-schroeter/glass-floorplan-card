@@ -105,8 +105,9 @@ Object.assign(GlassFloorplanCard.prototype, {
       else if (PRESS_DOMAINS.includes(d)) { sub.textContent = txt; }
       else {
         sv.textContent = txt;
-        row.classList.toggle('on', d === 'binary_sensor' && isOn(st) && !['motion', 'occupancy', 'presence', 'connectivity', 'power', 'plug', 'running', 'light'].includes(st?.attributes?.device_class));
-        sub.textContent = st?.last_changed && d === 'binary_sensor' ? relTime(st.last_changed) : '';
+        const handle = d === 'sensor' && openingSensor(eid, st);
+        row.classList.toggle('on', (d === 'binary_sensor' && isOn(st) && !['motion', 'occupancy', 'presence', 'connectivity', 'power', 'plug', 'running', 'light'].includes(st?.attributes?.device_class)) || (handle && this._isAlert(eid)));
+        sub.textContent = st?.last_changed && (d === 'binary_sensor' || handle) ? relTime(st.last_changed) : '';
       }
       sub.hidden = !sub.textContent;
     });
@@ -134,6 +135,8 @@ Object.assign(GlassFloorplanCard.prototype, {
   /* open windows / doors, unlocked locks, leaks … */
   _isAlert(eid) {
     const st = this._hass.states[eid], d = domainOf(eid), dc = st?.attributes?.device_class;
+    // a window handle: open or tilted
+    if (d === 'sensor' && openingSensor(eid, st)) return ['open', 'tilt'].includes(openState(eid, st));
     if (d === 'binary_sensor') return isOn(st) && ['door', 'window', 'opening', 'garage_door', 'moisture', 'smoke', 'gas', 'carbon_monoxide', 'safety', 'problem', 'tamper', 'lock'].includes(dc);
     if (d === 'lock') return ['unlocked', 'open', 'jammed'].includes(st?.state);
     if (d === 'alarm_control_panel') return st?.state === 'triggered';

@@ -29,6 +29,8 @@ A lamp switches with one tap and its glow fills the room – warm white, cool wh
 
 Layers switch the plan between light, climate, covers, a Roborock vacuum or your own mix, such as *Night = lights + covers + front door lock*.
 
+Window and door contacts sit on their window: an open window glows orange and its sash swings into the room, a tilted one shows its sash slightly inside, in every layer.
+
 <img src="docs/images/vacuum-2x.jpg" alt="The Roborock layer: three rooms picked in order, the menu open with vacuum, vacuum and mop, mop and the suction level, next to Start" width="100%">
 
 <p align="center"><sub>Your <b>Roborock</b>: tap the rooms, choose vacuum, mop or both, press <i>Start</i>.</sub></p>

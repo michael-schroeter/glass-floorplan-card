@@ -10,6 +10,12 @@ function autoDevice(h, id) {
   return d === 'sensor' && st.attributes?.device_class === 'temperature';
 }
 
+/* window and door contacts: they come onto the plan only where their room has a window (or the front door) for them */
+function autoContact(h, id) {
+  const st = h.states?.[id], reg = h.entities?.[id];
+  return !!st && !reg?.hidden && !reg?.entity_category && openingSensor(id, st);
+}
+
 /* A first floor plan from the Home Assistant areas: one room per area (with devices), packed edge to edge,
  * lights / thermostats / covers / media / temperature sensors placed inside. A starting point for the editor. */
 function autoConfig(hass, { lang } = {}) {
@@ -183,11 +189,16 @@ Object.assign(STR.en, {
   ed_duplicate: 'Duplicate', ed_delete: 'Delete',
   ed_furn_drag: 'Drag into a room or click', ed_typicalFurn: 'Add typical furniture', ed_typicalFurnHelp: (n) => `Bed, sofa, kitchen, bath … in ${n} ${pl(n, 'room', 'rooms')} without furniture – change it as you like afterwards.`, ed_furnished: (n, r) => `${n} pieces in ${r} ${pl(r, 'room', 'rooms')}`, ed_furn_lead: 'Purely for the looks: drag a piece into a room or tap it to add it to the selected room. Resize with the handles, R rotates.',
   ed_kind: 'Kind', ed_widthCm: 'Width (cm)', ed_depthCm: 'Depth (cm)', ed_rotate: 'Rotate', ed_moreFurniture: 'Add more',
-  ed_open_lead_window: 'Hover over an outer wall and click – the window snaps onto the wall. Windows let daylight in and show your covers.',
+  ed_open_lead_window: 'Hover over an outer wall and click – the window snaps onto the wall. Windows let daylight in, show your covers and – with a contact – whether they are open.',
   ed_open_lead_door: 'Click on the wall between two rooms. Passages are drawn as glass bridges and show the vacuum its way.',
   ed_open_lead_entrance: 'Click on the wall with your front door. It glows green when the door is opened.',
   ed_open_counts: (w, d, e) => `${w} ${pl(w, 'window', 'windows')} · ${d} ${pl(d, 'passage', 'passages')} · ${e ? 'front door set' : 'no front door'}`,
   ed_lengthCm: 'Length (cm)', ed_open_move: 'Drag it along the wall, the round handles change its length.',
+  ed_openSensor: 'Contact', ed_openSensorHelp: 'Pick its window or door contact – the window then opens on the plan, tilted ones a little. Contacts of the room’s area come first.',
+  ed_openSensorOn: 'Opens on the plan with its contact – in every layer. Tap it there for the contact’s details.',
+  ed_onWindow: 'On a window', ed_onWin_on: 'On', ed_onWin_off: 'Off', ed_onWin_at: (w) => `Shows on the ${w}: open, tilted or closed right there.`,
+  ed_onWin_window: (r) => (r ? `window of ${r}` : 'window'), ed_onWin_door: 'front door', ed_onWin_offHelp: 'Shown as a button in its layers.',
+  ed_onWin_notContact: 'Not a window or door contact – switch on to show it on the nearest window.', ed_onWin_noWin: 'No window in its room yet – draw one under “Windows & doors” and it shows there.',
   ed_ownLayer: 'Own layer', ed_dev_lead: 'The devices of your areas are in their rooms already. Drag them to move, tap them for settings – and drag more from the list onto the plan.', ed_dev_lead0: 'Pick a layer, then drag devices onto the plan. Lamps, sensors and switches get the symbol you choose.',
   ed_dev_noArea: (n) => `${n} ${pl(n, 'room', 'rooms')} without an area – their devices are still missing.`, ed_linkAreas: 'Link areas', ed_autoPlaced: (n) => `${n} ${pl(n, 'device', 'devices')} placed in their rooms`,
   ed_next: (s) => `Next: ${s}`, ed_doneHint: 'Layers, tiles and settings are optional – everything works as it is.',
@@ -252,11 +263,16 @@ Object.assign(STR.de, {
   ed_duplicate: 'Duplizieren', ed_delete: 'Löschen',
   ed_furn_drag: 'In einen Raum ziehen oder antippen', ed_typicalFurn: 'Typische Möbel einsetzen', ed_typicalFurnHelp: (n) => `Bett, Sofa, Küche, Bad … in ${n} ${pl(n, 'Raum', 'Räumen')} ohne Möbel – danach nach Belieben anpassen.`, ed_furnished: (n, r) => `${n} Möbel in ${r} ${pl(r, 'Raum', 'Räumen')}`, ed_furn_lead: 'Rein fürs Auge: Möbel in einen Raum ziehen oder antippen (landet im gewählten Raum). Größe über die Griffe, R dreht.',
   ed_kind: 'Art', ed_widthCm: 'Breite (cm)', ed_depthCm: 'Tiefe (cm)', ed_rotate: 'Drehen', ed_moreFurniture: 'Weitere hinzufügen',
-  ed_open_lead_window: 'Mit der Maus über eine Außenwand fahren und klicken – das Fenster rastet auf der Wand ein. Fenster lassen Tageslicht herein und zeigen die Rollläden.',
+  ed_open_lead_window: 'Mit der Maus über eine Außenwand fahren und klicken – das Fenster rastet auf der Wand ein. Fenster lassen Tageslicht herein, zeigen die Rollläden und – mit Kontakt – ob sie offen sind.',
   ed_open_lead_door: 'Auf die Wand zwischen zwei Räumen klicken. Durchgänge erscheinen als Glasbrücken und zeigen dem Saugroboter den Weg.',
   ed_open_lead_entrance: 'Auf die Wand mit deiner Haustür klicken. Sie leuchtet grün, wenn die Tür geöffnet wurde.',
   ed_open_counts: (w, d, e) => `${w} Fenster · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${e ? 'Haustür gesetzt' : 'keine Haustür'}`,
   ed_lengthCm: 'Länge (cm)', ed_open_move: 'Entlang der Wand ziehen, die runden Griffe ändern die Länge.',
+  ed_openSensor: 'Kontakt', ed_openSensorHelp: 'Wähle den Fenster- oder Türkontakt – das Fenster öffnet sich dann im Plan, gekippt nur ein wenig. Kontakte aus dem Bereich des Raums stehen oben.',
+  ed_openSensorOn: 'Öffnet sich im Plan mit seinem Kontakt – in jeder Ebene. Dort antippen zeigt den Kontakt.',
+  ed_onWindow: 'Am Fenster', ed_onWin_on: 'An', ed_onWin_off: 'Aus', ed_onWin_at: (w) => `Zeigt sich ${w}: offen, gekippt oder zu, direkt dort.`,
+  ed_onWin_window: (r) => (r ? `am Fenster (${r})` : 'am Fenster'), ed_onWin_door: 'an der Haustür', ed_onWin_offHelp: 'Erscheint als Knopf in seinen Ebenen.',
+  ed_onWin_notContact: 'Kein Fenster- oder Türkontakt – einschalten, um ihn am nächsten Fenster zu zeigen.', ed_onWin_noWin: 'In seinem Raum ist noch kein Fenster – zeichne eins unter „Fenster & Türen“, dann zeigt er sich dort.',
   ed_ownLayer: 'Eigene Ebene', ed_dev_lead: 'Die Geräte deiner Bereiche stehen schon in ihren Räumen. Ziehen zum Verschieben, antippen für Einstellungen – weitere aus der Liste auf den Plan ziehen.', ed_dev_lead0: 'Ebene wählen, dann Geräte auf den Plan ziehen. Lampen, Sensoren und Schalter bekommen das Symbol, das du auswählst.',
   ed_dev_noArea: (n) => `${n} ${pl(n, 'Raum', 'Räume')} ohne Bereich – ihre Geräte fehlen noch.`, ed_linkAreas: 'Bereiche zuordnen', ed_autoPlaced: (n) => `${n} ${pl(n, 'Gerät', 'Geräte')} in ihre Räume gesetzt`,
   ed_next: (s) => `Weiter: ${s}`, ed_doneHint: 'Ebenen, Kacheln und Optionen sind optional – es funktioniert schon so.',
