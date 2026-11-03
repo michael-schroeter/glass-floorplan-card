@@ -256,7 +256,7 @@ class GlassFloorplanCard extends HTMLElement {
       : `<i class="pas" style="top:${G.py(s[1])}%;height:${G.ph(s[3] - s[1])}%;left:calc(${G.px(s[0])}% - var(--gap) / 2 + var(--u));width:calc(var(--gap) - 2 * var(--u))"></i>`)).join('');
 
     // window and door contacts sit on their window (15-openings), not as a button
-    const markers = M.ents.filter((e) => e.at && e.plan && e.kind !== 'vacuum' && !e.win).map((e) => this._markerHtml(e)).join('')
+    const markers = M.ents.filter((e) => e.at && e.plan && e.kind !== 'vacuum' && !(e.win && contactOnly(e.entity))).map((e) => this._markerHtml(e)).join('')
       + (M.door?.at ? `<button class="dev door" data-e="__door" data-k="door" style="${G.at(M.door.at)}" aria-label="${esc(M.door.name || t('frontDoor'))}"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${icon('door')}</button>` : '');
     const vac = M.vac ? `<svg class="trail" viewBox="${S.x} ${S.y} ${S.w} ${S.h}" preserveAspectRatio="none"><polyline class="t1" points=""/><polyline class="t2" points=""/></svg>
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';

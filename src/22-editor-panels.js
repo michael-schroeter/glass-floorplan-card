@@ -418,10 +418,11 @@ Object.assign(GfcEditor.prototype, {
       const c = this._c;
       for (const id of o.sens) {
         if (id === v) continue;
-        // a contact that is in a layer of its own stays there as a button, otherwise it leaves the plan
+        // a contact that is in a layer of its own stays there as a button, otherwise it leaves the plan;
+        // a device with a button of its own (door opener, lock …) only leaves the window
         const i = c.entities.findIndex((x) => x.entity === id);
         if (i < 0) continue;
-        if ((c.layers || []).some((l) => l && typeof l === 'object' && [].concat(l.entities || []).includes(id))) c.entities[i].opening = false;
+        if (!contactOnly(id) || (c.layers || []).some((l) => l && typeof l === 'object' && [].concat(l.entities || []).includes(id))) c.entities[i].opening = false;
         else c.entities.splice(i, 1);
       }
       if (!v) return;
@@ -719,14 +720,16 @@ Object.assign(GfcEditor.prototype, {
     I.append(this._fieldEl(t('ed_icon'), grid));
     // window / door contact: on its window – automatic, always or never
     const d = domainOf(e.entity);
-    if (d === 'binary_sensor' || d === 'sensor' || (d === 'cover' && ['window', 'door', 'garage', 'gate'].includes(st?.attributes?.device_class))) {
+    // contacts, and devices that open something: a door opener, a lock, a switch (window drive), a cover
+    if (['binary_sensor', 'sensor', 'button', 'input_button', 'lock', 'switch', 'input_boolean', 'cover'].includes(d)) {
       const v = e.opening === true ? 'on' : e.opening === false ? 'off' : 'auto', w = M?.ents.find((x) => x.entity === e.entity)?.win;
       I.append(this._fieldEl(t('ed_onWindow'), this._segEl([['auto', t('ed_auto')], ['on', t('ed_onWin_on')], ['off', t('ed_onWin_off')]], v, (x) => this._change(() => {
         if (x === 'auto') delete e.opening; else e.opening = x === 'on';
         this._snapToWindow(e);
       }, { keepSel: true }))));
-      const msg = w ? t('ed_onWin_at', w.door ? t('ed_onWin_door') : t('ed_onWin_window', M.byRoom[w.room]?.name || ''))
-        : v === 'off' ? t('ed_onWin_offHelp') : v === 'auto' && !openingSensor(e.entity, st) ? t('ed_onWin_notContact') : t('ed_onWin_noWin');
+      const how = contactOnly(e.entity) ? '' : ` ${t(`ed_onWin_how_${PRESS_DOMAINS.includes(d) ? 'press' : d === 'lock' ? 'lock' : d === 'cover' ? 'cover' : 'switch'}`)}`;
+      const msg = w ? t(how ? 'ed_onWin_atDev' : 'ed_onWin_at', w.door ? t('ed_onWin_door') : t('ed_onWin_window', M.byRoom[w.room]?.name || '')) + how
+        : v === 'off' ? t('ed_onWin_offHelp') : v === 'auto' && !openingSensor(e.entity, st) ? t(contactOnly(e.entity) ? 'ed_onWin_notContact' : 'ed_onWin_device') + how : t('ed_onWin_noWin');
       I.append(this._el(`<p class="small">${esc(msg)}</p>`));
     }
     if (kind === 'light') {

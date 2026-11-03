@@ -83,6 +83,7 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .wsn[data-st="tilt"] .wl, .wsn[data-st="tilt"] .sa { opacity: .85; }
 .wsn[data-st="tilt"] { --ty: calc(var(--sg) * 7 * var(--u)); }
 .wsn.v[data-st="tilt"] { --ty: 0px; --tx: calc(var(--sg) * -7 * var(--u)); }
+.wsn.go .wl, .wsn.go .sa { background: rgb(var(--green)); box-shadow: 0 0 calc(10 * var(--u)) rgba(var(--green), .8), 0 0 calc(26 * var(--u)) rgba(var(--green), .35); }
 .wsn:focus-visible { outline: 2px solid rgba(var(--blue), .9); outline-offset: 2px; border-radius: 6px; }
 
 .room { position: absolute; z-index: 1; border-radius: calc(15 * var(--u)); overflow: hidden; cursor: pointer; outline: none;

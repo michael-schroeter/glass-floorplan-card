@@ -44,21 +44,30 @@ Object.assign(GlassFloorplanCard.prototype, {
   },
   /* "Open · 25 min ago" */
   _openText(e) {
-    const st = this._st(e.entity), s = openState(e.entity, st);
+    const st = this._st(e.entity), s = openState(e.entity, st), d = domainOf(e.entity);
+    // a door opener: "Opened · 20 s ago" for a minute, else when it was last used
+    if (PRESS_DOMAINS.includes(d)) return s === 'open' ? `${t('opened')} · ${relTime(st.state)}` : s === 'na' ? t('offline') : this._stateText(e.entity, st);
     const txt = s === 'na' ? t('offline') : this._stateText(e.entity, st);
     const ago = (s === 'open' || s === 'tilt') && relTime(st.last_changed);
     return ago ? `${txt} · ${ago}` : txt;
   },
 
   _updOpenings() {
+    clearTimeout(this._wsnT);
+    let next = Infinity;
     for (const el of this.shadowRoot.querySelectorAll('.wsn')) {
-      const sts = this._wsnEnts(el).map((e) => openState(e.entity, this._st(e.entity)));
+      const ents = this._wsnEnts(el), sts = ents.map((e) => openState(e.entity, this._st(e.entity)));
       const s = sts.includes('open') ? 'open' : sts.includes('tilt') ? 'tilt' : sts.every((x) => x === 'na') ? 'na' : 'closed';
+      // opened by the door opener (not reported by a contact): green like the front door, closed again after a minute
+      const press = ents.filter((x, i) => sts[i] === 'open' && PRESS_DOMAINS.includes(domainOf(x.entity)));
+      el.classList.toggle('go', press.length > 0 && press.length === sts.filter((x) => x === 'open').length);
+      for (const x of press) next = Math.min(next, new Date(this._st(x.entity).state).getTime() + OPENER_MS - Date.now());
       const e = this._wsnMain(el);
       el.setAttribute('aria-label', `${this._name(e)}: ${this._openText(e)}`);
       if (el.dataset.st === s) continue;
       el.dataset.st = s;
       el.style.setProperty('--a', s === 'open' ? (el.classList.contains('dr') ? SASH_DEG.door : SASH_DEG.open) : 0);
     }
+    if (next < Infinity) this._wsnT = setTimeout(() => this._update(true), Math.max(0, next) + 250);
   },
 });

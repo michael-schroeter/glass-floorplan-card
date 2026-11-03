@@ -73,10 +73,15 @@ function openingSensor(eid, st) {
   if (words.some((w) => TILT_WORDS.includes(w))) return true;
   return words.some((w) => w === 'open' || w === 'closed') && /window|fenster|door|t(ü|ue)r|handle|griff/.test(`${eid} ${a.friendly_name || ''}`.toLowerCase());
 }
-/* 'open' | 'tilt' | 'closed' | 'na' */
+/* devices that do something (a door opener, a lock, a switch, a cover) keep their button on the plan when they are put on a
+ * window / door; contacts only show there */
+const contactOnly = (eid) => ['binary_sensor', 'sensor'].includes(domainOf(eid));
+const OPENER_MS = 60000;
+/* 'open' | 'tilt' | 'closed' | 'na' – a door opener (button) counts as open for a minute after it was pressed */
 function openState(eid, st) {
   if (unavailable(st)) return 'na';
   const d = domainOf(eid), s = String(st.state).toLowerCase();
+  if (d === 'button' || d === 'input_button') { const age = isTime(st.state) ? Date.now() - new Date(st.state).getTime() : Infinity; return age >= 0 && age < OPENER_MS ? 'open' : 'closed'; }
   if (d === 'binary_sensor') return s === 'on' ? 'open' : 'closed';
   if (d === 'cover') return s === 'closed' ? 'closed' : 'open';
   if (TILT_WORDS.includes(s)) return 'tilt';
@@ -347,7 +352,8 @@ function assignOpenings(M, hass) {
     if (e.opening !== true && !openingSensor(e.entity, st)) continue;
     const p = e.at || (M.byRoom[e.room] && center(M.byRoom[e.room].r));
     if (!p) continue;
-    const dc = st?.attributes?.device_class, door = dc === 'door' || dc === 'garage_door';
+    // a door contact, a door opener or a lock: the front door first
+    const dc = st?.attributes?.device_class, door = dc === 'door' || dc === 'garage_door' || ['button', 'input_button', 'lock'].includes(domainOf(e.entity));
     let best = null, bd = Infinity;
     for (const o of ops) {
       if (e.opening !== true && !o.rooms.includes(e.room)) continue;
