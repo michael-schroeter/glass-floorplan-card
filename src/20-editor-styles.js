@@ -250,6 +250,7 @@ dialog.ed[open] { display: block; }
 .edrag-ghost.sq { border-radius: 12px; }
 .edrag-ghost.pill { width: auto; height: 36px; margin: -18px 0 0 -18px; padding: 0 14px 0 10px; gap: 7px; display: flex; border-radius: 99px; font-size: 13.5px; font-weight: 650; color: #0c0c0e; }
 .edrag-ghost.pill .ic { font-size: 17px; }
+.edrag-src { opacity: .4; }
 .echip.area { cursor: grab; touch-action: none; }
 .echip.area small { margin-left: 2px; padding: 1px 6px; border-radius: 99px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, .12); color: var(--t1); }
 .echip.area.done { color: rgb(var(--green)); background: rgba(var(--green), .1); box-shadow: inset 0 0 0 1px rgba(var(--green), .3); }

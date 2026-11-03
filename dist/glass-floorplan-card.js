@@ -7540,6 +7540,7 @@ dialog.ed[open] { display: block; }
 .edrag-ghost.sq { border-radius: 12px; }
 .edrag-ghost.pill { width: auto; height: 36px; margin: -18px 0 0 -18px; padding: 0 14px 0 10px; gap: 7px; display: flex; border-radius: 99px; font-size: 13.5px; font-weight: 650; color: #0c0c0e; }
 .edrag-ghost.pill .ic { font-size: 17px; }
+.edrag-src { opacity: .4; }
 .echip.area { cursor: grab; touch-action: none; }
 .echip.area small { margin-left: 2px; padding: 1px 6px; border-radius: 99px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, .12); color: var(--t1); }
 .echip.area.done { color: rgb(var(--green)); background: rgba(var(--green), .1); box-shadow: inset 0 0 0 1px rgba(var(--green), .3); }
@@ -8990,6 +8991,7 @@ class GfcEditor extends HTMLElement {
       if (!st.ghost && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 6) {
         st.ghost = mk('div', `edrag-ghost${square ? ' sq' : ''}${extra.label ? ' pill' : ''}`, `${icon(ghostIcon)}${extra.label ? `<span>${esc(extra.label)}</span>` : ''}`);
         this.$('.ew').append(st.ghost);
+        el.classList.add('edrag-src');
       }
       if (st.ghost) {
         st.ghost.style.left = `${e.clientX}px`; st.ghost.style.top = `${e.clientY}px`;
@@ -9001,7 +9003,7 @@ class GfcEditor extends HTMLElement {
       const g = st.ghost;
       st = null;
       if (!g) return;
-      g.remove();
+      g.remove(); el.classList.remove('edrag-src');
       extra.hover?.(null);
       const r = this._cv.getBoundingClientRect();
       if (!cancel && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) onDrop(this._pt(e).map(r0));
@@ -9300,6 +9302,8 @@ Object.assign(GfcEditor.prototype, {
 
   /* ---------------------------------------------------------------- small UI builders */
   _el(html, cls = '') { return mk('div', cls, html); },
+  /* while something is dragged from a list: the room under the pointer lights up */
+  _hoverRoom(pt) { const i = pt ? this._c.rooms.findIndex((r) => inRect(r.rect, pt)) : -1; const v = i >= 0 ? i : null; if (v !== this._dropRoom) { this._dropRoom = v; this._draw(); } },
   _fieldEl(label, ctl, row) {
     const f = mk('div', `efield${row ? ' row' : ''}`, label ? `<label>${esc(label)}</label>` : '');
     f.append(ctl);
@@ -9502,7 +9506,7 @@ Object.assign(GfcEditor.prototype, {
         if (i >= 0) this._assignArea(i, a.area_id); else this._toast(t('ed_areaDropRoom'));
       }, 'plan', false, {
         label: a.name,
-        hover: (pt) => { const i = pt ? this._c.rooms.findIndex((r) => inRect(r.rect, pt)) : -1; const v = i >= 0 ? i : null; if (v !== this._dropRoom) { this._dropRoom = v; this._draw(); } },
+        hover: (pt) => this._hoverRoom(pt),
       });
       b.addEventListener('click', () => { if (this._s?.t === 'room') this._assignArea(this._s.i, a.area_id); else this._toast(t('ed_areaDrag')); });
       chips.append(b);
@@ -9844,7 +9848,7 @@ Object.assign(GfcEditor.prototype, {
     const row = this._el(`<span class="ei">${icon(ic)}</span><div><b>${esc(this._fname(id))}</b><small>${esc(id)}</small></div><button class="eadd" title="${esc(isPlaced ? t('ed_showOnPlan') : t('ed_add'))}">${icon(isPlaced && inL ? 'check' : 'plus')}</button>`, `erow${isPlaced ? ' placed' : ''}`);
     const sel = this._s?.t === 'ent' && this._c.entities[this._s.i]?.entity === id;
     row.classList.toggle('on', sel);
-    this._dragFrom(row, (at) => this._placeEntity(id, at), ic);
+    this._dragFrom(row, (at) => this._placeEntity(id, at), ic, false, { label: this._fname(id), hover: (pt) => this._hoverRoom(pt) });
     row.querySelector('.eadd').addEventListener('click', () => {
       const i = this._c.entities.findIndex((e) => e.entity === id && e.at);
       if (i >= 0 && inL) { this._select({ t: 'ent', i }); return; }
@@ -10415,7 +10419,7 @@ Object.assign(STR.en, {
   ed_start_lead: 'Three ways to your floor plan – take the one that is easiest for you.', ed_sketch_lead: 'Set the scale, then let the rooms be found – or trace them yourself under Rooms.',
   ed_sketch_lead2: 'A picture under the plan helps to trace or check it. Or start again another way.', ed_otherWays: 'Other ways', ed_fromAreasSub: 'One room per area – you only arrange them',
   ed_step_scale: '1 · Scale', ed_step_rooms: '2 · Rooms', ed_look: 'Look', ed_measureHelp: 'Measure: click the start and the end of a wall whose length you know – or enter the width of the picture.',
-  ed_ulReplace: 'Replace picture', ed_ulPick: 'Trace a photo or sketch', ed_ulDrop: 'Choose a picture or drop it here – JPG, PNG, screenshot', ed_opacity: 'Visibility', ed_ulWidth: 'Width of the picture (m)',
+  ed_ulReplace: 'Replace picture', ed_ulPick: 'Add a photo or sketch', ed_ulDrop: 'Choose a picture or drop it here – JPG, PNG, screenshot', ed_opacity: 'Visibility', ed_ulWidth: 'Width of the picture (m)',
   ed_measure_len: 'How long is this distance in reality (m)?', ed_apply: 'Apply', ed_measure: 'Measure', ed_measure_stop: 'Stop measuring', ed_ulRemove: 'Remove template',
   ed_ulNote: 'The template is only kept in this browser and never shown on the dashboard.', ed_quick: 'Quick start', ed_fromAreas: 'Rooms from Home Assistant areas',
   ed_example: 'Load example flat', ed_exampleLoaded: 'Example loaded', ed_clear: 'Start over', ed_claudeTip: 'Tip: hard-to-read photo or sketch? The Claude skill from the project page turns it into a floor plan file for “Import”.',
@@ -10489,7 +10493,7 @@ Object.assign(STR.de, {
   ed_start_lead: 'Drei Wege zu deinem Grundriss – nimm den, der für dich am einfachsten ist.', ed_sketch_lead: 'Maßstab setzen, dann die Räume erkennen lassen – oder unter „Räume“ selbst nachzeichnen.',
   ed_sketch_lead2: 'Ein Bild unter dem Plan hilft beim Nachzeichnen und Prüfen. Oder fang auf einem anderen Weg neu an.', ed_otherWays: 'Andere Wege', ed_fromAreasSub: 'Ein Raum je Bereich – du ordnest sie nur noch an',
   ed_step_scale: '1 · Maßstab', ed_step_rooms: '2 · Räume', ed_look: 'Darstellung', ed_measureHelp: 'Ausmessen: Anfang und Ende einer Wand anklicken, deren Länge du kennst – oder die Breite des Bildes eingeben.',
-  ed_ulReplace: 'Bild ersetzen', ed_ulPick: 'Foto oder Skizze nachzeichnen', ed_ulDrop: 'Bild wählen oder hierher ziehen – JPG, PNG, Screenshot', ed_opacity: 'Sichtbarkeit', ed_ulWidth: 'Breite des Bildes (m)',
+  ed_ulReplace: 'Bild ersetzen', ed_ulPick: 'Foto oder Skizze hinzufügen', ed_ulDrop: 'Bild wählen oder hierher ziehen – JPG, PNG, Screenshot', ed_opacity: 'Sichtbarkeit', ed_ulWidth: 'Breite des Bildes (m)',
   ed_measure_len: 'Wie lang ist diese Strecke in echt (m)?', ed_apply: 'Übernehmen', ed_measure: 'Ausmessen', ed_measure_stop: 'Messen beenden', ed_ulRemove: 'Vorlage entfernen',
   ed_ulNote: 'Die Vorlage bleibt nur in diesem Browser und erscheint nie im Dashboard.', ed_quick: 'Schnellstart', ed_fromAreas: 'Räume aus Home-Assistant-Bereichen',
   ed_example: 'Beispielwohnung laden', ed_exampleLoaded: 'Beispiel geladen', ed_clear: 'Neu beginnen', ed_claudeTip: 'Tipp: Schwer lesbares Foto oder Skizze? Der Claude-Skill von der Projektseite macht daraus eine Grundriss-Datei zum Importieren.',

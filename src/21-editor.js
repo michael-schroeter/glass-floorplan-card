@@ -1406,6 +1406,7 @@ class GfcEditor extends HTMLElement {
       if (!st.ghost && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 6) {
         st.ghost = mk('div', `edrag-ghost${square ? ' sq' : ''}${extra.label ? ' pill' : ''}`, `${icon(ghostIcon)}${extra.label ? `<span>${esc(extra.label)}</span>` : ''}`);
         this.$('.ew').append(st.ghost);
+        el.classList.add('edrag-src');
       }
       if (st.ghost) {
         st.ghost.style.left = `${e.clientX}px`; st.ghost.style.top = `${e.clientY}px`;
@@ -1417,7 +1418,7 @@ class GfcEditor extends HTMLElement {
       const g = st.ghost;
       st = null;
       if (!g) return;
-      g.remove();
+      g.remove(); el.classList.remove('edrag-src');
       extra.hover?.(null);
       const r = this._cv.getBoundingClientRect();
       if (!cancel && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) onDrop(this._pt(e).map(r0));

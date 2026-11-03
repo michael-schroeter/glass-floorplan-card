@@ -69,6 +69,8 @@ Object.assign(GfcEditor.prototype, {
 
   /* ---------------------------------------------------------------- small UI builders */
   _el(html, cls = '') { return mk('div', cls, html); },
+  /* while something is dragged from a list: the room under the pointer lights up */
+  _hoverRoom(pt) { const i = pt ? this._c.rooms.findIndex((r) => inRect(r.rect, pt)) : -1; const v = i >= 0 ? i : null; if (v !== this._dropRoom) { this._dropRoom = v; this._draw(); } },
   _fieldEl(label, ctl, row) {
     const f = mk('div', `efield${row ? ' row' : ''}`, label ? `<label>${esc(label)}</label>` : '');
     f.append(ctl);
@@ -271,7 +273,7 @@ Object.assign(GfcEditor.prototype, {
         if (i >= 0) this._assignArea(i, a.area_id); else this._toast(t('ed_areaDropRoom'));
       }, 'plan', false, {
         label: a.name,
-        hover: (pt) => { const i = pt ? this._c.rooms.findIndex((r) => inRect(r.rect, pt)) : -1; const v = i >= 0 ? i : null; if (v !== this._dropRoom) { this._dropRoom = v; this._draw(); } },
+        hover: (pt) => this._hoverRoom(pt),
       });
       b.addEventListener('click', () => { if (this._s?.t === 'room') this._assignArea(this._s.i, a.area_id); else this._toast(t('ed_areaDrag')); });
       chips.append(b);
@@ -613,7 +615,7 @@ Object.assign(GfcEditor.prototype, {
     const row = this._el(`<span class="ei">${icon(ic)}</span><div><b>${esc(this._fname(id))}</b><small>${esc(id)}</small></div><button class="eadd" title="${esc(isPlaced ? t('ed_showOnPlan') : t('ed_add'))}">${icon(isPlaced && inL ? 'check' : 'plus')}</button>`, `erow${isPlaced ? ' placed' : ''}`);
     const sel = this._s?.t === 'ent' && this._c.entities[this._s.i]?.entity === id;
     row.classList.toggle('on', sel);
-    this._dragFrom(row, (at) => this._placeEntity(id, at), ic);
+    this._dragFrom(row, (at) => this._placeEntity(id, at), ic, false, { label: this._fname(id), hover: (pt) => this._hoverRoom(pt) });
     row.querySelector('.eadd').addEventListener('click', () => {
       const i = this._c.entities.findIndex((e) => e.entity === id && e.at);
       if (i >= 0 && inL) { this._select({ t: 'ent', i }); return; }
