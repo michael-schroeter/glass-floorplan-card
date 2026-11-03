@@ -811,7 +811,7 @@ class GfcEditor extends HTMLElement {
       const m = el.dataset.m;
       pick(m ? { t: m } : { t: 'ent', i: +el.dataset.i }, 'devices');
       // a contact on a window is dragged from its window (where its handle is)
-      const e0 = !m && this._c.entities[+el.dataset.i], win = e0 && contactOnly(e0.entity) && this._winOf(e0.entity);
+      const e0 = !m && this._c.entities[+el.dataset.i], win = e0 && this._winOf(e0.entity);
       const at = m === 'door' ? this._c.door.at : m === 'dock' ? this._c.vacuum.dock : win ? openingSpot(win, 0) : e0.at;
       this._d = { ...base, mode: 'move-mk', orig: [...at], tap: true };
       return;
@@ -1262,9 +1262,9 @@ class GfcEditor extends HTMLElement {
   }
   /* the window / front door a device shows on (in the configuration's coordinates) */
   _winOf(eid) { return this._model()?.ents.find((x) => x.entity === eid)?.win || null; }
-  /* a contact on a window sits right inside it – then it stays on that window (a device with a button stays where it is) */
+  /* a device on a window sits right inside it – then it stays on that window */
   _snapToWindow(e) {
-    const w = e && contactOnly(e.entity) && this._winOf(e.entity);
+    const w = e && this._winOf(e.entity);
     if (w) e.at = openingSpot(w);
   }
   /* hints of a floor plan file in these rooms (a lamp, the TV … with a position) → devices of the same kind; where there

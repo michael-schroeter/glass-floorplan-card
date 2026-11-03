@@ -419,7 +419,7 @@ Object.assign(GfcEditor.prototype, {
       for (const id of o.sens) {
         if (id === v) continue;
         // a contact that is in a layer of its own stays there as a button, otherwise it leaves the plan;
-        // a device with a button of its own (door opener, lock …) only leaves the window
+        // a device that opens something (door opener, lock …) becomes a button again
         const i = c.entities.findIndex((x) => x.entity === id);
         if (i < 0) continue;
         if (!contactOnly(id) || (c.layers || []).some((l) => l && typeof l === 'object' && [].concat(l.entities || []).includes(id))) c.entities[i].opening = false;

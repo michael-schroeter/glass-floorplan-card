@@ -503,8 +503,7 @@ function openingSensor(eid, st) {
   if (words.some((w) => TILT_WORDS.includes(w))) return true;
   return words.some((w) => w === 'open' || w === 'closed') && /window|fenster|door|t(ü|ue)r|handle|griff/.test(`${eid} ${a.friendly_name || ''}`.toLowerCase());
 }
-/* devices that do something (a door opener, a lock, a switch, a cover) keep their button on the plan when they are put on a
- * window / door; contacts only show there */
+/* contacts only report; the other devices on a window / door (a door opener, a lock, a switch, a cover) open something */
 const contactOnly = (eid) => ['binary_sensor', 'sensor'].includes(domainOf(eid));
 const OPENER_MS = 60000;
 /* 'open' | 'tilt' | 'closed' | 'na' – a door opener (button) counts as open for a minute after it was pressed */
@@ -2062,9 +2061,10 @@ class GlassFloorplanCard extends HTMLElement {
       ? `<i class="pas" style="left:${G.px(s[0])}%;width:${G.pw(s[2] - s[0])}%;top:calc(${G.py(s[1])}% - var(--gap) / 2 + var(--u));height:calc(var(--gap) - 2 * var(--u))"></i>`
       : `<i class="pas" style="top:${G.py(s[1])}%;height:${G.ph(s[3] - s[1])}%;left:calc(${G.px(s[0])}% - var(--gap) / 2 + var(--u));width:calc(var(--gap) - 2 * var(--u))"></i>`)).join('');
 
-    // window and door contacts sit on their window (15-openings), not as a button
-    const markers = M.ents.filter((e) => e.at && e.plan && e.kind !== 'vacuum' && !(e.win && contactOnly(e.entity))).map((e) => this._markerHtml(e)).join('')
-      + (M.door?.at ? `<button class="dev door" data-e="__door" data-k="door" style="${G.at(M.door.at)}" aria-label="${esc(M.door.name || t('frontDoor'))}"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${icon('door')}</button>` : '');
+    // what is put on a window / door shows there (15-openings), not as a button
+    const markers = M.ents.filter((e) => e.at && e.plan && e.kind !== 'vacuum' && !e.win).map((e) => this._markerHtml(e)).join('')
+      // the front door's own button is gone as well when its door opener is put on the door
+      + (M.door?.at && !M.ents.some((e) => e.win && e.entity === M.door.open) ? `<button class="dev door" data-e="__door" data-k="door" style="${G.at(M.door.at)}" aria-label="${esc(M.door.name || t('frontDoor'))}"><i class="rip"></i><i class="halo"></i><i class="disc"></i>${icon('door')}</button>` : '');
     const vac = M.vac ? `<svg class="trail" viewBox="${S.x} ${S.y} ${S.w} ${S.h}" preserveAspectRatio="none"><polyline class="t1" points=""/><polyline class="t2" points=""/></svg>
       ${M.vac.dock ? `<i class="dockm" style="${G.at(M.vac.dock)}"></i>` : ''}<div class="bot" style="${G.at(M.vac.dock || center(M.rooms[0]?.r || [0, 0, 0, 0]))}"><i class="bp"></i><i class="bd"></i></div>` : '';
     // layer bar: in the plan (upright or lying), on a phone else at the bottom of the screen like a tab bar
@@ -8412,7 +8412,7 @@ class GfcEditor extends HTMLElement {
       const m = el.dataset.m;
       pick(m ? { t: m } : { t: 'ent', i: +el.dataset.i }, 'devices');
       // a contact on a window is dragged from its window (where its handle is)
-      const e0 = !m && this._c.entities[+el.dataset.i], win = e0 && contactOnly(e0.entity) && this._winOf(e0.entity);
+      const e0 = !m && this._c.entities[+el.dataset.i], win = e0 && this._winOf(e0.entity);
       const at = m === 'door' ? this._c.door.at : m === 'dock' ? this._c.vacuum.dock : win ? openingSpot(win, 0) : e0.at;
       this._d = { ...base, mode: 'move-mk', orig: [...at], tap: true };
       return;
@@ -8863,9 +8863,9 @@ class GfcEditor extends HTMLElement {
   }
   /* the window / front door a device shows on (in the configuration's coordinates) */
   _winOf(eid) { return this._model()?.ents.find((x) => x.entity === eid)?.win || null; }
-  /* a contact on a window sits right inside it – then it stays on that window (a device with a button stays where it is) */
+  /* a device on a window sits right inside it – then it stays on that window */
   _snapToWindow(e) {
-    const w = e && contactOnly(e.entity) && this._winOf(e.entity);
+    const w = e && this._winOf(e.entity);
     if (w) e.at = openingSpot(w);
   }
   /* hints of a floor plan file in these rooms (a lamp, the TV … with a position) → devices of the same kind; where there
@@ -9668,7 +9668,7 @@ Object.assign(GfcEditor.prototype, {
       for (const id of o.sens) {
         if (id === v) continue;
         // a contact that is in a layer of its own stays there as a button, otherwise it leaves the plan;
-        // a device with a button of its own (door opener, lock …) only leaves the window
+        // a device that opens something (door opener, lock …) becomes a button again
         const i = c.entities.findIndex((x) => x.entity === id);
         if (i < 0) continue;
         if (!contactOnly(id) || (c.layers || []).some((l) => l && typeof l === 'object' && [].concat(l.entities || []).includes(id))) c.entities[i].opening = false;
@@ -10456,11 +10456,11 @@ Object.assign(STR.en, {
   ed_lengthCm: 'Length (cm)', ed_open_move: 'Drag it along the wall, the round handles change its length.',
   ed_openSensor: 'Contact', ed_openSensorHelp: 'Pick its window or door contact – the window then opens on the plan, tilted ones a little. Contacts of the room’s area come first.',
   ed_openSensorOn: 'Opens on the plan with its contact – in every layer. Tap it there for the contact’s details.',
-  ed_onWindow: 'On a window', ed_onWin_on: 'On', ed_onWin_off: 'Off', ed_onWin_at: (w) => `Shows on the ${w}: open, tilted or closed right there.`, ed_onWin_atDev: (w) => `Shows on the ${w}.`,
-  ed_onWin_window: (r) => (r ? `window of ${r}` : 'window'), ed_onWin_door: 'front door', ed_onWin_offHelp: 'Shown as a button in its layers.',
+  ed_onWindow: 'Assign to window / door (open/closed sensor)', ed_onWin_on: 'On', ed_onWin_off: 'Off', ed_onWin_at: (w) => `Shows on the ${w}: open, tilted or closed right there.`, ed_onWin_atDev: (w) => `Shows on the ${w}.`,
+  ed_onWin_window: (r) => (r ? `window of ${r}` : 'window'), ed_onWin_door: 'front door', ed_onWin_offHelp: 'Shown as a round button in its layers.',
   ed_onWin_notContact: 'Not a window or door contact – switch on to show it on the nearest window.',
-  ed_onWin_device: 'Not a contact – switch on to show on the front door or the nearest window what it does.', ed_onWin_how_press: 'After it was pressed the door swings open in green for a minute; its button stays on the plan.',
-  ed_onWin_how_lock: 'Open when the lock reports “open”; its button stays on the plan.', ed_onWin_how_switch: 'Open while it is on (e.g. a window drive); its button stays on the plan.', ed_onWin_how_cover: 'Open unless it is closed; its button stays on the plan.', ed_onWin_noWin: 'No window in its room yet – draw one under “Windows & doors” and it shows there.',
+  ed_onWin_device: 'Not a contact – switch on to show on the front door or the nearest window what it does.', ed_onWin_how_press: 'After it was pressed the door swings open in green for a minute. Tap the door for its details.',
+  ed_onWin_how_lock: 'Open when the lock reports “open”.', ed_onWin_how_switch: 'Open while it is on (e.g. a window drive).', ed_onWin_how_cover: 'Open unless it is closed.', ed_onWin_noWin: 'No window in its room yet – draw one under “Windows & doors” and it shows there.',
   ed_ownLayer: 'Own layer', ed_dev_lead: 'The devices of your areas are in their rooms already. Drag them to move, tap them for settings – and drag more from the list onto the plan.', ed_dev_lead0: 'Pick a layer, then drag devices onto the plan. Lamps, sensors and switches get the symbol you choose.',
   ed_dev_noArea: (n) => `${n} ${pl(n, 'room', 'rooms')} without an area – their devices are still missing.`, ed_linkAreas: 'Link areas', ed_autoPlaced: (n) => `${n} ${pl(n, 'device', 'devices')} placed in their rooms`,
   ed_next: (s) => `Next: ${s}`, ed_doneHint: 'Layers, tiles and settings are optional – everything works as it is.',
@@ -10532,11 +10532,11 @@ Object.assign(STR.de, {
   ed_lengthCm: 'Länge (cm)', ed_open_move: 'Entlang der Wand ziehen, die runden Griffe ändern die Länge.',
   ed_openSensor: 'Kontakt', ed_openSensorHelp: 'Wähle den Fenster- oder Türkontakt – das Fenster öffnet sich dann im Plan, gekippt nur ein wenig. Kontakte aus dem Bereich des Raums stehen oben.',
   ed_openSensorOn: 'Öffnet sich im Plan mit seinem Kontakt – in jeder Ebene. Dort antippen zeigt den Kontakt.',
-  ed_onWindow: 'Am Fenster', ed_onWin_on: 'An', ed_onWin_off: 'Aus', ed_onWin_at: (w) => `Zeigt sich ${w}: offen, gekippt oder zu, direkt dort.`, ed_onWin_atDev: (w) => `Zeigt sich ${w}.`,
-  ed_onWin_window: (r) => (r ? `am Fenster (${r})` : 'am Fenster'), ed_onWin_door: 'an der Haustür', ed_onWin_offHelp: 'Erscheint als Knopf in seinen Ebenen.',
+  ed_onWindow: 'Fenster/Tür zuordnen (Offen/Zu-Sensor)', ed_onWin_on: 'An', ed_onWin_off: 'Aus', ed_onWin_at: (w) => `Zeigt sich ${w}: offen, gekippt oder zu, direkt dort.`, ed_onWin_atDev: (w) => `Zeigt sich ${w}.`,
+  ed_onWin_window: (r) => (r ? `am Fenster (${r})` : 'am Fenster'), ed_onWin_door: 'an der Haustür', ed_onWin_offHelp: 'Erscheint als runder Knopf in seinen Ebenen.',
   ed_onWin_notContact: 'Kein Fenster- oder Türkontakt – einschalten, um ihn am nächsten Fenster zu zeigen.',
-  ed_onWin_device: 'Kein Kontakt – einschalten, um an der Haustür bzw. am nächsten Fenster zu zeigen, was es tut.', ed_onWin_how_press: 'Nach dem Auslösen schwingt die Tür eine Minute lang grün auf; der Knopf bleibt im Plan.',
-  ed_onWin_how_lock: 'Offen, wenn das Schloss „geöffnet“ meldet; der Knopf bleibt im Plan.', ed_onWin_how_switch: 'Offen, solange er an ist (z. B. ein Fensterantrieb); der Knopf bleibt im Plan.', ed_onWin_how_cover: 'Offen, außer wenn er geschlossen ist; der Knopf bleibt im Plan.', ed_onWin_noWin: 'In seinem Raum ist noch kein Fenster – zeichne eins unter „Fenster & Türen“, dann zeigt er sich dort.',
+  ed_onWin_device: 'Kein Kontakt – einschalten, um an der Haustür bzw. am nächsten Fenster zu zeigen, was es tut.', ed_onWin_how_press: 'Nach dem Auslösen schwingt die Tür eine Minute lang grün auf. Die Tür antippen zeigt das Gerät.',
+  ed_onWin_how_lock: 'Offen, wenn das Schloss „geöffnet“ meldet.', ed_onWin_how_switch: 'Offen, solange er an ist (z. B. ein Fensterantrieb).', ed_onWin_how_cover: 'Offen, außer wenn er geschlossen ist.', ed_onWin_noWin: 'In seinem Raum ist noch kein Fenster – zeichne eins unter „Fenster & Türen“, dann zeigt er sich dort.',
   ed_ownLayer: 'Eigene Ebene', ed_dev_lead: 'Die Geräte deiner Bereiche stehen schon in ihren Räumen. Ziehen zum Verschieben, antippen für Einstellungen – weitere aus der Liste auf den Plan ziehen.', ed_dev_lead0: 'Ebene wählen, dann Geräte auf den Plan ziehen. Lampen, Sensoren und Schalter bekommen das Symbol, das du auswählst.',
   ed_dev_noArea: (n) => `${n} ${pl(n, 'Raum', 'Räume')} ohne Bereich – ihre Geräte fehlen noch.`, ed_linkAreas: 'Bereiche zuordnen', ed_autoPlaced: (n) => `${n} ${pl(n, 'Gerät', 'Geräte')} in ihre Räume gesetzt`,
   ed_next: (s) => `Weiter: ${s}`, ed_doneHint: 'Ebenen, Kacheln und Optionen sind optional – es funktioniert schon so.',

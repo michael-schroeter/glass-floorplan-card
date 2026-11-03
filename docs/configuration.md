@@ -23,9 +23,9 @@ Everything can be set in the floor plan editor. This page walks through it and i
 A window or door contact shows **on its window**, not as a button: when the window is open, its frame glows orange and the sash swings into the room (a wide window as two sashes, the front door wide open). A tilted window shows its sash a little inside, parallel to the frame. This works in every layer. Tap the window for the contact's details.
 
 - **Automatic**: a `binary_sensor` with the device class `window`, `door`, `garage_door` or `opening`, or a handle sensor that reports `open` / `tilted` / `closed`, sits on the drawn window (or front door) nearest to it in its room. A door contact prefers the front door, a window contact a window. When the editor places the devices of your areas, it puts contacts straight onto a free window of their room.
-- **By hand**: in the editor, tap a window and choose its *Contact*, or drag a contact onto another window. In a device's settings, *On a window* is *Automatic*, *On* (any entity, e.g. a sensor without a device class, onto the nearest window) or *Off* (a normal button in its layers). In YAML that is `opening: true` / `opening: false`.
+- **By hand**: in the editor, tap a window and choose its *Contact*, or drag a contact onto another window. In a device's settings, *Assign to window / door* is *Automatic*, *On* (any entity, e.g. a sensor without a device class, onto the nearest window) or *Off* (a normal button in its layers). In YAML that is `opening: true` / `opening: false`.
 - A contact in a room without a drawn window stays a button. Draw the window under **Windows & doors** and it moves there.
-- **Devices that open something** can show there too (*On*): a door opener (button) swings the door open in green for a minute after it was pressed, a lock while it reports *open*, a switch (e.g. a window drive) while it is on. Unlike contacts they keep their button on the plan.
+- **Devices that open something** can show there too (*On*): a door opener (button) swings the door open in green for a minute after it was pressed, a lock while it reports *open*, a switch (e.g. a window drive) while it is on. Like contacts they show only there, without a round button.
 
 ## Modes
 
@@ -175,7 +175,7 @@ mobile:
 | `beams` | 1–6 light cones (spots) instead of a round glow |
 | `reach` | Glow radius in cm |
 | `plan: false` | No button on the plan (glow and pop-up tile only) |
-| `opening` | Window and door contacts: shown on the nearest window / front door of their room automatically. `true` puts any entity there (a door opener, lock or switch keeps its button as well), `false` keeps it a button. |
+| `opening` | Window and door contacts: shown on the nearest window / front door of their room automatically. `true` puts any entity there (door opener, lock, switch …), `false` keeps it a round button. |
 | `tap_action`, `hold_action`, `double_tap_action` | What tapping, holding and double tapping the button do, in [Home Assistant's action schema](https://www.home-assistant.io/dashboards/actions/): `toggle`, `more-info`, `navigate`, `url`, `perform-action`, `assist`, `fire-dom-event`, `none`, each with an optional `confirmation`. Without them: a tap switches lamps and switches, moves covers, runs scenes and opens the room for everything else; holding opens the room. A hold action also applies in the room pop-up (instead of the device page). |
 
 | Tile option | Meaning |

@@ -73,8 +73,7 @@ function openingSensor(eid, st) {
   if (words.some((w) => TILT_WORDS.includes(w))) return true;
   return words.some((w) => w === 'open' || w === 'closed') && /window|fenster|door|t(ü|ue)r|handle|griff/.test(`${eid} ${a.friendly_name || ''}`.toLowerCase());
 }
-/* devices that do something (a door opener, a lock, a switch, a cover) keep their button on the plan when they are put on a
- * window / door; contacts only show there */
+/* contacts only report; the other devices on a window / door (a door opener, a lock, a switch, a cover) open something */
 const contactOnly = (eid) => ['binary_sensor', 'sensor'].includes(domainOf(eid));
 const OPENER_MS = 60000;
 /* 'open' | 'tilt' | 'closed' | 'na' – a door opener (button) counts as open for a minute after it was pressed */
