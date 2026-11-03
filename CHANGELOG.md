@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0
+
+Everything from v0.2.0 keeps working – updating adds to your card, your floor plan stays as it is.
+
+**New**
+- **Window and door contacts on their window**: a contact (`binary_sensor` of class `window` / `door` / `garage_door` / `opening`, or a handle sensor with open / tilted / closed) shows on the nearest drawn window or the front door of its room instead of as a button. Open = the frame glows orange and the sash swings into the room, tilted = the sash sits a little inside. In every layer; tap for the contact's details
+- **Door openers, locks and switches** can show on a door or window too (*On a window*: On): a door opener swings the door open in green for a minute after it was pressed, a lock while it reports open, a switch (e.g. a window drive) while it is on. They keep their button on the plan
+- `opening: true | false` per entity to put any entity on a window or keep it a button
+
+**Editor**
+- *On a window*: Automatic / On / Off in the device settings, a **Contact** field on every window and the front door, drag a contact onto another window; contacts of linked areas go onto free windows by themselves
+- Dragging a device from the list onto the plan now shows clearly where it goes: the room under the pointer lights up, the device's name travels with the pointer and its row fades while it is carried
+- "Trace a photo or sketch" is now **Add a photo or sketch** – draw the rooms on it yourself or let *Find rooms* detect them
+
+**Fixed**
+- A contact that only appears after the plan was built (Home Assistant still starting) now moves onto its window by itself
+- Relay inputs that report their switch input as an "opening" are no longer put on the front door when the editor places devices
+
 ## 0.2.0
 
 Everything from v0.1.0 keeps working – updating adds to your card, your floor plan stays as it is.
