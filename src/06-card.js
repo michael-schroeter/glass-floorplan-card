@@ -936,8 +936,9 @@ class GlassFloorplanCard extends HTMLElement {
     const door = this._mk.__door, M = this._M;
     if (M.door) {
       const ds = h.states[M.door.open];
-      const age = ds && isTime(ds.state) ? Date.now() - new Date(ds.state).getTime() : Infinity;
-      const open = (age >= 0 && age < 60000) || (domainOf(M.door.open) === 'lock' && ['unlocked', 'open', 'opening'].includes(ds?.state));
+      // by the browser's clock (_pressAge) – Home Assistant's may be a little ahead
+      const age = this._pressAge(M.door.open);
+      const open = age < OPENER_MS || (domainOf(M.door.open) === 'lock' && ['unlocked', 'open', 'opening'].includes(ds?.state));
       if (door) {
         door.classList.toggle('open', open);
         door.style.setProperty('--c', open ? '48,209,88' : '255,255,255');
@@ -946,7 +947,7 @@ class GlassFloorplanCard extends HTMLElement {
       }
       sr.querySelector('.win.fd')?.classList.toggle('open', open);
       clearTimeout(this._doorT);
-      if (open && age < 60000) this._doorT = setTimeout(() => this._update(true), 60000 - age + 250);
+      if (open && age < OPENER_MS) this._doorT = setTimeout(() => this._update(true), OPENER_MS - age + 250);
     }
   }
 

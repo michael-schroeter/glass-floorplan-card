@@ -80,7 +80,7 @@ const OPENER_MS = 60000;
 function openState(eid, st) {
   if (unavailable(st)) return 'na';
   const d = domainOf(eid), s = String(st.state).toLowerCase();
-  if (d === 'button' || d === 'input_button') { const age = isTime(st.state) ? Date.now() - new Date(st.state).getTime() : Infinity; return age >= 0 && age < OPENER_MS ? 'open' : 'closed'; }
+  if (d === 'button' || d === 'input_button') { const age = isTime(st.state) ? Date.now() - new Date(st.state).getTime() : Infinity; return age < OPENER_MS ? 'open' : 'closed'; }
   if (d === 'binary_sensor') return s === 'on' ? 'open' : 'closed';
   if (d === 'cover') return s === 'closed' ? 'closed' : 'open';
   if (TILT_WORDS.includes(s)) return 'tilt';
