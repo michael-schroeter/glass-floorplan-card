@@ -61,16 +61,16 @@ You never write coordinates. Pick whatever you have at hand:
 
 | You have … | Do this |
 |---|---|
-| 📷 **A picture** of your floor plan (listing, photo, screenshot, hand sketch) | Load it in the editor, measure one wall, click **Find rooms automatically**. Rooms and doorways appear on their own. |
+| 📷 **A picture** of your floor plan (listing, photo, screenshot, hand sketch) | Add it in the editor and measure one wall. Then draw the rooms on it yourself, or click **Find rooms automatically** and rooms and doorways appear on their own. |
 | ✨ **A hard-to-read picture** (taken at an angle, busy, hand-drawn) | Send it to **Claude** with the [floor plan skill](docs/claude-skill.md). You get a file back and import it with one click. |
 | 🏠 **Your Home Assistant areas** | One click creates a room for each area. Drag them where they are – the devices follow by themselves. |
 | ✏️ **Nothing but your memory** | Drag rectangles. Edges snap together, so the rooms line up like walls. |
 
-<img src="docs/images/editor-start-2x.jpg" alt="The editor on an empty card: three ways to start – trace a photo or sketch, import a floor plan file, or start from your Home Assistant areas" width="100%">
+<img src="docs/images/editor-start-2x.jpg" alt="The editor on an empty card: three ways to start – add a photo or sketch and draw the rooms on it or let them be found, import a floor plan file, or start from your Home Assistant areas" width="100%">
 
-<p align="center"><sub>Three ways to start: trace a picture, import a file, or begin with your areas.</sub></p>
+<p align="center"><sub>Three ways to start: add a picture and draw the rooms or let them be found, import a file, or begin with your areas.</sub></p>
 
-<img src="docs/images/editor-devices-2x.jpg" alt="Devices step: a lamp dragged from the list on the right into the guest room" width="49.6%"> <img src="docs/images/editor-layers-2x.jpg" alt="Layers step: the layer bar of the card highlighted, each layer with its switch and order on the right" width="49.6%">
+<img src="docs/images/editor-devices-2x.jpg" alt="Devices step: the reading lamp is dragged from the list on the right into the guest room, which lights up blue as the drop target" width="49.6%"> <img src="docs/images/editor-layers-2x.jpg" alt="Layers step: the layer bar of the card highlighted, each layer with its switch and order on the right" width="49.6%">
 
 <p align="center"><sub><b>Devices</b> are dragged from the list onto the plan &nbsp;·&nbsp; <b>Layers</b> are switched on, sorted or made your own</sub></p>
 
