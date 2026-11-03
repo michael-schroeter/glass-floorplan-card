@@ -78,6 +78,7 @@ class GfcEditor extends HTMLElement {
     this._markDone();
     this._hints = [];
     this._tilePick = null;
+    this._choose = null;
     // inside Home Assistant: its own action and YAML editors
     this._haUi = false;
     this._haForms().then((ok) => { this._haUi = ok; if (ok && this._dlg?.open && ['ent', 'tile', 'wid'].includes(this._s?.t)) this._panel(); });
@@ -302,6 +303,7 @@ class GfcEditor extends HTMLElement {
     this._measure = null;
     this._editLayer = null;
     this._picker = null;
+    this._choose = null;
     this._tilePick = null;
     this._tb = null;
     // the plan is built: the devices of the linked areas come into their rooms
@@ -840,6 +842,9 @@ class GfcEditor extends HTMLElement {
     this._s = s;
     this._tilePick = null;
     this._tb = null;
+    // tapping the plan leaves a list to choose from
+    const chose = !!this._choose;
+    this._choose = null;
     if (s?.t === 'ent') {
       const e = this._c.entities[s.i], st = this._hs()?.states?.[e.entity], kind = kindOf(e.entity, st);
       const cur = this._layerDef(this._layerSel);
@@ -848,7 +853,7 @@ class GfcEditor extends HTMLElement {
     if (s?.t === 'door') this._layerSel = 'light';
     if (s?.t === 'dock') this._layerSel = 'vacuum';
     this._draw();
-    if (!same || changedTool) this._panel();
+    if (!same || changedTool || chose) this._panel();
   }
 
   _move(e) {

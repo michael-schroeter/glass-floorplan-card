@@ -2169,6 +2169,8 @@ class GlassFloorplanCard extends HTMLElement {
     if (d === 'camera') return 'camera';
     if (d === 'humidifier') return 'humid';
     if (d === 'siren') return 'bell';
+    // a doorbell (event of a ring)
+    if (d === 'event') return dc === 'doorbell' || [].concat(a.event_types || []).some((x) => /ring|ding|bell|klingel/i.test(x)) ? 'bell' : 'dot';
     if (d === 'alarm_control_panel') return 'shield';
     if (d === 'binary_sensor') {
       if (['door', 'garage_door'].includes(dc)) return isOn(st) ? 'doorOpen' : 'door';
@@ -2180,6 +2182,8 @@ class GlassFloorplanCard extends HTMLElement {
       return 'dot';
     }
     if (d === 'sensor') {
+      // a window handle
+      if (openingSensor(eid, st)) return openState(eid, st) === 'closed' ? 'window' : 'windowOpen';
       return { temperature: 'thermo', humidity: 'humid', power: 'bolt', energy: 'bolt', current: 'bolt', voltage: 'bolt', illuminance: 'sun', carbon_dioxide: 'leaf', pm25: 'leaf', volatile_organic_compounds: 'leaf', battery: 'battery', moisture: 'drop' }[dc] || 'gauge';
     }
     return 'dot';
@@ -7484,6 +7488,17 @@ dialog.ed[open] { display: block; }
 .esel2 { appearance: none; -webkit-appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, rgba(235, 235, 245, .6) 50%), linear-gradient(135deg, rgba(235, 235, 245, .6) 50%, transparent 50%);
   background-position: calc(100% - 17px) 17px, calc(100% - 12px) 17px; background-size: 5px 5px; background-repeat: no-repeat; }
 .esel2 option { background: #26262c; color: #f5f5f7; }
+/* a chosen entity: opens the list to choose from (like "Add entity") */
+.epickf { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px 6px 8px; border-radius: 11px; text-align: left; color: var(--t1);
+  background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); transition: background .15s; }
+.epickf:hover { background: rgba(255, 255, 255, .12); }
+.epickf.none { padding-left: 12px; }
+.epickf .ei { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; background: rgba(255, 255, 255, .08); }
+.epickf > div { flex: 1; min-width: 0; }
+.epickf b { display: block; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.epickf.none b { font-weight: 500; color: var(--t2); }
+.epickf small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.epickf > .ic { flex: none; font-size: 14px; opacity: .55; }
 .eseg { position: relative; display: flex; padding: 3px; border-radius: 12px; background: rgba(0, 0, 0, .28); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
 .eseg button { position: relative; z-index: 1; flex: 1; min-width: 0; height: 32px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--t2); display: flex; align-items: center; justify-content: center; gap: 5px; transition: color .2s, background .2s; white-space: nowrap; padding: 0 6px; }
 .eseg button .ic { font-size: 15px; }
@@ -7697,6 +7712,7 @@ class GfcEditor extends HTMLElement {
     this._markDone();
     this._hints = [];
     this._tilePick = null;
+    this._choose = null;
     // inside Home Assistant: its own action and YAML editors
     this._haUi = false;
     this._haForms().then((ok) => { this._haUi = ok; if (ok && this._dlg?.open && ['ent', 'tile', 'wid'].includes(this._s?.t)) this._panel(); });
@@ -7921,6 +7937,7 @@ class GfcEditor extends HTMLElement {
     this._measure = null;
     this._editLayer = null;
     this._picker = null;
+    this._choose = null;
     this._tilePick = null;
     this._tb = null;
     // the plan is built: the devices of the linked areas come into their rooms
@@ -8459,6 +8476,9 @@ class GfcEditor extends HTMLElement {
     this._s = s;
     this._tilePick = null;
     this._tb = null;
+    // tapping the plan leaves a list to choose from
+    const chose = !!this._choose;
+    this._choose = null;
     if (s?.t === 'ent') {
       const e = this._c.entities[s.i], st = this._hs()?.states?.[e.entity], kind = kindOf(e.entity, st);
       const cur = this._layerDef(this._layerSel);
@@ -8467,7 +8487,7 @@ class GfcEditor extends HTMLElement {
     if (s?.t === 'door') this._layerSel = 'light';
     if (s?.t === 'dock') this._layerSel = 'vacuum';
     this._draw();
-    if (!same || changedTool) this._panel();
+    if (!same || changedTool || chose) this._panel();
   }
 
   _move(e) {
@@ -9284,16 +9304,22 @@ Object.assign(GfcEditor.prototype, {
     const detail = !tileP && !tileB && s && !s.quiet && this._selObj() ? map[s.t] : null;
     const layer = !detail && this._tool === 'layers' && this._editLayer ? this._layerDef(this._editLayer) : null;
     const picker = !detail && this._tool === 'devices' && this._picker ? this._layerDef(this._picker) : null;
-    const view = tileP ? `v:${tileP.id}` : tileB ? `b:${tileB.id}:${this._tb.i}` : detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
+    const choose = this._choose;
+    const view = choose ? `c:${choose.key}` : tileP ? `v:${tileP.id}` : tileB ? `b:${tileB.id}:${this._tb.i}` : detail ? `d:${s.t}` : layer ? `e:${layer.id}` : picker ? `p:${picker.id}` : `t:${this._tool}`;
     if (this._view?.startsWith('t:')) this._scrollMem[this._view] = I.scrollTop;
     const keep = view === this._view ? I.scrollTop : null;
     I.innerHTML = '';
-    if (detail || layer || picker || tileP || tileB) {
+    if (choose) {
+      const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(choose.back)}</span>`);
+      back.addEventListener('click', () => this._back());
+      I.append(back);
+      this._chooseView(I, choose);
+    } else if (detail || layer || picker || tileP || tileB) {
       const back = mk('button', 'eback', `${icon('chevL')}<span>${esc(pickB ? this._btnName(pickB) : tileP || tileB ? this._tileName(tileP || tileB) : t(`ed_tool_${this._tool}`))}</span>`);
       back.addEventListener('click', () => this._back());
       I.append(back);
     }
-    if (tileP) this._tilePickerView(I, tileP);
+    if (choose) { /* above */ } else if (tileP) this._tilePickerView(I, tileP);
     else if (tileB) this._tileBtnView(I, tileB, this._tb.i);
     else if (detail) this[detail](I);
     else if (layer) { I.append(this._el(`<h2>${esc(layer.name)}</h2><p class="lead">${esc(t('ed_layerEditLead'))}</p>`)); I.append(this._layerEditor(layer)); }
@@ -9304,6 +9330,7 @@ Object.assign(GfcEditor.prototype, {
     this._syncTop();
   },
   _back() {
+    if (this._choose) { this._choose = null; this._panel(); return; }
     if (this._tilePick) { this._tilePick = null; this._draw(); this._panel(); return; }
     if (this._tb) { this._tb = null; this._draw(); this._panel(); return; }
     // from a device's settings back to the list it came from (the picker stays), else out of the picker
@@ -9681,7 +9708,8 @@ Object.assign(GfcEditor.prototype, {
     const area = M.byRoom[o.room]?.area, ids = Object.keys(hs).filter((id) => openingSensor(id, hs[id]) || o.sens.includes(id));
     const name = (id) => this._fname(id), mine = ids.filter((id) => area && this._areaOf(id) === area).sort((x, y) => name(x).localeCompare(name(y), LOCALE));
     const rest = ids.filter((id) => !mine.includes(id)).sort((x, y) => name(x).localeCompare(name(y), LOCALE));
-    I.append(this._fieldEl(t('ed_openSensor'), this._drop([['', t('ed_none')], ...[...mine, ...rest].map((id) => [id, `${name(id)} (${id})`])], o.sens[0] || '', (v) => {
+    I.append(this._fieldEl(t('ed_openSensor'), this._pickField('open-sensor', o.sens[0] || '', { back: t(`ed_open_${this._s?.k || 'window'}`), title: t('ed_openSensor'),
+      filter: (id) => mine.includes(id) || rest.includes(id), onPick: (v) => {
       const c = this._c;
       for (const id of o.sens) {
         if (id === v) continue;
@@ -9697,7 +9725,7 @@ Object.assign(GfcEditor.prototype, {
       if (!e) { e = { entity: v }; c.entities.push(e); }
       if (openingSensor(v, hs[v])) delete e.opening; else e.opening = true;
       e.at = openingSpot(o);
-    })));
+    } })));
     I.append(this._el(`<p class="small">${esc(t(o.sens.length ? 'ed_openSensorOn' : 'ed_openSensorHelp'))}</p>`));
   },
 
@@ -9802,6 +9830,41 @@ Object.assign(GfcEditor.prototype, {
     I.append(list);
   },
 
+  /* A field that shows the chosen entity; tapping it opens the list to choose from – the same as "Add entity" (search,
+   * by area or label). { back: label of the way back, title, filter(id), onPick(id | '') } */
+  _pickField(key, value, opts) {
+    const h = this._hs() || {}, st = value && h.states?.[value];
+    const f = mk('button', `epickf${value ? '' : ' none'}`, `${value ? `<span class="ei">${icon(GlassFloorplanCard.prototype._autoIcon(value, st))}</span>` : ''}<div><b>${esc(value ? this._fname(value) : t('ed_none'))}</b>${value ? `<small>${esc(value)}</small>` : ''}</div>${icon('chevR')}`);
+    f.addEventListener('click', () => { this._choose = { key, value: value || '', ...opts }; this._cq = ''; this._panel(); });
+    return f;
+  },
+  _chooseView(I, ch) {
+    const h = this._hs() || {};
+    I.append(this._el(`<h2>${esc(ch.title)}</h2>`));
+    I.append(this._searchEl('_cq', t('ed_searchAll')));
+    const q = (this._cq || '').trim().toLowerCase();
+    const ids = this._matchQ(Object.keys(h.states || {}).filter((id) => ch.filter(id) && !h.entities?.[id]?.hidden), q);
+    const pick = (v) => { this._choose = null; this._change(() => ch.onPick(v), { keepSel: true }); };
+    // nothing chosen (yet), or a way to take it away
+    if (ch.value && !q) {
+      const none = this._el(`<span class="ei">${icon('minus')}</span><div><b>${esc(t('ed_none'))}</b></div>`, 'erow');
+      none.style.cursor = 'pointer';
+      none.addEventListener('click', () => pick(''));
+      const l = mk('div', 'elist');
+      l.append(none);
+      I.append(l);
+    }
+    const chosen = new Set(ch.value ? [ch.value] : []);
+    this._groupedList(I, ids, (id) => {
+      const st = h.states?.[id], on = id === ch.value;
+      const row = this._el(`<span class="ei">${icon(GlassFloorplanCard.prototype._autoIcon(id, st))}</span><div><b>${esc(this._fname(id))}</b><small>${esc(id)}</small></div>${on ? `<span class="eadd">${icon('check')}</span>` : ''}`, `erow${on ? ' placed' : ''}`);
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', () => (on ? this._back() : pick(id)));
+      return row;
+    }, { q, placed: chosen, scope: `choose:${ch.key}`, closed: ids.length > 40 });
+    if (!ids.length) I.append(this._el(esc(t(q ? 'ed_noMatch' : 'ed_noEntities')), 'eempty'));
+  },
+
   /* "More entities" of a built-in layer: anything added by hand, with a way to add more */
   _extrasSection(I, L) {
     const h = this._hs() || {};
@@ -9902,8 +9965,11 @@ Object.assign(GfcEditor.prototype, {
     const c = this._c, d = c.door || {};
     I.append(this._el(`<h3>${esc(t('frontDoor'))}</h3>`));
     const set = (k, v) => { c.door = { ...(c.door || {}) }; if (v) c.door[k] = v; else delete c.door[k]; if (!c.door.open && !c.door.doorbell) delete c.door; };
-    I.append(this._fieldEl(t('ed_doorOpen'), this._drop(this._entityOptions((id) => ['button', 'lock', 'switch', 'script', 'input_button'].includes(domainOf(id)), t('ed_none')), d.open, (v) => set('open', v))));
-    I.append(this._fieldEl(t('ed_doorBell'), this._drop(this._entityOptions((id) => domainOf(id) === 'event' || (domainOf(id) === 'binary_sensor' && ['sound', 'occupancy', 'running', undefined].includes(this._hs()?.states?.[id]?.attributes?.device_class)), t('ed_none')), d.doorbell, (v) => set('doorbell', v))));
+    const back = this._s?.t === 'door' ? t('frontDoor') : t(`ed_tool_${this._tool}`);
+    I.append(this._fieldEl(t('ed_doorOpen'), this._pickField('door-open', d.open, { back, title: t('ed_doorOpen'),
+      filter: (id) => ['button', 'lock', 'switch', 'script', 'input_button'].includes(domainOf(id)), onPick: (v) => set('open', v) })));
+    I.append(this._fieldEl(t('ed_doorBell'), this._pickField('door-bell', d.doorbell, { back, title: t('ed_doorBell'),
+      filter: (id) => domainOf(id) === 'event' || (domainOf(id) === 'binary_sensor' && ['sound', 'occupancy', 'running', undefined].includes(this._hs()?.states?.[id]?.attributes?.device_class)), onPick: (v) => set('doorbell', v) })));
     if (c.door && !c.door.at) {
       const b = this._btn(`${icon('door')}<span>${esc(t('ed_doorPlace'))}</span>`, 'wide', () => this._change(() => {
         const hall = c.rooms.find((r) => /flur|hall|diele|entr|eingang/i.test(`${r.name} ${r.area || ''}`)) || c.rooms[0];

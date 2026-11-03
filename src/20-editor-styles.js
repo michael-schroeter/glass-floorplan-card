@@ -160,6 +160,17 @@ dialog.ed[open] { display: block; }
 .esel2 { appearance: none; -webkit-appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, rgba(235, 235, 245, .6) 50%), linear-gradient(135deg, rgba(235, 235, 245, .6) 50%, transparent 50%);
   background-position: calc(100% - 17px) 17px, calc(100% - 12px) 17px; background-size: 5px 5px; background-repeat: no-repeat; }
 .esel2 option { background: #26262c; color: #f5f5f7; }
+/* a chosen entity: opens the list to choose from (like "Add entity") */
+.epickf { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px 6px 8px; border-radius: 11px; text-align: left; color: var(--t1);
+  background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); transition: background .15s; }
+.epickf:hover { background: rgba(255, 255, 255, .12); }
+.epickf.none { padding-left: 12px; }
+.epickf .ei { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; background: rgba(255, 255, 255, .08); }
+.epickf > div { flex: 1; min-width: 0; }
+.epickf b { display: block; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.epickf.none b { font-weight: 500; color: var(--t2); }
+.epickf small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.epickf > .ic { flex: none; font-size: 14px; opacity: .55; }
 .eseg { position: relative; display: flex; padding: 3px; border-radius: 12px; background: rgba(0, 0, 0, .28); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
 .eseg button { position: relative; z-index: 1; flex: 1; min-width: 0; height: 32px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--t2); display: flex; align-items: center; justify-content: center; gap: 5px; transition: color .2s, background .2s; white-space: nowrap; padding: 0 6px; }
 .eseg button .ic { font-size: 15px; }

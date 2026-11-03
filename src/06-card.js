@@ -363,6 +363,8 @@ class GlassFloorplanCard extends HTMLElement {
     if (d === 'camera') return 'camera';
     if (d === 'humidifier') return 'humid';
     if (d === 'siren') return 'bell';
+    // a doorbell (event of a ring)
+    if (d === 'event') return dc === 'doorbell' || [].concat(a.event_types || []).some((x) => /ring|ding|bell|klingel/i.test(x)) ? 'bell' : 'dot';
     if (d === 'alarm_control_panel') return 'shield';
     if (d === 'binary_sensor') {
       if (['door', 'garage_door'].includes(dc)) return isOn(st) ? 'doorOpen' : 'door';
@@ -374,6 +376,8 @@ class GlassFloorplanCard extends HTMLElement {
       return 'dot';
     }
     if (d === 'sensor') {
+      // a window handle
+      if (openingSensor(eid, st)) return openState(eid, st) === 'closed' ? 'window' : 'windowOpen';
       return { temperature: 'thermo', humidity: 'humid', power: 'bolt', energy: 'bolt', current: 'bolt', voltage: 'bolt', illuminance: 'sun', carbon_dioxide: 'leaf', pm25: 'leaf', volatile_organic_compounds: 'leaf', battery: 'battery', moisture: 'drop' }[dc] || 'gauge';
     }
     return 'dot';
