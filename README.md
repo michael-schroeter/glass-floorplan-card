@@ -29,9 +29,9 @@ A lamp switches with one tap and its glow fills the room – warm white, cool wh
 
 Layers switch the plan between light, climate, covers, a Roborock vacuum or your own mix, such as *Night = lights + covers + front door lock*.
 
-<img src="docs/images/vacuum.webp" alt="From the light layer to climate and the Roborock layer: pick three rooms, choose vacuum and mop, press Start" width="100%">
+<img src="docs/images/vacuum-2x.jpg" alt="The Roborock layer: three rooms picked in order, the menu open with vacuum, vacuum and mop, mop and the suction level, next to Start" width="100%">
 
-<p align="center"><sub>From light to climate to your <b>Roborock</b>: tap the rooms, choose vacuum, mop or both, press <i>Start</i>.</sub></p>
+<p align="center"><sub>Your <b>Roborock</b>: tap the rooms, choose vacuum, mop or both, press <i>Start</i>.</sub></p>
 
 <img src="docs/images/climate-2x.jpg" alt="Climate layer: each room tinted by its temperature, thermostats heating in orange" width="49.6%"> <img src="docs/images/covers-2x.jpg" alt="Covers layer: every blind on the plan with its position" width="49.6%">
 
@@ -43,7 +43,7 @@ Layers switch the plan between light, climate, covers, a Roborock vacuum or your
 
 Your own tiles show **values** of your choice, **buttons** like the ones on the plan or **any Home Assistant card** in the glass look. The layer card comes in three sizes, the layer bar vertical or horizontal – and laptop and phone are arranged separately. Every device can get its own tap, hold and double tap action, the same ones as anywhere in Home Assistant.
 
-<img src="docs/images/phone.webp" alt="Phone layout: switching lamps, a room opening as a sheet from the bottom" width="250" align="right">
+<img src="docs/images/phone-2x.jpg" alt="Phone layout: the plan upright with its lamps glowing, tiles below and the layers in a tab bar at the bottom" width="250" align="right">
 
 ### On your phone
 
@@ -64,9 +64,13 @@ You never write coordinates. Pick whatever you have at hand:
 | 🏠 **Your Home Assistant areas** | One click creates a room for each area. Drag them where they are – the devices follow by themselves. |
 | ✏️ **Nothing but your memory** | Drag rectangles. Edges snap together, so the rooms line up like walls. |
 
-<img src="docs/images/editor.webp" alt="The editor: load a sketch, set the scale, find rooms automatically, drag Home Assistant areas onto them" width="100%">
+<img src="docs/images/editor-start-2x.jpg" alt="The editor on an empty card: three ways to start – trace a photo or sketch, import a floor plan file, or start from your Home Assistant areas" width="100%">
 
-<p align="center"><sub>From a sketch to rooms: load it, find the rooms automatically, drag your areas onto them.</sub></p>
+<p align="center"><sub>Three ways to start: trace a picture, import a file, or begin with your areas.</sub></p>
+
+<img src="docs/images/editor-devices-2x.jpg" alt="Devices step: a lamp dragged from the list on the right into the guest room" width="49.6%"> <img src="docs/images/editor-layers-2x.jpg" alt="Layers step: the layer bar of the card highlighted, each layer with its switch and order on the right" width="49.6%">
+
+<p align="center"><sub><b>Devices</b> are dragged from the list onto the plan &nbsp;·&nbsp; <b>Layers</b> are switched on, sorted or made your own</sub></p>
 
 Rooms named like a Home Assistant area are linked by themselves (also across languages, *Living* ↔ *Wohnzimmer*) and take its name; drag any other area onto its room. **Next** takes you through furniture (one click for typical pieces), windows and doors to your devices, which are in their rooms already. Click **Done**. The editor always shows the real card at the real size of your screen.
 
