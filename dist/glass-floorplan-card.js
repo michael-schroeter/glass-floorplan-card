@@ -2112,6 +2112,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._roomEls = {};
     this.shadowRoot.querySelectorAll('.room').forEach((el) => { this._roomEls[el.dataset.room] = el; });
     this._watch = this._watchList();
+    this._opSig = this._openSig();
 
     this._buildSide();
     this._wire();
@@ -2661,6 +2662,7 @@ class GlassFloorplanCard extends HTMLElement {
     if (!h || !this._built || !this._root) return;
     const changed = force || this._watch.some((id) => h.states[id] !== this._last[id]);
     if (!changed) return;
+    if (this._openSig() !== this._opSig) { this._rebuild(); return; }
     this._watch.forEach((id) => { this._last[id] = h.states[id]; });
     this._useLang();
     this._updLights();
@@ -7243,6 +7245,12 @@ Object.assign(GlassFloorplanCard.prototype, {
     }).join('');
   },
 
+  /* which devices are contacts – a contact that only shows up later (Home Assistant still starting) needs a new plan */
+  _openSig() {
+    const h = this._hass;
+    return this._M.ents.map((e) => (e.opening === false ? 0 : e.opening === true || openingSensor(e.entity, h?.states?.[e.entity]) ? 1 : 0)).join('');
+  },
+
   _wsnEnts(el) { return el.dataset.s.split(' ').map((id) => this._M.ents.find((e) => e.entity === id)).filter(Boolean); },
   /* the contact that speaks for the window: an open one first */
   _wsnMain(el) {
@@ -10237,10 +10245,12 @@ function autoDevice(h, id) {
   return d === 'sensor' && st.attributes?.device_class === 'temperature';
 }
 
-/* window and door contacts: they come onto the plan only where their room has a window (or the front door) for them */
+/* window and door contacts: they come onto the plan only where their room has a window (or the front door) for them.
+ * "opening" is also what some relays call their switch input – such a one needs a name that says window, door or contact. */
 function autoContact(h, id) {
   const st = h.states?.[id], reg = h.entities?.[id];
-  return !!st && !reg?.hidden && !reg?.entity_category && openingSensor(id, st);
+  if (!st || reg?.hidden || reg?.entity_category || !openingSensor(id, st)) return false;
+  return st.attributes?.device_class !== 'opening' || /window|fenster|door|t(ü|ue)r|contact|kontakt|magnet/.test(`${id} ${st.attributes?.friendly_name || ''}`.toLowerCase());
 }
 
 /* A first floor plan from the Home Assistant areas: one room per area (with devices), packed edge to edge,

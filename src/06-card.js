@@ -312,6 +312,7 @@ class GlassFloorplanCard extends HTMLElement {
     this._roomEls = {};
     this.shadowRoot.querySelectorAll('.room').forEach((el) => { this._roomEls[el.dataset.room] = el; });
     this._watch = this._watchList();
+    this._opSig = this._openSig();
 
     this._buildSide();
     this._wire();
@@ -861,6 +862,7 @@ class GlassFloorplanCard extends HTMLElement {
     if (!h || !this._built || !this._root) return;
     const changed = force || this._watch.some((id) => h.states[id] !== this._last[id]);
     if (!changed) return;
+    if (this._openSig() !== this._opSig) { this._rebuild(); return; }
     this._watch.forEach((id) => { this._last[id] = h.states[id]; });
     this._useLang();
     this._updLights();

@@ -20,6 +20,12 @@ Object.assign(GlassFloorplanCard.prototype, {
     }).join('');
   },
 
+  /* which devices are contacts – a contact that only shows up later (Home Assistant still starting) needs a new plan */
+  _openSig() {
+    const h = this._hass;
+    return this._M.ents.map((e) => (e.opening === false ? 0 : e.opening === true || openingSensor(e.entity, h?.states?.[e.entity]) ? 1 : 0)).join('');
+  },
+
   _wsnEnts(el) { return el.dataset.s.split(' ').map((id) => this._M.ents.find((e) => e.entity === id)).filter(Boolean); },
   /* the contact that speaks for the window: an open one first */
   _wsnMain(el) {

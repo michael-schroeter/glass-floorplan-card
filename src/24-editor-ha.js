@@ -10,10 +10,12 @@ function autoDevice(h, id) {
   return d === 'sensor' && st.attributes?.device_class === 'temperature';
 }
 
-/* window and door contacts: they come onto the plan only where their room has a window (or the front door) for them */
+/* window and door contacts: they come onto the plan only where their room has a window (or the front door) for them.
+ * "opening" is also what some relays call their switch input – such a one needs a name that says window, door or contact. */
 function autoContact(h, id) {
   const st = h.states?.[id], reg = h.entities?.[id];
-  return !!st && !reg?.hidden && !reg?.entity_category && openingSensor(id, st);
+  if (!st || reg?.hidden || reg?.entity_category || !openingSensor(id, st)) return false;
+  return st.attributes?.device_class !== 'opening' || /window|fenster|door|t(ü|ue)r|contact|kontakt|magnet/.test(`${id} ${st.attributes?.friendly_name || ''}`.toLowerCase());
 }
 
 /* A first floor plan from the Home Assistant areas: one room per area (with devices), packed edge to edge,
