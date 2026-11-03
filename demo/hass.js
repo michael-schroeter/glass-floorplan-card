@@ -73,7 +73,7 @@ window.GFC_HASS = (SCENE = 'evening', LANG = 'en', onChange = () => {}) => {
     reg(id, { device_id: `dev_${id}`, area_id: area, platform: 'shelly' });
   };
   const night = ev || SCENE === 'playing';
-  cover('cover.bedroom', N('Bedroom', 'Schlafzimmer'), night ? 0 : 100, 'bedroom');
+  cover('cover.bedroom', N('Bedroom', 'Schlafzimmer'), night ? 40 : 100, 'bedroom');
   cover('cover.office', N('Office', 'Büro'), night ? 30 : 100, 'office');
   cover('cover.living_room_left', N('Left', 'Links'), night ? 0 : 100, 'living_room');
   cover('cover.living_room_right', N('Right', 'Rechts'), night ? 45 : 100, 'living_room');
