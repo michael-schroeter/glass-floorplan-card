@@ -1,8 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-- Editor: a clear way through – three ways to start side by side, numbered steps for a template picture (scale, then rooms), a **Next** button at the end of every step and **Done** after the devices
+Everything from v0.1.0 keeps working – updating adds to your card, your floor plan stays as it is.
+
+**New**
+- **Actions** for every device: `tap_action`, `hold_action`, `double_tap_action` (the Home Assistant ones, with confirmation), also inside room pop-ups
+- **Own tiles** beside the plan: values of your choice, **buttons** like the ones on the plan, or any Home Assistant card in the glass look
+- **Laptop and phone arranged separately** (`widgets` / `mobile.widgets`); on the phone, the layer card and layer bar can sit below or inside the plan
+- Layer card in **three sizes** (`size: normal | small | mini`) that leave out what does not fit; layer bar vertical or horizontal
+- **Departures** layer: the next trains and buses of your stops on a glass board (VBB / BVG, directly or from the VBB/BVG integration's sensors)
+- **Live map** layer (`departures.map`): your stops' buses and trains moving on a glass map of the streets around you (OpenStreetMap)
+
+**Editor**
+- A clear way through – three ways to start side by side, numbered steps for a template picture (scale, then rooms), a **Next** button at the end of every step and **Done** after the devices
 - While the plan itself is built (template, rooms, furniture, windows), no devices are shown; at **Devices** every linked area's devices are in their room by themselves (once – what you remove stays away, undo takes them back)
 - A room linked to an area takes the area's name (rename it as you like – linking again names it again). Rooms are linked by name on import and when you type a name, also across languages (*Living* ↔ *Wohnzimmer*)
 - Import without an extra question when nothing is drawn yet
@@ -11,10 +22,7 @@
 - **Typical furniture** in one click for rooms without furniture (bed, sofa and TV, kitchen, bath …)
 - Floor plan files may say where lamps and devices are (`devices`, without entity ids) – they go onto the matching devices of the room's area
 - Claude skill: asks where furniture and devices are and whether to add typical furniture before it builds the file
-
-## 0.1.1
-
-- Editor opens again the way you left it: tool, phone or laptop view, selection, the size check after an import and an import still waiting
+- Opens again the way you left it: tool, phone or laptop view, selection, the size check after an import and an import still waiting
 - The template picture only shows once you choose it. Before, a picture loaded earlier (for any card) could show up under an imported plan
 - English by default wherever Home Assistant's language is unknown; the demo starts in English, the example sketch and skill examples are English
 
