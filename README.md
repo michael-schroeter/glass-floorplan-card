@@ -9,7 +9,7 @@ Your home as a plan made of frosted glass, where every lamp glows in its real co
 [![Release](https://img.shields.io/github/v/release/michael-schroeter/glass-floorplan-card?style=flat-square&color=f6c859)](https://github.com/michael-schroeter/glass-floorplan-card/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square)](LICENSE)
 
-[**▶ Try the live demo**](https://michael-schroeter.github.io/glass-floorplan-card/) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Configuration](docs/configuration.md)
+[**▶ Try the live demo**](https://michael-schroeter.github.io/glass-floorplan-card/) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Configuration](docs/configuration.md) &nbsp;·&nbsp; [⬇ Claude skill](https://github.com/michael-schroeter/glass-floorplan-card/releases/latest/download/floorplan-setup-skill.zip)
 
 <br>
 
@@ -62,7 +62,7 @@ You never write coordinates. Pick whatever you have at hand:
 | You have … | Do this |
 |---|---|
 | 📷 **A picture** of your floor plan (listing, photo, screenshot, hand sketch) | Add it in the editor and measure one wall. Then draw the rooms on it yourself, or click **Find rooms automatically** and rooms and doorways appear on their own. |
-| ✨ **A hard-to-read picture** (taken at an angle, busy, hand-drawn) | Send it to **Claude** with the [floor plan skill](docs/claude-skill.md). You get a file back and import it with one click. |
+| ✨ **A hard-to-read picture** (taken at an angle, busy, hand-drawn) | Send it to **Claude** with the floor plan skill: **[⬇ Download the skill](https://github.com/michael-schroeter/glass-floorplan-card/releases/latest/download/floorplan-setup-skill.zip)** ([how it works](docs/claude-skill.md)). You get a file back and import it with one click. |
 | 🏠 **Your Home Assistant areas** | One click creates a room for each area. Drag them where they are – the devices follow by themselves. |
 | ✏️ **Nothing but your memory** | Drag rectangles. Edges snap together, so the rooms line up like walls. |
 
@@ -99,7 +99,7 @@ Copy `glass-floorplan-card.js` from the [latest release](https://github.com/mich
 ## More
 
 - [Configuration reference](docs/configuration.md): all options, modes, vacuum, YAML
-- [Floor plan from a picture with Claude](docs/claude-skill.md)
+- [Floor plan from a picture with Claude](docs/claude-skill.md): **[⬇ download the skill](https://github.com/michael-schroeter/glass-floorplan-card/releases/latest/download/floorplan-setup-skill.zip)**
 - [Development](docs/development.md): build, local demo, file overview
 
 English and German.
