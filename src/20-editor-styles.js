@@ -1,6 +1,7 @@
 /* ================================================================== Floor plan editor: styles (same glass language as the card) */
 const EDITOR_STYLES = `
 dialog.ed { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: #08090c; color: var(--t1); overflow: hidden; }
+@supports (height: 100dvh) { dialog.ed { height: 100dvh; } }
 dialog.ed::backdrop { background: rgba(0, 0, 0, .6); }
 dialog.ed[open] { display: block; }
 .ew { position: absolute; inset: 0; display: grid; grid-template-columns: 84px minmax(0, 1fr) 340px; grid-template-rows: 60px minmax(0, 1fr); }
@@ -282,24 +283,60 @@ dialog.ed[open] { display: block; }
   background: rgba(50, 50, 56, .9); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13), 0 18px 44px rgba(0, 0, 0, .45); opacity: 0; transform: translate(-50%, -10px); transition: opacity .25s, transform .4s var(--sp); pointer-events: none; }
 .etoast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* narrow screens: rail at the bottom, inspector as a sheet */
+/* only on a phone (below): the handle of the sheet, an X instead of "Cancel", the button that puts the tools away */
+.esheet { display: contents; }
+.egrab, .etop .xcancel, .etop .epanel { display: none; }
+.estage { position: absolute; inset: 0; transform-origin: 0 0; pointer-events: none; }
+.estage > .world { pointer-events: none; }
+
+/* narrow screens: the tool bar at the bottom, the inspector as a sheet above it – both over the canvas, so the
+ * canvas is the phone's real dashboard area; put away, the card shows exactly as in Home Assistant */
 @media (max-width: 760px) {
-  .ew { grid-template-columns: minmax(0, 1fr); grid-template-rows: 56px minmax(0, 1fr) auto 72px; }
-  .etop h1 small { display: none; }
-  .ecv { grid-row: 2; }
-  .eins { grid-row: 3; max-height: 42vh; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
-  .erail { grid-row: 4; flex-direction: row; overflow-x: auto; padding: 6px 8px; justify-content: flex-start; }
-  .erail button { width: 64px; min-height: 56px; flex: none; }
-  .erail .rsep { width: 1px; height: 36px; margin: 0 4px; }
-  .etop { padding: 0 10px; gap: 6px; }
-  .etop h1 { display: none; }
+  .ew { --railh: calc(70px + env(safe-area-inset-bottom, 0px)); --sheeth: min(44vh, 420px);
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: calc(56px + env(safe-area-inset-top, 0px)) minmax(0, 1fr); }
+  .etop { padding: env(safe-area-inset-top, 0px) 8px 0; gap: 6px; }
+  .etop h1, .etop .esep, .etop .cancel { display: none; }
+  .etop .xcancel, .etop .epanel { display: inline-flex; }
   .etop .undo { margin-left: auto; }
-  .etop .ebtn.lbl span { display: none; }
-  .etop .ebtn.lbl { padding: 0 11px; }
-  .etop .esep { display: none; }
+  .etop .epanel { margin-left: 4px; transition: background .25s, color .25s, transform .3s var(--snap); }
+  .etop .epanel.act { background: rgba(var(--blue), .9); box-shadow: 0 4px 14px rgba(var(--blue), .35); color: #fff; }
+  .etop .epanel.act .ic { --ip: currentColor; }
+  .ecv { grid-row: 2; grid-column: 1; }
+  .eframe small { display: none; }
+  /* the phone itself: no device frame around it, just the edge of the screen */
+  .eframe.phone.real { border-radius: 16px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .13), 0 24px 70px rgba(0, 0, 0, .6); transition: border-radius .3s, box-shadow .3s; }
+  .nopanel .eframe.phone.real { border-radius: 0; box-shadow: none; }
+
+  .esheet { position: absolute; left: 0; right: 0; bottom: var(--railh); height: var(--sheeth); z-index: 4; display: flex; flex-direction: column;
+    border-radius: 22px 22px 0 0; background: linear-gradient(180deg, rgba(36, 36, 42, .9), rgba(22, 22, 28, .95));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 -16px 44px rgba(0, 0, 0, .42);
+    -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%);
+    transition: transform var(--soft-ms) var(--soft); will-change: transform; }
+  .egrab { display: grid; place-items: center; flex: none; height: 24px; margin-bottom: -2px; touch-action: none; cursor: grab; }
+  .egrab i { width: 38px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .26); transition: background .2s; }
+  .egrab:hover i, .egrab:active i { background: rgba(255, 255, 255, .5); }
+  .eins { flex: 1; min-height: 0; padding: 6px 18px 26px; background: none; box-shadow: none; }
+
+  .erail { position: absolute; left: 0; right: 0; bottom: 0; height: var(--railh); box-sizing: border-box; flex-direction: row; overflow-x: auto; justify-content: flex-start; align-items: flex-start;
+    padding: 7px 8px env(safe-area-inset-bottom, 0px); background: rgb(19, 19, 24); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+    transition: transform var(--soft-ms) var(--soft); will-change: transform; }
+  .erail button { width: 64px; min-height: 56px; flex: none; }
+  .erail .rsep { width: 1px; height: 36px; margin: 10px 4px 0; }
+  .erail .ereset { margin-top: 0; margin-left: auto; position: sticky; right: -8px; z-index: 1; background: linear-gradient(90deg, rgba(19, 19, 24, 0), rgb(19, 19, 24) 24%); border-radius: 0; padding: 7px 8px 6px 14px; width: 86px; margin-right: -8px; }
+
+  .ecv .elight, .ezoom { bottom: calc(var(--railh) + var(--sheeth) + 10px); transition: opacity .25s, transform var(--soft-ms) var(--soft); }
+  .ecv .elight { left: 10px; } .ezoom { right: 10px; }
   .ehint { display: none; }
   .eview button span, .elight .lbl { display: none; }
   .eview button { padding: 0 9px; }
-  .erail .ereset { margin-top: 0; margin-left: auto; position: sticky; right: -8px; z-index: 1; background: linear-gradient(90deg, rgba(20, 20, 26, 0), rgb(20, 20, 26) 24%); border-radius: 0; padding: 7px 8px 6px 14px; width: 86px; margin-right: -8px; }
+
+  /* tools put away: sheet and bar slide down, the card has the whole screen below the bar */
+  .nopanel .esheet { transform: translateY(calc(100% + var(--railh) + 70px)); }
+  .nopanel .erail { transform: translateY(100%); }
+  .nopanel .ecv .elight, .nopanel .ezoom { opacity: 0; pointer-events: none; transform: translateY(24px); }
+}
+@media (max-width: 380px) {
+  .etop .save { width: 36px; padding: 0; }
+  .etop .save span { display: none; }
 }
 `;

@@ -20,6 +20,8 @@ const LAYER_FILTER = {
 };
 /* the screen of a phone in the Home Assistant app (below the header) */
 const ED_PHONE = { w: 390, h: 788 };
+/* the laptop previewed on a phone (the phone's own size would only squeeze the laptop layout) */
+const ED_LAPTOP = { w: 1440, h: 790 };
 /* tools that show the template picture (and keep it inside the visible plan) */
 const ED_UL_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
 /* the steps that build the plan itself: devices stay hidden there, they come into their rooms once the plan is built */
@@ -179,22 +181,24 @@ class GfcEditor extends HTMLElement {
 <dialog class="ed"><div class="root ew" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs><linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient></defs></svg>
   <div class="etop">
+    <button class="ebtn icon xcancel" title="${esc(t('ed_cancel'))}">${icon('close')}</button>
     <h1>${esc(t('ed_title'))}<small></small></h1>
     <div class="eseg eview">${['laptop', 'phone'].map((m) => `<button data-m="${m}">${icon(m)}<span>${esc(t(`ed_prev_${m}`))}</span></button>`).join('')}</div>
     <i class="esep"></i>
     <button class="ebtn icon undo" title="${esc(t('ed_undo'))}">${icon('undo')}</button>
     <button class="ebtn icon redo" title="${esc(t('ed_redo'))}">${icon('redo')}</button>
+    <button class="ebtn icon epanel" title="${esc(t('ed_hidePanel'))}">${icon('sheet')}</button>
     <i class="esep"></i>
     <button class="ebtn lbl cancel">${esc(t('ed_cancel'))}</button>
     <button class="ebtn white save">${icon('check')}<span>${esc(t('ed_done'))}</span></button>
   </div>
   <nav class="erail">${ED_TOOLS.map((x) => (x ? `<button data-tool="${x[0]}">${icon(x[1])}<span>${esc(t(`ed_tool_${x[0]}`))}</span></button>` : '<i class="rsep"></i>')).join('')}
     <button class="ereset" data-del="all">${icon('restart')}<span>${esc(t('ed_reset'))}</span></button></nav>
-  <div class="ecv" tabindex="-1" autofocus><div class="eframe"><small></small></div><div class="elive"></div><img class="ul" alt="" hidden><div class="world"></div>
+  <div class="ecv" tabindex="-1" autofocus><div class="estage"><div class="eframe"><small></small></div><div class="elive"></div><img class="ul" alt="" hidden><div class="world"></div></div>
     <div class="elight eseg" title="${esc(t('ed_lightPreview'))}"><span class="lbl">${icon('bulb')}</span>${['on', 'off', 'real'].map((m) => `<button data-l="${m}">${esc(t(`ed_light_${m}`))}</button>`).join('')}</div>
     <div class="ezoom"><button class="zo" title="−">${icon('minus')}</button><button class="zf" title="${esc(t('ed_fit'))}">${icon('fit')}</button><button class="zi" title="+">${icon('plus')}</button></div>
     <div class="ehint"></div></div>
-  <aside class="eins"></aside>
+  <div class="esheet"><div class="egrab" title="${esc(t('ed_hidePanel'))}"><i></i></div><aside class="eins"></aside></div>
   <div class="econfirm" hidden></div>
   <div class="etoast"></div>
 </div></dialog>`;
@@ -223,6 +227,9 @@ class GfcEditor extends HTMLElement {
     $('.redo').addEventListener('click', () => this._doRedo());
     $('.save').addEventListener('click', () => this._close(true));
     $('.cancel').addEventListener('click', () => this._tryClose());
+    $('.xcancel').addEventListener('click', () => this._tryClose());
+    $('.epanel').addEventListener('click', () => this._setPanel(!!this._noPanel));
+    this._wireGrab();
     $('.ereset').addEventListener('click', () => this._askReset());
     this.shadowRoot.querySelectorAll('.eview button').forEach((b) => b.addEventListener('click', () => this._setMode(b.dataset.m)));
     this.shadowRoot.querySelectorAll('.elight button').forEach((b) => b.addEventListener('click', () => { this._light = b.dataset.l; this._draw(); }));
@@ -327,6 +334,65 @@ class GfcEditor extends HTMLElement {
     this._panel();
   }
 
+  /* ---------------------------------------------------------------- phone: the tools as a sheet that can be put away */
+  /* the editor's own narrow layout (a phone): sheet + tool bar at the bottom, over the canvas */
+  _narrowUI() { return window.matchMedia?.('(max-width: 760px)').matches; }
+  /* tools put away while previewing the phone on a phone: the card exactly as Home Assistant shows it – same size,
+   * right under the 56 px bar (where Home Assistant's own header is) */
+  _haView() { return !!this._noPanel && this._mode === 'phone' && this._narrowUI(); }
+  /* what the sheet and the tool bar cover at the bottom of the canvas (layout sizes – not moved by an animation) */
+  _bottomInset() {
+    if (this._noPanel || !this._narrowUI()) return 0;
+    return (this.$('.esheet')?.offsetHeight || 0) + (this.$('.erail')?.offsetHeight || 0);
+  }
+  _setPanel(show) {
+    const hide = !show;
+    if (!!this._noPanel === hide) return;
+    const F0 = this._f && { ...this._f }, st = this.$('.estage');
+    this._noPanel = hide;
+    this.$('.ew').classList.toggle('nopanel', hide);
+    const b = this.$('.epanel');
+    b.classList.toggle('act', hide);
+    b.title = t(hide ? 'ed_showPanel' : 'ed_hidePanel');
+    this._viewTouched = false;
+    this._fit();
+    this._draw();
+    // the plan glides to its new place (transform only, same spring as the sheet)
+    const F1 = this._f;
+    if (!F0 || !F1 || (Math.abs(F0.k - F1.k) < 1e-4 && Math.abs(F0.ox - F1.ox) < 0.5 && Math.abs(F0.oy - F1.oy) < 0.5)) return;
+    const q = F0.k / F1.k, cs = getComputedStyle(this.$('.ew'));
+    st.getAnimations().forEach((a) => a.cancel());
+    st.animate([{ transform: `translate(${F0.ox - q * F1.ox}px, ${F0.oy - q * F1.oy}px) scale(${q})` }, { transform: 'none' }],
+      { duration: parseFloat(cs.getPropertyValue('--soft-ms')) || 520, easing: cs.getPropertyValue('--soft').trim() || 'ease-out' });
+  }
+  /* the handle of the sheet: tap or pull down puts the tools away (sheet and tool bar follow the finger) */
+  _wireGrab() {
+    const g = this.$('.egrab'), parts = [this.$('.esheet'), this.$('.erail')];
+    let d = null;
+    const set = (tr, tf) => parts.forEach((el) => { el.style.transition = tr; el.style.transform = tf; });
+    g.addEventListener('pointerdown', (e) => {
+      if (e.button) return;
+      d = { y: e.clientY, dy: 0 };
+      try { g.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+      set('none', '');
+    });
+    g.addEventListener('pointermove', (e) => {
+      if (!d) return;
+      d.dy = e.clientY - d.y;
+      // up only a little, with resistance
+      set('none', `translateY(${d.dy > 0 ? d.dy : d.dy / 4}px)`);
+    });
+    const end = (cancel) => {
+      if (!d) return;
+      const dy = d.dy;
+      d = null;
+      set('', '');
+      if (!cancel && (dy > 46 || Math.abs(dy) < 6)) this._setPanel(false);
+    };
+    g.addEventListener('pointerup', () => end(false));
+    g.addEventListener('pointercancel', () => end(true));
+  }
+
   _syncTop() {
     this.shadowRoot.querySelectorAll('.erail button[data-tool]').forEach((b) => b.classList.toggle('act', b.dataset.tool === this._tool));
     this.shadowRoot.querySelectorAll('.eview button').forEach((b) => b.classList.toggle('act', b.dataset.m === this._mode));
@@ -372,7 +438,12 @@ class GfcEditor extends HTMLElement {
   /* ---------------------------------------------------------------- the live card on its screen */
   /* size of the real screen: the dashboard next to Home Assistant's sidebar, or a phone */
   _screen() {
-    if (this._mode === 'phone') return ED_PHONE;
+    if (this._mode === 'phone') {
+      // on a phone: the screen of this very phone (the canvas reaches from the bar to the bottom, under the sheet)
+      const r = this._narrowUI() && this._cv?.getBoundingClientRect();
+      return r && r.width > 200 && r.height > 300 ? { w: Math.round(r.width), h: Math.round(r.height) } : ED_PHONE;
+    }
+    if (this._narrowUI()) return ED_LAPTOP;
     if (this._vp) return this._vp;
     let sb = 0;
     try {
@@ -468,7 +539,12 @@ class GfcEditor extends HTMLElement {
     if (!r.width) return;
     if (this._fix && !keepScale) { this._fix = null; this._syncLive(); }
     const scr = this._screen(), H = (!this._area && this._map?.H) || scr.h, narrow = r.width < 600;
-    const pad = narrow ? 10 : 30, top = narrow ? 14 : 46, bottom = narrow ? 64 : 66;
+    if (this._haView()) {
+      const k = Math.min(1, r.width / scr.w, r.height / H);
+      this._f = { k, ox: (r.width - scr.w * k) / 2, oy: 0 };
+      return;
+    }
+    const pad = narrow ? 10 : 30, top = narrow ? 14 : 46, bottom = (narrow ? 64 : 66) + this._bottomInset();
     const k = clamp(Math.min((r.width - 2 * pad) / scr.w, (r.height - top - bottom) / H), 0.08, 1.4);
     this._f = { k, ox: (r.width - scr.w * k) / 2, oy: top + Math.max(0, (r.height - top - bottom - H * k) / 2) };
   }
@@ -540,6 +616,7 @@ class GfcEditor extends HTMLElement {
     this._frameEl.hidden = !!A;
     Object.assign(this._frameEl.style, { left: `${F.ox}px`, top: `${F.oy}px`, width: `${scr.w * F.k}px`, height: `${H * F.k}px` });
     this._frameEl.classList.toggle('phone', this._mode === 'phone');
+    this._frameEl.classList.toggle('real', this._mode === 'phone' && this._narrowUI());
     this._frameEl.querySelector('small').textContent = `${t(`ed_prev_${this._mode}`)} · ${scr.w} × ${scr.h}`;
     // template picture (on top of the card, so the plan can be traced)
     const ul = this._ulEl;

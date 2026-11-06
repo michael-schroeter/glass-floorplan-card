@@ -39,7 +39,10 @@ Object.assign(GfcEditor.prototype, {
     else if (picker) this._pickerView(I, picker);
     else { this[`_p_${this._tool}`]?.(I); this._nextStep(I); }
     I.scrollTop = keep ?? (view.startsWith('t:') ? this._scrollMem[view] || 0 : 0);
+    // tools put away (phone) and something was tapped: its settings come up
+    const show = this._noPanel && view !== this._view && !view.startsWith('t:');
     this._view = view;
+    if (show) this._setPanel(true);
     this._syncTop();
   },
   _back() {

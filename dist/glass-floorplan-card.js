@@ -396,6 +396,7 @@ const ICONS = {
   sliders: '<path d="M4 7.4h9.6M17.6 7.4H20M4 16.6h2.4M10.4 16.6H20"/><circle cx="15.6" cy="7.4" r="2"/><circle cx="8.4" cy="16.6" r="2"/>',
   eye: '<path d="M2.8 12s3.4-6.4 9.2-6.4 9.2 6.4 9.2 6.4-3.4 6.4-9.2 6.4S2.8 12 2.8 12z"/><circle cx="12" cy="12" r="2.8"/>',
   copy: '<rect x="8.4" y="8.4" width="11.8" height="11.8" rx="2.4"/><path d="M15.6 8.4V6a2.2 2.2 0 0 0-2.2-2.2H6A2.2 2.2 0 0 0 3.8 6v7.4a2.2 2.2 0 0 0 2.2 2.2h2.4"/>',
+  sheet: '<rect x="3.6" y="4.2" width="16.8" height="15.6" rx="3"/><path d="M3.6 13.6h16.8"/><path d="M10.2 16.7h3.6"/>',
   fit: '<path d="M4 9V5.4C4 4.6 4.6 4 5.4 4H9M15 4h3.6c.8 0 1.4.6 1.4 1.4V9M20 15v3.6c0 .8-.6 1.4-1.4 1.4H15M9 20H5.4c-.8 0-1.4-.6-1.4-1.4V15"/>',
   info: '<circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.4"/><circle cx="12" cy="7.8" r=".9" class="f"/>',
   /* departures */
@@ -7329,6 +7330,7 @@ Object.assign(GlassFloorplanCard.prototype, {
 /* ================================================================== Floor plan editor: styles (same glass language as the card) */
 const EDITOR_STYLES = `
 dialog.ed { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: #08090c; color: var(--t1); overflow: hidden; }
+@supports (height: 100dvh) { dialog.ed { height: 100dvh; } }
 dialog.ed::backdrop { background: rgba(0, 0, 0, .6); }
 dialog.ed[open] { display: block; }
 .ew { position: absolute; inset: 0; display: grid; grid-template-columns: 84px minmax(0, 1fr) 340px; grid-template-rows: 60px minmax(0, 1fr); }
@@ -7610,25 +7612,61 @@ dialog.ed[open] { display: block; }
   background: rgba(50, 50, 56, .9); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13), 0 18px 44px rgba(0, 0, 0, .45); opacity: 0; transform: translate(-50%, -10px); transition: opacity .25s, transform .4s var(--sp); pointer-events: none; }
 .etoast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* narrow screens: rail at the bottom, inspector as a sheet */
+/* only on a phone (below): the handle of the sheet, an X instead of "Cancel", the button that puts the tools away */
+.esheet { display: contents; }
+.egrab, .etop .xcancel, .etop .epanel { display: none; }
+.estage { position: absolute; inset: 0; transform-origin: 0 0; pointer-events: none; }
+.estage > .world { pointer-events: none; }
+
+/* narrow screens: the tool bar at the bottom, the inspector as a sheet above it – both over the canvas, so the
+ * canvas is the phone's real dashboard area; put away, the card shows exactly as in Home Assistant */
 @media (max-width: 760px) {
-  .ew { grid-template-columns: minmax(0, 1fr); grid-template-rows: 56px minmax(0, 1fr) auto 72px; }
-  .etop h1 small { display: none; }
-  .ecv { grid-row: 2; }
-  .eins { grid-row: 3; max-height: 42vh; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
-  .erail { grid-row: 4; flex-direction: row; overflow-x: auto; padding: 6px 8px; justify-content: flex-start; }
-  .erail button { width: 64px; min-height: 56px; flex: none; }
-  .erail .rsep { width: 1px; height: 36px; margin: 0 4px; }
-  .etop { padding: 0 10px; gap: 6px; }
-  .etop h1 { display: none; }
+  .ew { --railh: calc(70px + env(safe-area-inset-bottom, 0px)); --sheeth: min(44vh, 420px);
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: calc(56px + env(safe-area-inset-top, 0px)) minmax(0, 1fr); }
+  .etop { padding: env(safe-area-inset-top, 0px) 8px 0; gap: 6px; }
+  .etop h1, .etop .esep, .etop .cancel { display: none; }
+  .etop .xcancel, .etop .epanel { display: inline-flex; }
   .etop .undo { margin-left: auto; }
-  .etop .ebtn.lbl span { display: none; }
-  .etop .ebtn.lbl { padding: 0 11px; }
-  .etop .esep { display: none; }
+  .etop .epanel { margin-left: 4px; transition: background .25s, color .25s, transform .3s var(--snap); }
+  .etop .epanel.act { background: rgba(var(--blue), .9); box-shadow: 0 4px 14px rgba(var(--blue), .35); color: #fff; }
+  .etop .epanel.act .ic { --ip: currentColor; }
+  .ecv { grid-row: 2; grid-column: 1; }
+  .eframe small { display: none; }
+  /* the phone itself: no device frame around it, just the edge of the screen */
+  .eframe.phone.real { border-radius: 16px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .13), 0 24px 70px rgba(0, 0, 0, .6); transition: border-radius .3s, box-shadow .3s; }
+  .nopanel .eframe.phone.real { border-radius: 0; box-shadow: none; }
+
+  .esheet { position: absolute; left: 0; right: 0; bottom: var(--railh); height: var(--sheeth); z-index: 4; display: flex; flex-direction: column;
+    border-radius: 22px 22px 0 0; background: linear-gradient(180deg, rgba(36, 36, 42, .9), rgba(22, 22, 28, .95));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 -16px 44px rgba(0, 0, 0, .42);
+    -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%);
+    transition: transform var(--soft-ms) var(--soft); will-change: transform; }
+  .egrab { display: grid; place-items: center; flex: none; height: 24px; margin-bottom: -2px; touch-action: none; cursor: grab; }
+  .egrab i { width: 38px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .26); transition: background .2s; }
+  .egrab:hover i, .egrab:active i { background: rgba(255, 255, 255, .5); }
+  .eins { flex: 1; min-height: 0; padding: 6px 18px 26px; background: none; box-shadow: none; }
+
+  .erail { position: absolute; left: 0; right: 0; bottom: 0; height: var(--railh); box-sizing: border-box; flex-direction: row; overflow-x: auto; justify-content: flex-start; align-items: flex-start;
+    padding: 7px 8px env(safe-area-inset-bottom, 0px); background: rgb(19, 19, 24); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+    transition: transform var(--soft-ms) var(--soft); will-change: transform; }
+  .erail button { width: 64px; min-height: 56px; flex: none; }
+  .erail .rsep { width: 1px; height: 36px; margin: 10px 4px 0; }
+  .erail .ereset { margin-top: 0; margin-left: auto; position: sticky; right: -8px; z-index: 1; background: linear-gradient(90deg, rgba(19, 19, 24, 0), rgb(19, 19, 24) 24%); border-radius: 0; padding: 7px 8px 6px 14px; width: 86px; margin-right: -8px; }
+
+  .ecv .elight, .ezoom { bottom: calc(var(--railh) + var(--sheeth) + 10px); transition: opacity .25s, transform var(--soft-ms) var(--soft); }
+  .ecv .elight { left: 10px; } .ezoom { right: 10px; }
   .ehint { display: none; }
   .eview button span, .elight .lbl { display: none; }
   .eview button { padding: 0 9px; }
-  .erail .ereset { margin-top: 0; margin-left: auto; position: sticky; right: -8px; z-index: 1; background: linear-gradient(90deg, rgba(20, 20, 26, 0), rgb(20, 20, 26) 24%); border-radius: 0; padding: 7px 8px 6px 14px; width: 86px; margin-right: -8px; }
+
+  /* tools put away: sheet and bar slide down, the card has the whole screen below the bar */
+  .nopanel .esheet { transform: translateY(calc(100% + var(--railh) + 70px)); }
+  .nopanel .erail { transform: translateY(100%); }
+  .nopanel .ecv .elight, .nopanel .ezoom { opacity: 0; pointer-events: none; transform: translateY(24px); }
+}
+@media (max-width: 380px) {
+  .etop .save { width: 36px; padding: 0; }
+  .etop .save span { display: none; }
 }
 `;
 
@@ -7654,6 +7692,8 @@ const LAYER_FILTER = {
 };
 /* the screen of a phone in the Home Assistant app (below the header) */
 const ED_PHONE = { w: 390, h: 788 };
+/* the laptop previewed on a phone (the phone's own size would only squeeze the laptop layout) */
+const ED_LAPTOP = { w: 1440, h: 790 };
 /* tools that show the template picture (and keep it inside the visible plan) */
 const ED_UL_TOOLS = ['sketch', 'rooms', 'furniture', 'openings'];
 /* the steps that build the plan itself: devices stay hidden there, they come into their rooms once the plan is built */
@@ -7813,22 +7853,24 @@ class GfcEditor extends HTMLElement {
 <dialog class="ed"><div class="root ew" style="${springVars()}">
   <svg class="defs" width="0" height="0" aria-hidden="true"><defs><linearGradient id="gfcg" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#fbfbfd" stop-opacity=".94"/><stop offset=".55" stop-color="#d8dae1" stop-opacity=".8"/><stop offset="1" stop-color="#9ca1ad" stop-opacity=".7"/></linearGradient></defs></svg>
   <div class="etop">
+    <button class="ebtn icon xcancel" title="${esc(t('ed_cancel'))}">${icon('close')}</button>
     <h1>${esc(t('ed_title'))}<small></small></h1>
     <div class="eseg eview">${['laptop', 'phone'].map((m) => `<button data-m="${m}">${icon(m)}<span>${esc(t(`ed_prev_${m}`))}</span></button>`).join('')}</div>
     <i class="esep"></i>
     <button class="ebtn icon undo" title="${esc(t('ed_undo'))}">${icon('undo')}</button>
     <button class="ebtn icon redo" title="${esc(t('ed_redo'))}">${icon('redo')}</button>
+    <button class="ebtn icon epanel" title="${esc(t('ed_hidePanel'))}">${icon('sheet')}</button>
     <i class="esep"></i>
     <button class="ebtn lbl cancel">${esc(t('ed_cancel'))}</button>
     <button class="ebtn white save">${icon('check')}<span>${esc(t('ed_done'))}</span></button>
   </div>
   <nav class="erail">${ED_TOOLS.map((x) => (x ? `<button data-tool="${x[0]}">${icon(x[1])}<span>${esc(t(`ed_tool_${x[0]}`))}</span></button>` : '<i class="rsep"></i>')).join('')}
     <button class="ereset" data-del="all">${icon('restart')}<span>${esc(t('ed_reset'))}</span></button></nav>
-  <div class="ecv" tabindex="-1" autofocus><div class="eframe"><small></small></div><div class="elive"></div><img class="ul" alt="" hidden><div class="world"></div>
+  <div class="ecv" tabindex="-1" autofocus><div class="estage"><div class="eframe"><small></small></div><div class="elive"></div><img class="ul" alt="" hidden><div class="world"></div></div>
     <div class="elight eseg" title="${esc(t('ed_lightPreview'))}"><span class="lbl">${icon('bulb')}</span>${['on', 'off', 'real'].map((m) => `<button data-l="${m}">${esc(t(`ed_light_${m}`))}</button>`).join('')}</div>
     <div class="ezoom"><button class="zo" title="−">${icon('minus')}</button><button class="zf" title="${esc(t('ed_fit'))}">${icon('fit')}</button><button class="zi" title="+">${icon('plus')}</button></div>
     <div class="ehint"></div></div>
-  <aside class="eins"></aside>
+  <div class="esheet"><div class="egrab" title="${esc(t('ed_hidePanel'))}"><i></i></div><aside class="eins"></aside></div>
   <div class="econfirm" hidden></div>
   <div class="etoast"></div>
 </div></dialog>`;
@@ -7857,6 +7899,9 @@ class GfcEditor extends HTMLElement {
     $('.redo').addEventListener('click', () => this._doRedo());
     $('.save').addEventListener('click', () => this._close(true));
     $('.cancel').addEventListener('click', () => this._tryClose());
+    $('.xcancel').addEventListener('click', () => this._tryClose());
+    $('.epanel').addEventListener('click', () => this._setPanel(!!this._noPanel));
+    this._wireGrab();
     $('.ereset').addEventListener('click', () => this._askReset());
     this.shadowRoot.querySelectorAll('.eview button').forEach((b) => b.addEventListener('click', () => this._setMode(b.dataset.m)));
     this.shadowRoot.querySelectorAll('.elight button').forEach((b) => b.addEventListener('click', () => { this._light = b.dataset.l; this._draw(); }));
@@ -7961,6 +8006,65 @@ class GfcEditor extends HTMLElement {
     this._panel();
   }
 
+  /* ---------------------------------------------------------------- phone: the tools as a sheet that can be put away */
+  /* the editor's own narrow layout (a phone): sheet + tool bar at the bottom, over the canvas */
+  _narrowUI() { return window.matchMedia?.('(max-width: 760px)').matches; }
+  /* tools put away while previewing the phone on a phone: the card exactly as Home Assistant shows it – same size,
+   * right under the 56 px bar (where Home Assistant's own header is) */
+  _haView() { return !!this._noPanel && this._mode === 'phone' && this._narrowUI(); }
+  /* what the sheet and the tool bar cover at the bottom of the canvas (layout sizes – not moved by an animation) */
+  _bottomInset() {
+    if (this._noPanel || !this._narrowUI()) return 0;
+    return (this.$('.esheet')?.offsetHeight || 0) + (this.$('.erail')?.offsetHeight || 0);
+  }
+  _setPanel(show) {
+    const hide = !show;
+    if (!!this._noPanel === hide) return;
+    const F0 = this._f && { ...this._f }, st = this.$('.estage');
+    this._noPanel = hide;
+    this.$('.ew').classList.toggle('nopanel', hide);
+    const b = this.$('.epanel');
+    b.classList.toggle('act', hide);
+    b.title = t(hide ? 'ed_showPanel' : 'ed_hidePanel');
+    this._viewTouched = false;
+    this._fit();
+    this._draw();
+    // the plan glides to its new place (transform only, same spring as the sheet)
+    const F1 = this._f;
+    if (!F0 || !F1 || (Math.abs(F0.k - F1.k) < 1e-4 && Math.abs(F0.ox - F1.ox) < 0.5 && Math.abs(F0.oy - F1.oy) < 0.5)) return;
+    const q = F0.k / F1.k, cs = getComputedStyle(this.$('.ew'));
+    st.getAnimations().forEach((a) => a.cancel());
+    st.animate([{ transform: `translate(${F0.ox - q * F1.ox}px, ${F0.oy - q * F1.oy}px) scale(${q})` }, { transform: 'none' }],
+      { duration: parseFloat(cs.getPropertyValue('--soft-ms')) || 520, easing: cs.getPropertyValue('--soft').trim() || 'ease-out' });
+  }
+  /* the handle of the sheet: tap or pull down puts the tools away (sheet and tool bar follow the finger) */
+  _wireGrab() {
+    const g = this.$('.egrab'), parts = [this.$('.esheet'), this.$('.erail')];
+    let d = null;
+    const set = (tr, tf) => parts.forEach((el) => { el.style.transition = tr; el.style.transform = tf; });
+    g.addEventListener('pointerdown', (e) => {
+      if (e.button) return;
+      d = { y: e.clientY, dy: 0 };
+      try { g.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+      set('none', '');
+    });
+    g.addEventListener('pointermove', (e) => {
+      if (!d) return;
+      d.dy = e.clientY - d.y;
+      // up only a little, with resistance
+      set('none', `translateY(${d.dy > 0 ? d.dy : d.dy / 4}px)`);
+    });
+    const end = (cancel) => {
+      if (!d) return;
+      const dy = d.dy;
+      d = null;
+      set('', '');
+      if (!cancel && (dy > 46 || Math.abs(dy) < 6)) this._setPanel(false);
+    };
+    g.addEventListener('pointerup', () => end(false));
+    g.addEventListener('pointercancel', () => end(true));
+  }
+
   _syncTop() {
     this.shadowRoot.querySelectorAll('.erail button[data-tool]').forEach((b) => b.classList.toggle('act', b.dataset.tool === this._tool));
     this.shadowRoot.querySelectorAll('.eview button').forEach((b) => b.classList.toggle('act', b.dataset.m === this._mode));
@@ -8006,7 +8110,12 @@ class GfcEditor extends HTMLElement {
   /* ---------------------------------------------------------------- the live card on its screen */
   /* size of the real screen: the dashboard next to Home Assistant's sidebar, or a phone */
   _screen() {
-    if (this._mode === 'phone') return ED_PHONE;
+    if (this._mode === 'phone') {
+      // on a phone: the screen of this very phone (the canvas reaches from the bar to the bottom, under the sheet)
+      const r = this._narrowUI() && this._cv?.getBoundingClientRect();
+      return r && r.width > 200 && r.height > 300 ? { w: Math.round(r.width), h: Math.round(r.height) } : ED_PHONE;
+    }
+    if (this._narrowUI()) return ED_LAPTOP;
     if (this._vp) return this._vp;
     let sb = 0;
     try {
@@ -8102,7 +8211,12 @@ class GfcEditor extends HTMLElement {
     if (!r.width) return;
     if (this._fix && !keepScale) { this._fix = null; this._syncLive(); }
     const scr = this._screen(), H = (!this._area && this._map?.H) || scr.h, narrow = r.width < 600;
-    const pad = narrow ? 10 : 30, top = narrow ? 14 : 46, bottom = narrow ? 64 : 66;
+    if (this._haView()) {
+      const k = Math.min(1, r.width / scr.w, r.height / H);
+      this._f = { k, ox: (r.width - scr.w * k) / 2, oy: 0 };
+      return;
+    }
+    const pad = narrow ? 10 : 30, top = narrow ? 14 : 46, bottom = (narrow ? 64 : 66) + this._bottomInset();
     const k = clamp(Math.min((r.width - 2 * pad) / scr.w, (r.height - top - bottom) / H), 0.08, 1.4);
     this._f = { k, ox: (r.width - scr.w * k) / 2, oy: top + Math.max(0, (r.height - top - bottom - H * k) / 2) };
   }
@@ -8174,6 +8288,7 @@ class GfcEditor extends HTMLElement {
     this._frameEl.hidden = !!A;
     Object.assign(this._frameEl.style, { left: `${F.ox}px`, top: `${F.oy}px`, width: `${scr.w * F.k}px`, height: `${H * F.k}px` });
     this._frameEl.classList.toggle('phone', this._mode === 'phone');
+    this._frameEl.classList.toggle('real', this._mode === 'phone' && this._narrowUI());
     this._frameEl.querySelector('small').textContent = `${t(`ed_prev_${this._mode}`)} · ${scr.w} × ${scr.h}`;
     // template picture (on top of the card, so the plan can be traced)
     const ul = this._ulEl;
@@ -9326,7 +9441,10 @@ Object.assign(GfcEditor.prototype, {
     else if (picker) this._pickerView(I, picker);
     else { this[`_p_${this._tool}`]?.(I); this._nextStep(I); }
     I.scrollTop = keep ?? (view.startsWith('t:') ? this._scrollMem[view] || 0 : 0);
+    // tools put away (phone) and something was tapped: its settings come up
+    const show = this._noPanel && view !== this._view && !view.startsWith('t:');
     this._view = view;
+    if (show) this._setPanel(true);
     this._syncTop();
   },
   _back() {
@@ -10507,7 +10625,7 @@ class GfcCardEditor extends HTMLElement {
 
 /* ---------------------------------------------------------------- editor texts */
 Object.assign(STR.en, {
-  ed_selected: 'Selected', ed_ulAligned: 'Template placed exactly under the imported plan', ed_importBad: 'No floor plan found in this file / text', ed_imported: (n) => `${n} ${pl(n, 'room', 'rooms')} imported`, ed_importedLinked: (n, m) => `${n} ${pl(n, 'room', 'rooms')} imported · ${m} linked with areas`, ed_importReady: 'Floor plan ready to import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'room', 'rooms')} · ${d} ${pl(d, 'passage', 'passages')} · ${w} ${pl(w, 'window', 'windows')} · ${f} pieces of furniture`, ed_importReplaces: 'Replaces the rooms drawn so far – placed devices stay.', ed_importApply: 'Import', ed_scaleTitle: 'Check the size', ed_scaleText: 'The size was estimated from the picture. Enter one real length and everything is adjusted.', ed_scaleOk: 'Size is right', ed_pastePlaceholder: 'Paste the answer or the file content from Claude here …', ed_importRead: 'Read', ed_importTitle: 'Import a floor plan file', ed_importSub: 'e.g. from the Claude skill – file or pasted text', ed_importFile: 'Choose file', ed_importPaste: 'Paste text', ed_export: 'Save floor plan as file', ed_roomList: 'Rooms', ed_areasHead: 'Home Assistant areas', ed_areasHelp: 'Drag an area onto its room – the room takes its name. Its devices come in by themselves in the Devices step.', ed_assigned: (r) => `“${r}” linked`, ed_areaDrag: 'Drag the area onto a room on the plan', ed_areaDropRoom: 'Drop the area onto a room', ed_areaIn: (r) => `Linked with ${r}`, ed_noAreaYet: 'no area yet', ed_matchByName: (n) => `Link ${n} ${pl(n, 'room', 'rooms')} by name`, ed_matched: (n) => `${n} ${pl(n, 'room', 'rooms')} linked by name`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now drag your areas onto them`, ed_invert: 'Invert colours', ed_detect: 'Find rooms automatically', ed_detectHelp: 'Works best with clean plans – check the result. Or trace the rooms yourself: Next: Rooms.', ed_detectFail: 'The picture could not be analysed', ed_detectNone: 'No rooms found – draw them by hand', ed_detectNothingNew: 'No new rooms found', ed_detected: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now name them`, ed_title: 'Floor plan', ed_undo: 'Undo', ed_redo: 'Redo', ed_preview: 'Preview', ed_cancel: 'Cancel', ed_done: 'Done', ed_fit: 'Fit to screen',
+  ed_selected: 'Selected', ed_ulAligned: 'Template placed exactly under the imported plan', ed_importBad: 'No floor plan found in this file / text', ed_imported: (n) => `${n} ${pl(n, 'room', 'rooms')} imported`, ed_importedLinked: (n, m) => `${n} ${pl(n, 'room', 'rooms')} imported · ${m} linked with areas`, ed_importReady: 'Floor plan ready to import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'room', 'rooms')} · ${d} ${pl(d, 'passage', 'passages')} · ${w} ${pl(w, 'window', 'windows')} · ${f} pieces of furniture`, ed_importReplaces: 'Replaces the rooms drawn so far – placed devices stay.', ed_importApply: 'Import', ed_scaleTitle: 'Check the size', ed_scaleText: 'The size was estimated from the picture. Enter one real length and everything is adjusted.', ed_scaleOk: 'Size is right', ed_pastePlaceholder: 'Paste the answer or the file content from Claude here …', ed_importRead: 'Read', ed_importTitle: 'Import a floor plan file', ed_importSub: 'e.g. from the Claude skill – file or pasted text', ed_importFile: 'Choose file', ed_importPaste: 'Paste text', ed_export: 'Save floor plan as file', ed_roomList: 'Rooms', ed_areasHead: 'Home Assistant areas', ed_areasHelp: 'Drag an area onto its room – the room takes its name. Its devices come in by themselves in the Devices step.', ed_assigned: (r) => `“${r}” linked`, ed_areaDrag: 'Drag the area onto a room on the plan', ed_areaDropRoom: 'Drop the area onto a room', ed_areaIn: (r) => `Linked with ${r}`, ed_noAreaYet: 'no area yet', ed_matchByName: (n) => `Link ${n} ${pl(n, 'room', 'rooms')} by name`, ed_matched: (n) => `${n} ${pl(n, 'room', 'rooms')} linked by name`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now drag your areas onto them`, ed_invert: 'Invert colours', ed_detect: 'Find rooms automatically', ed_detectHelp: 'Works best with clean plans – check the result. Or trace the rooms yourself: Next: Rooms.', ed_detectFail: 'The picture could not be analysed', ed_detectNone: 'No rooms found – draw them by hand', ed_detectNothingNew: 'No new rooms found', ed_detected: (n, d) => `${n} ${pl(n, 'room', 'rooms')} and ${d} ${pl(d, 'passage', 'passages')} found – now name them`, ed_title: 'Floor plan', ed_undo: 'Undo', ed_redo: 'Redo', ed_preview: 'Preview', ed_cancel: 'Cancel', ed_done: 'Done', ed_fit: 'Fit to screen', ed_hidePanel: 'Hide the tools – see it as in Home Assistant', ed_showPanel: 'Show the tools',
   ed_summary: (r, d) => `${r} ${pl(r, 'room', 'rooms')} · ${d} ${pl(d, 'device', 'devices')}`,
   ed_tool_sketch: 'Template', ed_tool_rooms: 'Rooms', ed_tool_furniture: 'Furniture', ed_tool_openings: 'Windows & doors', ed_tool_devices: 'Devices', ed_tool_layers: 'Layers', ed_tool_tiles: 'Tiles', ed_tool_settings: 'Settings',
   ed_room: 'Room', ed_open_window: 'Window', ed_open_door: 'Passage', ed_open_entrance: 'Front door',
@@ -10583,7 +10701,7 @@ Object.assign(STR.en, {
   ed_removeFromLayers: 'Remove from all layers', ed_deleteLayer: 'Delete layer', ed_layerEditLead: 'What this layer shows: whole categories and single devices.',
 });
 Object.assign(STR.de, {
-  ed_selected: 'Ausgewählt', ed_ulAligned: 'Vorlage liegt genau unter dem importierten Plan', ed_importBad: 'In dieser Datei / diesem Text wurde kein Grundriss gefunden', ed_imported: (n) => `${n} ${pl(n, 'Raum', 'Räume')} importiert`, ed_importedLinked: (n, m) => `${n} ${pl(n, 'Raum', 'Räume')} importiert · ${m} mit Bereichen verknüpft`, ed_importReady: 'Grundriss bereit zum Import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${w} Fenster · ${f} Möbel`, ed_importReplaces: 'Ersetzt die bisher gezeichneten Räume – platzierte Geräte bleiben.', ed_importApply: 'Importieren', ed_scaleTitle: 'Größe prüfen', ed_scaleText: 'Die Größe wurde aus dem Bild geschätzt. Gib eine echte Länge ein, dann wird alles angepasst.', ed_scaleOk: 'Größe stimmt', ed_pastePlaceholder: 'Antwort oder Dateiinhalt von Claude hier einfügen …', ed_importRead: 'Einlesen', ed_importTitle: 'Grundriss-Datei importieren', ed_importSub: 'z. B. vom Claude-Skill – Datei oder eingefügter Text', ed_importFile: 'Datei wählen', ed_importPaste: 'Text einfügen', ed_export: 'Grundriss als Datei sichern', ed_roomList: 'Räume', ed_areasHead: 'Home-Assistant-Bereiche', ed_areasHelp: 'Ziehe einen Bereich auf seinen Raum – der Raum heißt dann wie der Bereich. Die Geräte kommen im Schritt „Geräte“ von selbst dazu.', ed_assigned: (r) => `„${r}“ verknüpft`, ed_areaDrag: 'Ziehe den Bereich auf einen Raum im Plan', ed_areaDropRoom: 'Den Bereich auf einen Raum ziehen', ed_areaIn: (r) => `Verknüpft mit ${r}`, ed_noAreaYet: 'noch kein Bereich', ed_matchByName: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpfen`, ed_matched: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpft`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt deine Bereiche auf die Räume ziehen`, ed_invert: 'Farben umkehren', ed_detect: 'Räume automatisch erkennen', ed_detectHelp: 'Klappt am besten mit sauberen Plänen – Ergebnis prüfen. Oder die Räume selbst nachzeichnen: „Weiter: Räume“.', ed_detectFail: 'Das Bild konnte nicht ausgewertet werden', ed_detectNone: 'Keine Räume gefunden – bitte von Hand zeichnen', ed_detectNothingNew: 'Keine neuen Räume gefunden', ed_detected: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt benennen`, ed_title: 'Grundriss', ed_undo: 'Rückgängig', ed_redo: 'Wiederholen', ed_preview: 'Vorschau', ed_cancel: 'Abbrechen', ed_done: 'Fertig', ed_fit: 'Einpassen',
+  ed_selected: 'Ausgewählt', ed_ulAligned: 'Vorlage liegt genau unter dem importierten Plan', ed_importBad: 'In dieser Datei / diesem Text wurde kein Grundriss gefunden', ed_imported: (n) => `${n} ${pl(n, 'Raum', 'Räume')} importiert`, ed_importedLinked: (n, m) => `${n} ${pl(n, 'Raum', 'Räume')} importiert · ${m} mit Bereichen verknüpft`, ed_importReady: 'Grundriss bereit zum Import', ed_importSummary: (r, d, w, f) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Durchgang', 'Durchgänge')} · ${w} Fenster · ${f} Möbel`, ed_importReplaces: 'Ersetzt die bisher gezeichneten Räume – platzierte Geräte bleiben.', ed_importApply: 'Importieren', ed_scaleTitle: 'Größe prüfen', ed_scaleText: 'Die Größe wurde aus dem Bild geschätzt. Gib eine echte Länge ein, dann wird alles angepasst.', ed_scaleOk: 'Größe stimmt', ed_pastePlaceholder: 'Antwort oder Dateiinhalt von Claude hier einfügen …', ed_importRead: 'Einlesen', ed_importTitle: 'Grundriss-Datei importieren', ed_importSub: 'z. B. vom Claude-Skill – Datei oder eingefügter Text', ed_importFile: 'Datei wählen', ed_importPaste: 'Text einfügen', ed_export: 'Grundriss als Datei sichern', ed_roomList: 'Räume', ed_areasHead: 'Home-Assistant-Bereiche', ed_areasHelp: 'Ziehe einen Bereich auf seinen Raum – der Raum heißt dann wie der Bereich. Die Geräte kommen im Schritt „Geräte“ von selbst dazu.', ed_assigned: (r) => `„${r}“ verknüpft`, ed_areaDrag: 'Ziehe den Bereich auf einen Raum im Plan', ed_areaDropRoom: 'Den Bereich auf einen Raum ziehen', ed_areaIn: (r) => `Verknüpft mit ${r}`, ed_noAreaYet: 'noch kein Bereich', ed_matchByName: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpfen`, ed_matched: (n) => `${n} ${pl(n, 'Raum', 'Räume')} nach Namen verknüpft`, ed_detectedAreas: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt deine Bereiche auf die Räume ziehen`, ed_invert: 'Farben umkehren', ed_detect: 'Räume automatisch erkennen', ed_detectHelp: 'Klappt am besten mit sauberen Plänen – Ergebnis prüfen. Oder die Räume selbst nachzeichnen: „Weiter: Räume“.', ed_detectFail: 'Das Bild konnte nicht ausgewertet werden', ed_detectNone: 'Keine Räume gefunden – bitte von Hand zeichnen', ed_detectNothingNew: 'Keine neuen Räume gefunden', ed_detected: (n, d) => `${n} ${pl(n, 'Raum', 'Räume')} und ${d} ${pl(d, 'Durchgang', 'Durchgänge')} erkannt – jetzt benennen`, ed_title: 'Grundriss', ed_undo: 'Rückgängig', ed_redo: 'Wiederholen', ed_preview: 'Vorschau', ed_cancel: 'Abbrechen', ed_done: 'Fertig', ed_fit: 'Einpassen', ed_hidePanel: 'Werkzeuge ausblenden – so wie in Home Assistant', ed_showPanel: 'Werkzeuge einblenden',
   ed_summary: (r, d) => `${r} ${pl(r, 'Raum', 'Räume')} · ${d} ${pl(d, 'Gerät', 'Geräte')}`,
   ed_tool_sketch: 'Vorlage', ed_tool_rooms: 'Räume', ed_tool_furniture: 'Möbel', ed_tool_openings: 'Fenster & Türen', ed_tool_devices: 'Geräte', ed_tool_layers: 'Ebenen', ed_tool_tiles: 'Kacheln', ed_tool_settings: 'Optionen',
   ed_room: 'Raum', ed_open_window: 'Fenster', ed_open_door: 'Durchgang', ed_open_entrance: 'Haustür',
