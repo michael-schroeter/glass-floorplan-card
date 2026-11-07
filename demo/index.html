@@ -7,7 +7,7 @@
 <!--
   Demo without Home Assistant: a made-up flat with a simulated `hass` (nothing leaves the browser).
   The page imitates the Home Assistant frame (sidebar 256 px, header 56 px).
-  Parameters: ?scene=evening|day|off|cleaning|playing|cold|nomodes · ?lang=en|de · ?mobile=1 (phone frame, see phone.html) · ?blank=1 empty plan · ?reset=1 forget edits
+  Parameters: ?scene=evening|day|off|cleaning|playing|cold|nomodes · ?lang=en|de · ?mobile=1 (used by phone.html; below 870 px the sidebar is a drawer anyway) · ?blank=1 empty plan · ?reset=1 forget edits
               ?sidebar=0 hides the sidebar · ?edit=1 opens the floor plan editor
   Local: python3 -m http.server 8765 --bind 127.0.0.1  →  http://127.0.0.1:8765/demo/
 -->
@@ -27,7 +27,22 @@
   .hd { position: fixed; left: 256px; right: 0; top: 0; height: 56px; background: #1c1c1c; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; padding-left: 24px; font-size: 20px; z-index: 2; }
   main { position: absolute; left: 256px; right: 0; top: 56px; }
   body.nosb .sb { display: none; } body.nosb .hd, body.nosb main { left: 0; }
-  body.mob .sb { display: none; } body.mob .hd, body.mob main { left: 0; } body.mob .hd { padding-left: 64px; border: 0; }
+  /* a phone (like Home Assistant below 870 px): the sidebar is a drawer behind the ☰ in the header */
+  .menu { display: none; position: fixed; left: 4px; top: calc(4px + env(safe-area-inset-top, 0px)); z-index: 3; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: none; color: #e1e1e1; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .menu:active { background: rgba(255, 255, 255, .1); }
+  .menu svg { width: 24px; height: 24px; }
+  .scrim { position: fixed; inset: 0; z-index: 9; background: rgba(0, 0, 0, .5); opacity: 0; pointer-events: none; transition: opacity .28s; }
+  @media (max-width: 870px) {
+    .sb { z-index: 10; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); transform: translateX(-105%); transition: transform .32s cubic-bezier(.2, .9, .3, 1); }
+    body.drawer .sb { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .55); }
+    body.drawer .scrim { opacity: 1; pointer-events: auto; }
+    .hd, main { left: 0; }
+    .hd { box-sizing: border-box; height: calc(56px + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 0 0 64px; border: 0; }
+    main { top: calc(56px + env(safe-area-inset-top, 0px)); }
+    .menu { display: grid; place-items: center; }
+    /* already on a phone: no phone frame around it */
+    #phone { display: none; }
+  }
   dialog.yaml { width: min(760px, 92vw); max-height: 84vh; border: 0; border-radius: 18px; padding: 0; background: #1c1c1e; color: #eee; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
   dialog.yaml::backdrop { background: rgba(0, 0, 0, .55); }
   dialog.yaml header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #2c2c2e; font-weight: 600; }
@@ -48,7 +63,9 @@
   <a id="phone" href="phone.html">▯&nbsp; <span data-i="phoneView">Phone view</span></a>
   <div class="note" data-i="note">Demo with a made-up flat and simulated devices – nothing is switched for real. Made with Claude.</div>
 </div>
+<div class="scrim" id="scrim"></div>
 <div class="hd" id="hd">Home</div>
+<button class="menu" id="menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg></button>
 <main id="main"></main>
 <dialog class="yaml" id="yamlDlg"><header><span>YAML</span><span><button id="copy">Copy</button><button id="closeY">Close</button></span></header><pre id="yamlPre"></pre></dialog>
 <!-- ?v= changes with the files, so a browser does not keep an old simulator -->
@@ -58,8 +75,11 @@
 const P = new URLSearchParams(location.search);
 const SCENE = P.get('scene') || 'evening';
 const LANG = P.get('lang') === 'de' ? 'de' : 'en';
-const MOBILE = P.get('mobile') === '1';
-if (MOBILE) document.body.classList.add('mob');
+// on a phone the sidebar is a drawer (☰ in the header, tap outside or Escape closes it)
+const drawer = (on) => document.body.classList.toggle('drawer', on);
+document.getElementById('menu').onclick = () => drawer(true);
+document.getElementById('scrim').onclick = () => drawer(false);
+addEventListener('keydown', (e) => { if (e.key === 'Escape') drawer(false); });
 if (P.get('sidebar') === '0') document.body.classList.add('nosb');
 const T = {
   en: { scenes: 'Scenes', language: 'Language', tools: 'Tools', editPlan: 'Edit floor plan', showYaml: 'Show configuration', phoneView: 'Phone view', note: 'Demo with a made-up flat and simulated devices – nothing is switched for real. Made with Claude.', home: 'Home',
@@ -98,11 +118,12 @@ function start() {
   document.getElementById('yaml').onclick = () => {
     const y = window.GFC_TOYAML ? window.GFC_TOYAML(config) : JSON.stringify(config, null, 2);
     document.getElementById('yamlPre').textContent = y;
+    drawer(false);
     document.getElementById('yamlDlg').showModal();
   };
   document.getElementById('closeY').onclick = () => document.getElementById('yamlDlg').close();
   document.getElementById('copy').onclick = () => navigator.clipboard?.writeText(document.getElementById('yamlPre').textContent);
-  document.getElementById('edit').onclick = openEditor;
+  document.getElementById('edit').onclick = () => { drawer(false); openEditor(); };
   if (P.get('edit') === '1') openEditor();
 }
 function openEditor() {
