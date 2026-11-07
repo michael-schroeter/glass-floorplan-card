@@ -1,6 +1,6 @@
 /* ================================================================== Window and door contacts on the plan
- * A window or the front door with a contact (assignOpenings in the model) opens on the plan: its frame turns orange and the
- * sash swings into the room – a wide window as two sashes, the front door wide; a tilted sash moves a little inwards.
+ * A window or the front door with a contact (assignOpenings in the model) opens on the plan: its sash glows orange and
+ * swings into the room – a wide window as two sashes, the front door wide; a tilted sash moves a little inwards.
  * Shown in every layer of the plan. Tap: the contact's tap_action, else Home Assistant's dialog of the contact. */
 const SASH_DEG = { open: 34, door: 66 };
 

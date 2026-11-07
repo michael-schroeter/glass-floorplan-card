@@ -55,14 +55,14 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .win.fd { height: max(3px, calc(4.6 * var(--u))); background: #fff; opacity: 1; box-shadow: 0 0 calc(8 * var(--u)) rgba(255, 255, 255, .6), 0 0 calc(20 * var(--u)) rgba(255, 255, 255, .18); transition: background .4s, box-shadow .4s; }
 .win.v.fd { height: auto; width: max(3px, calc(4.6 * var(--u))); }
 .win.fd.open { background: rgb(var(--green)); box-shadow: 0 0 calc(10 * var(--u)) rgba(var(--green), .8), 0 0 calc(26 * var(--u)) rgba(var(--green), .4); }
-/* shutters: in the covers layer a closed window shows a dark slat instead of daylight */
+/* shutters: in every layer a closed window shows a dark slat instead of daylight (the window line is the shutter's only) */
+.win.cv { opacity: 1; }
 .win.cv::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; background: rgba(30, 32, 40, .92); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25);
-  transform: scaleX(calc(1 - var(--op, 1))); transform-origin: 50% 50%; opacity: 0; transition: transform .8s var(--soft), opacity .4s; }
+  transform: scaleX(calc(1 - var(--op, 1))); transform-origin: 50% 50%; transition: transform .8s var(--soft); }
 .win.v.cv::after { transform: scaleY(calc(1 - var(--op, 1))); }
-.root[data-type="cover"] .win.cv { opacity: 1; }
-.root[data-type="cover"] .win.cv::after { opacity: 1; }
-/* window / door contacts: an open window's frame glows orange and its sash swings into the room (--a degrees, --sg = way in);
- * a tilted one shows its sash a little inside, parallel to the frame (seen from above) */
+/* window / door contacts: an open window's sash glows orange and swings into the room (--a degrees, --sg = way in);
+ * a tilted one shows its sash a little inside, parallel to the frame (seen from above). The window line itself stays
+ * the shutter's – only the front door's frame glows as well (it has no shutter) */
 .wsn { position: absolute; z-index: 5; --hit: max(14px, calc(22 * var(--u))); height: var(--hit); margin: calc(var(--hit) / -2) 0 0; padding: 0; border: 0; background: none;
   cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; --sw: max(1.5px, calc(2.6 * var(--u))); }
 .wsn.v { width: var(--hit); margin: 0 0 0 calc(var(--hit) / -2); }
@@ -79,8 +79,8 @@ ha-icon, ha-state-icon { display: grid; place-items: center; color: rgba(232, 23
 .wsn.v .sa { left: calc(50% - var(--sw) / 2); top: 0; width: var(--sw); height: 100%; transform-origin: 50% 0; }
 .wsn.v.two .sa { height: 50%; }
 .wsn.v .sa.b { top: auto; bottom: 0; transform-origin: 50% 100%; }
-.wsn[data-st="open"] .wl, .wsn[data-st="open"] .sa { opacity: 1; }
-.wsn[data-st="tilt"] .wl, .wsn[data-st="tilt"] .sa { opacity: .85; }
+.wsn.dr[data-st="open"] .wl, .wsn[data-st="open"] .sa { opacity: 1; }
+.wsn.dr[data-st="tilt"] .wl, .wsn[data-st="tilt"] .sa { opacity: .85; }
 .wsn[data-st="tilt"] { --ty: calc(var(--sg) * 7 * var(--u)); }
 .wsn.v[data-st="tilt"] { --ty: 0px; --tx: calc(var(--sg) * -7 * var(--u)); }
 .wsn.go .wl, .wsn.go .sa { background: rgb(var(--green)); box-shadow: 0 0 calc(10 * var(--u)) rgba(var(--green), .8), 0 0 calc(26 * var(--u)) rgba(var(--green), .35); }

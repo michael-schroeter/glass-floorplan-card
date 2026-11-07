@@ -20,7 +20,7 @@ Everything can be set in the floor plan editor. This page walks through it and i
 
 ## Window and door contacts
 
-A window or door contact shows **on its window**, not as a button: when the window is open, its frame glows orange and the sash swings into the room (a wide window as two sashes, the front door wide open). A tilted window shows its sash a little inside, parallel to the frame. This works in every layer. Tap the window for the contact's details.
+A window or door contact shows **on its window**, not as a button: when the window is open, its sash glows orange and swings into the room (a wide window as two sashes, the front door wide open and its frame orange too). A tilted window shows its sash a little inside, parallel to the frame. The window line itself keeps showing the shutter: bright when open, a dark slat when closed. This works in every layer. Tap the window for the contact's details.
 
 - **Automatic**: a `binary_sensor` with the device class `window`, `door`, `garage_door` or `opening`, or a handle sensor that reports `open` / `tilted` / `closed`, sits on the drawn window (or front door) nearest to it in its room. A door contact prefers the front door, a window contact a window. When the editor places the devices of your areas, it puts contacts straight onto a free window of their room.
 - **By hand**: in the editor, tap a window and choose its *Contact*, or drag a contact onto another window. In a device's settings, *Assign to window / door* is *Automatic*, *On* (any entity, e.g. a sensor without a device class, onto the nearest window) or *Off* (a normal button in its layers). In YAML that is `opening: true` / `opening: false`.
