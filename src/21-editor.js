@@ -647,7 +647,8 @@ class GfcEditor extends HTMLElement {
       const on = sel?.t === 'furn' && sel.r === ri && sel.i === fi;
       html += `<div class="efu${Fu.circle ? ' c' : ''}${on ? ' sel' : ''}" data-k="furn" data-r="${ri}" data-i="${fi}" style="${this._boxPx(Fu.r)};--fr:${(Fu.rad * z * 1.3).toFixed(1)}"></div>`;
     }));
-    // windows, passages, front door
+    // windows, passages, front door – own class names: the card's styles are loaded here too, and its .win / .pas
+    // (translate by half the size, glow, no pointer events) would shift upright handles by half their length
     const th = Math.max(8, 11 * z);
     for (const [kind, { key }] of Object.entries(OPEN_KINDS)) {
       const list = key === 'entrance' ? (c.entrance ? [c.entrance] : []) : c[key];
@@ -655,10 +656,10 @@ class GfcEditor extends HTMLElement {
         const s = normSeg(s0);
         if (!s) return;
         const on = sel?.t === 'open' && sel.k === kind && sel.i === i;
-        html += `<div class="eopen ${kind === 'window' ? 'win' : kind === 'door' ? 'pas' : 'ent'}${on ? ' sel' : ''}" data-k="open" data-o="${kind}" data-i="${i}" style="${this._segPx(s, th)}" title="${esc(t(`ed_open_${kind}`))}"></div>`;
+        html += `<div class="eopen ${kind === 'window' ? 'eo-win' : kind === 'door' ? 'eo-pas' : 'eo-ent'}${on ? ' sel' : ''}" data-k="open" data-o="${kind}" data-i="${i}" style="${this._segPx(s, th)}" title="${esc(t(`ed_open_${kind}`))}"></div>`;
       });
     }
-    if (this._hover && tool === 'openings') html += `<div class="eopen ghost ${this._openKind === 'window' ? 'win' : this._openKind === 'door' ? 'pas' : 'ent'}" style="${this._segPx(this._hover.seg, th)}"></div>`;
+    if (this._hover && tool === 'openings') html += `<div class="eopen ghost ${this._openKind === 'window' ? 'eo-win' : this._openKind === 'door' ? 'eo-pas' : 'eo-ent'}" style="${this._segPx(this._hover.seg, th)}"></div>`;
     // tiles, the layer card and the layer bar of the view shown (laptop and phone each have their own places);
     // those next to / below the plan or at the bottom of the screen can be dragged into the plan
     if (tool === 'tiles' && card?._M) {
