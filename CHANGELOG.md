@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0
+
+Everything from v0.3.1 keeps working – nothing to change in your configuration.
+
+**New**
+- **The editor on a phone**: the panel is a sheet above the tool bar and can be put away (button in the header, or drag the handle down). The phone preview then shows the card exactly as Home Assistant does on this phone – same size, nothing around it. Tap a device and the sheet comes back with its settings
+
+**Changed**
+- **Windows with a shutter and a contact**: the window line always shows the shutter (dark bar, in every layer); an open or tilted contact only lights the sash orange, so both can be seen at once
+
+**Fixed**
+- **Editor, phone preview**: window, passage and front door markers sat beside their wall and looked far too long – shifted by half their length on upright walls (nearly all of them on the turned phone plan) and lit like a window. They now sit exactly on the wall and can be clicked again (also on upright walls in the laptop preview)
+
+**Demo**
+- On a phone the demo's sidebar is a drawer behind ☰, as in Home Assistant – the card gets the full width
+
 ## 0.3.1
 
 Fixes and small improvements – nothing to change in your configuration.

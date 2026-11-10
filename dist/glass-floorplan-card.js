@@ -2,7 +2,7 @@
  * MIT License · https://github.com/michael-schroeter/glass-floorplan-card
  * Built from src/*.js by tools/build.py – edit the sources, not dist/. */
 (() => {
-const VERSION = '0.3.1';
+const VERSION = '0.4.0';
 const CARD_TAG = 'glass-floorplan-card';
 
 /* ================================================================== Helpers */
